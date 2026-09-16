@@ -1,0 +1,36 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "stream",
+  "globalEnv": ["NODE_ENV"],
+  "globalDependencies": ["packages/config/tsconfig.base.json", ".env"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["DATABASE_URL_TEST", "LOG_LEVEL"]
+    },
+    "test:unitarios": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test:integracion": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["DATABASE_URL_TEST", "LOG_LEVEL"]
+    }
+  }
+}

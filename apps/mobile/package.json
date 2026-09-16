@@ -1,0 +1,6 @@
+{
+  "name": "@gestoria/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cliente móvil (Expo / React Native). Placeholder: se implementa en el paso 6 de la hoja de ruta."
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Base estricta del proyecto",
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "moduleDetection": "force",
+
+    // Rigor de tipos. Van mas alla de "strict" porque el sistema maneja datos
+    // personales y preferimos que el compilador nos frene antes que un bug en
+    // produccion (ver orden de prioridades en CLAUDE.md).
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": true,
+
+    // Node 24 ejecuta TypeScript directamente borrando los tipos, pero no
+    // transforma sintaxis. "erasableSyntaxOnly" prohibe lo que Node no puede
+    // borrar (enum, namespace, parametros-propiedad) para que el mismo archivo
+    // corra con "node archivo.ts" en desarrollo y compile a dist/ en produccion.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    // Escribimos los imports relativos con extension .ts (lo que Node necesita)
+    // y tsc los reescribe a .js al emitir (lo que Node necesita en dist/).
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  }
+}

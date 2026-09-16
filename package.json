@@ -1,0 +1,33 @@
+{
+  "name": "gestoria",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:unitarios": "turbo run test:unitarios",
+    "test:integracion": "turbo run test:integracion",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "db:crear": "pnpm --filter @gestoria/db run crear-bases",
+    "db:generar": "pnpm --filter @gestoria/db run generar",
+    "db:migrar": "pnpm --filter @gestoria/db run migrar",
+    "db:migrar:test": "pnpm --filter @gestoria/db run migrar:test",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "catalog:",
+    "lefthook": "2.1.14",
+    "turbo": "2.10.13",
+    "typescript": "catalog:"
+  }
+}

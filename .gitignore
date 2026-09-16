@@ -1,0 +1,37 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Builds y cache
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+.next/
+out/
+.expo/
+
+# Variables de entorno: nunca se versionan (ver docs/guias/seguridad-y-datos.md).
+# La unica excepcion es .env.example, que va sin secretos.
+.env
+.env.*
+!.env.example
+
+# Tests y cobertura
+coverage/
+.vitest/
+test-results/
+playwright-report/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json

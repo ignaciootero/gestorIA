@@ -1,0 +1,7 @@
+{
+  "name": "@gestoria/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cliente web (Next.js). Placeholder: se implementa en el paso 3 de la hoja de ruta."
+}

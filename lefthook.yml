@@ -1,0 +1,32 @@
+# Hooks de Git (ver docs/guias/convenciones.md, sección Git).
+#
+# Se instalan solos al correr `pnpm install` (script "prepare" de package.json).
+# Funcionan igual en Windows y en Linux: Lefthook es un binario propio y no
+# depende de scripts de shell.
+
+pre-commit:
+  parallel: false
+  jobs:
+    # Biome formatea y arregla lo que puede sobre los archivos que se van a
+    # commitear, y vuelve a agregarlos al índice con stage_fixed.
+    - name: formato-y-lint
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
+      glob:
+        - "*.ts"
+        - "*.tsx"
+        - "*.js"
+        - "*.jsx"
+        - "*.json"
+        - "*.jsonc"
+        - "*.css"
+      stage_fixed: true
+
+    # La verificación de tipos es de todo el monorepo, no solo de los archivos
+    # tocados: un cambio en un paquete puede romper a quien lo usa.
+    - name: tipos
+      run: pnpm run typecheck
+
+pre-push:
+  jobs:
+    - name: tests
+      run: pnpm run test
