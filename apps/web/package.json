@@ -3,5 +3,42 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Cliente web (Next.js). Placeholder: se implementa en el paso 3 de la hoja de ruta."
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "@gestoria/db": "workspace:*",
+    "@gestoria/shared": "workspace:*",
+    "@gestoria/ui-tokens": "workspace:*",
+    "@hookform/resolvers": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "better-auth": "catalog:",
+    "clsx": "catalog:",
+    "geist": "catalog:",
+    "lucide-react": "catalog:",
+    "motion": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-hook-form": "catalog:",
+    "tailwind-merge": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@gestoria/config": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "drizzle-orm": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  }
 }

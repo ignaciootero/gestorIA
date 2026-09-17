@@ -7,12 +7,14 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_URL_API"]
     },
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": ["NEXT_PUBLIC_URL_API"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
@@ -31,6 +33,12 @@
       "dependsOn": ["^build"],
       "outputs": [],
       "env": ["DATABASE_URL_TEST", "LOG_LEVEL"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": false,
+      "env": ["NEXT_PUBLIC_URL_API", "DATABASE_URL_TEST"]
     }
   }
 }

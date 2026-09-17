@@ -18,6 +18,7 @@
     "crear-bases": "node --env-file-if-exists=../../.env src/crear-bases.ts"
   },
   "dependencies": {
+    "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"

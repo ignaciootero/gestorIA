@@ -21,7 +21,10 @@
     "db:generar": "pnpm --filter @gestoria/db run generar",
     "db:migrar": "pnpm --filter @gestoria/db run migrar",
     "db:migrar:test": "pnpm --filter @gestoria/db run migrar:test",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "usuario:admin": "pnpm --filter @gestoria/api run crear-admin",
+    "usuario:aprobar": "pnpm --filter @gestoria/api run aprobar-usuario",
+    "test:e2e": "turbo run test:e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

@@ -5,11 +5,11 @@
 // Separa siempre el mensaje al usuario del detalle tecnico: lo tecnico va al
 // log con el idPeticion, nunca a la respuesta (docs/guias/convenciones.md).
 
+import { CODIGOS_ERROR, type CodigoError } from "@gestoria/shared";
 import type { ErrorHandler, NotFoundHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ZodError } from "zod";
-import { CODIGOS_ERROR, type CodigoError } from "../errores/codigos.ts";
 import { type CampoInvalido, ErrorApi, type RespuestaError } from "../errores/error-api.ts";
 import type { EntornoHono } from "../tipos.ts";
 import { registrarFinDePeticion } from "./logs.ts";

@@ -1,0 +1,27 @@
+{
+  "extends": "@gestoria/config/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "es2024"],
+    "jsx": "preserve",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "allowJs": true,
+    // Los paquetes internos escriben sus imports con extensión .ts porque la API
+    // los ejecuta con Node. Al type-checkear la web también se leen esos archivos,
+    // así que hay que permitirlo; los archivos de la web usan imports sin extensión.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": false,
+    "incremental": true,
+    "types": ["node"],
+    // Next exige escribir process.env.NEXT_PUBLIC_X con punto para poder
+    // reemplazarlo al compilar, así que acá no aplica esta regla.
+    "noPropertyAccessFromIndexSignature": false,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", ".next", "dist"]
+}

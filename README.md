@@ -1,12 +1,17 @@
-# Sistema de gestión personal
+# gestorIA
 
-Sistema de gestión general (gastos, contactos, calendario, facturas, tareas y
+Sistema de gestión personal (gastos, contactos, calendario, facturas, tareas y
 notificaciones) para un grupo reducido de usuarios conocidos, con clientes web y móvil
 sobre una misma API.
 
-Estado actual: **paso 1 de la hoja de ruta (infraestructura)**. Hay monorepo, base de
-datos, API con endpoint de salud y las herramientas de calidad. Todavía no hay
-autenticación ni módulos de negocio. Ver `CLAUDE.md` para el panorama completo.
+El nombre es un juego de palabras entre **gestoría** e **IA**, por la entrada por
+lenguaje natural que se suma al final de la hoja de ruta. Se escribe siempre así, con
+la g minúscula y las dos últimas letras en mayúscula.
+
+Estado actual: **pasos 1 a 4 de la hoja de ruta**, con el 4 empezado. Hay monorepo,
+base de datos, API con autenticación, sistema visual y las pantallas de ingreso e
+inicio. Todavía no hay módulos de negocio ni panel de admin. Ver `CLAUDE.md` para el
+panorama completo.
 
 ## Requisitos
 
@@ -28,9 +33,17 @@ pnpm install
 Copy-Item .env.example .env
 ```
 
-Abrí `.env` y completá **`POSTGRES_PASSWORD`** con la contraseña que pusiste al
-instalar PostgreSQL. Ese archivo no se versiona: es el único lugar donde vive la
-contraseña.
+Abrí `.env` y completá dos cosas. Ese archivo no se versiona.
+
+- **`POSTGRES_PASSWORD`**: la contraseña que pusiste al instalar PostgreSQL.
+- **`BETTER_AUTH_SECRET`**: una clave de al menos 32 caracteres, propia y distinta en
+  cada entorno. Para generarla:
+
+  ```powershell
+  [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+  ```
+
+  En Linux: `openssl rand -base64 32`.
 
 ```powershell
 # 3. Crear las bases de datos "gestion" (desarrollo) y "gestion_test" (tests)
@@ -40,11 +53,38 @@ pnpm db:crear
 pnpm db:migrar
 pnpm db:migrar:test
 
-# 5. Levantar la API
+# 5. Crear tu cuenta de administrador (pide la contraseña por consola)
+pnpm usuario:admin
+
+# 6. Levantar la API y la web
 pnpm dev
 ```
 
-La API queda en `http://localhost:3001`. Para probarla:
+La web queda en `http://localhost:3000` y la API en `http://localhost:3001`.
+
+Al entrar a la web sin sesión vas directo a **`/ingresar`**, donde podés entrar con tu
+usuario **o** con tu correo, indistinto. Después del login llegás a `/inicio`.
+
+### Cómo entra alguien nuevo
+
+Para poder entrar hacen falta **dos cosas**, y con una sola no alcanza:
+
+1. **Confirmar el correo.** Al registrarse sale un mail con un enlace que vale 24 horas.
+2. **Que un admin apruebe la cuenta**, con `pnpm usuario:aprobar <usuario>`.
+
+Mientras falte alguna, el login se rechaza explicando cuál.
+
+### Ver los correos en desarrollo
+
+Sin SMTP configurado —que es lo normal en desarrollo— **los correos no se mandan: se
+escriben en el log de la API**, con el enlace completo. Buscá en la consola de `pnpm dev`
+la línea `correo NO enviado (SMTP sin configurar)` y copiá el enlace al navegador.
+
+Para mandar correos de verdad hay que completar las variables `SMTP_*` del `.env`. Sirve
+cualquier servidor SMTP. En producción es obligatorio: sin eso, nadie puede confirmar su
+cuenta.
+
+Para probar la API sola:
 
 ```powershell
 Invoke-RestMethod http://localhost:3001/health
@@ -60,6 +100,18 @@ Respuesta esperada:
   "tiempo": "2026-09-16T12:00:00.000Z"
 }
 ```
+
+### Sobre la contraseña del admin
+
+`pnpm usuario:admin` la pide por consola y no la guarda en ningún lado. El script es
+idempotente: si la cuenta ya existe, no la duplica ni le pisa la contraseña.
+
+La cuenta del admin queda con el correo dado por confirmado: la creás vos desde el
+servidor, así que no hay nada que verificar. Si no fuera así, el primer admin quedaría
+sin poder entrar y sin nadie que lo aprobara.
+
+En un entorno sin terminal (el seed automático en el VPS) se puede pasar en la variable
+`ADMIN_PASSWORD` **solo para ese comando**, sin dejarla en el `.env`.
 
 ### Crear las bases a mano (alternativa)
 
@@ -80,7 +132,7 @@ En Linux: `sudo -u postgres createdb gestion && sudo -u postgres createdb gestio
 
 | Comando | Qué hace |
 |---|---|
-| `pnpm dev` | Levanta la API en modo desarrollo, recargando al guardar |
+| `pnpm dev` | Levanta la API y la web en modo desarrollo, recargando al guardar |
 | `pnpm build` | Compila todos los paquetes a `dist/` |
 | `pnpm typecheck` | Verifica tipos en todo el monorepo |
 
@@ -99,6 +151,7 @@ En Linux: `sudo -u postgres createdb gestion && sudo -u postgres createdb gestio
 | `pnpm test` | Toda la suite |
 | `pnpm test:unitarios` | Solo unitarios (no tocan la base) |
 | `pnpm test:integracion` | Solo integración (contra `gestion_test`) |
+| `pnpm test:e2e` | End-to-end con Playwright, en un navegador real |
 
 Los tests de integración usan la base **`gestion_test`**, nunca la de desarrollo. Tiene
 que existir y tener las migraciones aplicadas (pasos 3 y 4 de la puesta en marcha).
@@ -115,16 +168,37 @@ que existir y tener las migraciones aplicadas (pasos 3 y 4 de la puesta en march
 Una migración ya aplicada **nunca se edita**: se genera una nueva
 (ver `docs/guias/seguridad-y-datos.md`).
 
+### Cuentas
+
+| Comando | Qué hace |
+|---|---|
+| `pnpm usuario:admin` | Crea el primer administrador. Pide la contraseña por consola |
+| `pnpm usuario:aprobar --listar` | Muestra las solicitudes pendientes y si ya confirmaron el correo |
+| `pnpm usuario:aprobar <usuario>` | Aprueba una cuenta. Acepta el usuario o el correo |
+| `pnpm usuario:aprobar <usuario> --rechazar` | La rechaza y le cierra las sesiones abiertas |
+
+Hasta que exista el panel de admin, estos comandos son la única forma de aprobar una
+cuenta que se registró y quedó pendiente.
+
+## Guía de estilo
+
+En desarrollo, `http://localhost:3000/guia-de-estilo` muestra todos los tokens y
+componentes del sistema visual en un solo lugar, para revisar contraste y consistencia
+en modo claro y oscuro. En producción devuelve 404.
+
 ## Estructura
 
 ```
 apps/
-  api/        Hono + Pino. Único backend, lo consumen web y móvil
-  web/        Next.js (placeholder, paso 3 de la hoja de ruta)
+  api/        Hono + Pino + Better Auth. Único backend, lo consumen web y móvil
+  web/        Next.js: pantallas de ingreso e inicio
   mobile/     Expo (placeholder, paso 6)
 packages/
   config/     tsconfig base y configuración compartida
   db/         Cliente Drizzle, esquemas y migraciones
+  shared/     Esquemas Zod, códigos de error y constantes compartidas
+  ui-tokens/  Colores, tipografía, espaciado y animaciones
+  testing/    Fábricas de datos de prueba
 docs/
   guias/      Guías de trabajo del proyecto
 ```

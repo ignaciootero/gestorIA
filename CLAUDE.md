@@ -1,6 +1,6 @@
-# Sistema de gestión personal
+# gestorIA
 
-Sistema de gestión general para un grupo reducido de usuarios conocidos. Web y móvil, con módulos muy integrados entre sí. Los módulos se definen a pedido (ver hoja de ruta); ideas iniciales: gastos, contactos, calendario con recordatorios, facturas, lista de tareas (to-do) y notificaciones. Al final se sumará entrada por lenguaje natural (por ejemplo "hoy gasté 1200 en comida") usando la API de Claude con tool use.
+**gestorIA** (juego de palabras entre "gestoría" e IA) es un sistema de gestión general para un grupo reducido de usuarios conocidos. Web y móvil, con módulos muy integrados entre sí. Los módulos se definen a pedido (ver hoja de ruta); ideas iniciales: gastos, contactos, calendario con recordatorios, facturas, lista de tareas (to-do) y notificaciones. Al final se sumará entrada por lenguaje natural (por ejemplo "hoy gasté 1200 en comida") usando la API de Claude con tool use.
 
 El proyecto también es de aprendizaje: explicá las decisiones importantes y no ocultes complejidad detrás de magia.
 
@@ -14,7 +14,7 @@ Este archivo tiene lo esencial. El detalle está en `docs/guias/`. **Leer la gu�
 | `seguridad-y-datos.md` | Crear o modificar endpoints, esquemas, migraciones, subida de archivos o manejo de datos de usuarios |
 | `testing.md` | Implementar o modificar cualquier funcionalidad |
 | `usabilidad.md` | Trabajar en pantallas, formularios o flujos de usuario |
-| `estetica.md` | Trabajar en interfaz, componentes, estilos o animaciones |
+| `estetica.md` | Trabajar en interfaz, componentes, estilos o animaciones (los algoritmos del fondo animado y del brillo de bordes están en `docs/referencias/fondo-animado.md`) |
 | `rendimiento.md` | Crear endpoints, consultas, listados o pantallas con datos, o agregar dependencias al cliente |
 
 ## Prioridades ante conflictos
@@ -49,8 +49,8 @@ La **simplicidad del código** es un criterio transversal: ante soluciones equiv
 - **Datos en el cliente:** TanStack Query en web y móvil; FlashList para listas largas en móvil.
 - **Tareas programadas:** pg-boss.
 - **Logs:** Pino.
-- **Email (futuro):** Nodemailer por SMTP.
-- **Diseño:** tipografía Geist, íconos Lucide, tokens en `packages/ui-tokens`.
+- **Email:** Nodemailer por SMTP. Sin SMTP configurado, los correos se escriben en el log (desarrollo).
+- **Diseño:** tipografía Geist, íconos Lucide, tokens en `packages/ui-tokens`. Nombre y logotipo en `packages/shared/src/marca.ts` y `apps/web/src/componentes/marca/`.
 - **Calidad:** Biome (lint y formato), Lefthook (hooks de Git).
 - **Testing:** Vitest, Playwright con axe-core, Jest con jest-expo y React Native Testing Library.
 
@@ -71,6 +71,7 @@ packages/
   testing/          Fábricas de datos, fixtures y utilidades de prueba
 docs/
   guias/            Guías de trabajo
+  referencias/      Algoritmos y detalles técnicos para no depender del código
 .gitattributes      Finales de línea LF en todo el repositorio
 ```
 
@@ -88,11 +89,14 @@ docs/
 
 ## Autenticación y administración
 
-- Email y contraseña con Better Auth.
+- Better Auth con **usuario o email** y contraseña: un solo campo en el formulario acepta los dos. Cada cuenta tiene un `usuario` único además del email.
+- **Para entrar hacen falta DOS cosas:** correo verificado y cuenta aprobada por un admin. Con una sola no alcanza.
+- **Verificación de correo:** al registrarse sale un mail con un enlace que confirma la dirección. Confirmarlo no inicia sesión ni aprueba la cuenta.
 - **Registro público con aprobación manual:** campo `estado` (`pendiente`, `aprobado`, `rechazado`). Los registros nuevos entran como `pendiente`, sin inicio de sesión automático. El login rechaza cuentas no aprobadas, y el middleware lo vuelve a verificar.
-- Formulario de registro con campo opcional "¿Quién sos?" y honeypot anti-bots. Rate limiting en registro y login.
-- Campos adicionales del usuario: `estado`, `mensajeRegistro`, `zonaHoraria`, `monedaPorDefecto`, `debeCambiarPassword`.
-- **Primer admin creado por script de seed** con datos de variables de entorno. Ningún endpoint permite volverse admin.
+- Formulario de registro con honeypot anti-bots y validación completa en el servidor. Rate limiting en registro, login y reenvío de verificación.
+- **Largo máximo de 24 caracteres** en usuario, nombre, apellido y contraseña.
+- Campos adicionales del usuario: `usuario`, `nombre`, `apellido`, `estado`, `zonaHoraria`, `monedaPorDefecto`, `debeCambiarPassword`.
+- **Primer admin creado por script de seed** con datos de variables de entorno, salvo la contraseña, que el script pide por consola y no queda guardada en ningún archivo. Queda con el correo dado por confirmado: lo crea desde el servidor quien ya tiene acceso a la base. Ningún endpoint permite volverse admin.
 - **Panel de admin (solo web):** solicitudes de registro, listado de usuarios, reseteo de contraseña (contraseña temporal, cierre de sesiones y cambio obligatorio en el próximo login) y bloqueo de cuentas.
 - Tabla de auditoría de acciones de admin (quién, qué, a quién, cuándo).
 - Sin recuperación de contraseña por email por ahora.
@@ -100,7 +104,7 @@ docs/
 ## Hoja de ruta
 
 1. Infraestructura: monorepo, Postgres, Drizzle, Pino, Lefthook, API con endpoint de salud.
-2. Better Auth en la API: email y contraseña, estados de cuenta, plugin de admin, rate limiting, seed del admin.
+2. Better Auth en la API: usuario o email y contraseña, verificación de correo, estados de cuenta, plugin de admin, rate limiting, seed del admin.
 3. Sistema visual: tokens, Tailwind/shadcn y NativeWind, Geist, modo claro/oscuro, animaciones base y guía de estilo interna.
 4. Web: registro, login, logout, página protegida, cambio de contraseña obligatorio.
 5. Web: panel de admin y auditoría.

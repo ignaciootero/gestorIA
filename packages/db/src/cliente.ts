@@ -16,7 +16,10 @@ export type ClienteDb = {
 };
 
 function crearDrizzle(pool: Pool) {
-  return drizzle({ client: pool, schema: esquema });
+  // snake_case en la base y camelCase en el codigo, sin escribir cada nombre de
+  // columna a mano (ver docs/guias/convenciones.md). Tiene que coincidir con lo
+  // que declara drizzle.config.ts, o las migraciones saldrian con otros nombres.
+  return drizzle({ client: pool, schema: esquema, casing: "snake_case" });
 }
 
 /**

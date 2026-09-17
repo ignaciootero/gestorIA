@@ -12,18 +12,27 @@
     "test": "vitest run",
     "test:unitarios": "vitest run --exclude \"**/*.integracion.test.ts\"",
     "test:integracion": "vitest run .integracion.test.ts",
-    "test:ver": "vitest"
+    "test:ver": "vitest",
+    "crear-admin": "node --env-file-if-exists=../../.env src/scripts/crear-admin.ts",
+    "aprobar-usuario": "node --env-file-if-exists=../../.env src/scripts/aprobar-usuario.ts",
+    "start:e2e": "node --env-file-if-exists=../../.env src/index.ts"
   },
   "dependencies": {
     "@gestoria/db": "workspace:*",
+    "@gestoria/shared": "workspace:*",
     "@hono/node-server": "catalog:",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "nodemailer": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@gestoria/config": "workspace:*",
+    "@gestoria/testing": "workspace:*",
     "@types/node": "catalog:",
+    "@types/nodemailer": "catalog:",
     "pino-pretty": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

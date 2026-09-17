@@ -77,6 +77,7 @@
         "**/*.config.ts",
         "packages/db/src/migrar.ts",
         "packages/db/src/crear-bases.ts",
+        "apps/api/src/scripts/**",
         "apps/api/src/index.ts"
       ],
       "linter": {
@@ -86,6 +87,21 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/web/src/componentes/tema.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
+        }
+      }
     }
-  ]
+  ],
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
 }

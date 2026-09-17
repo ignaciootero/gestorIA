@@ -10,18 +10,39 @@ allowBuilds:
   lefthook: true
 
 # Catalogo de versiones: cada dependencia compartida se declara una sola vez aca
-# y los package.json la referencian con "catalog:". Actualizar una version es
-# tocar un solo lugar y evita que dos paquetes usen versiones distintas.
+# y los package.json la referencian con la palabra catalog. Actualizar una
+# version es tocar un solo lugar y evita que dos paquetes usen versiones
+# distintas de la misma libreria.
 catalog:
+  "@axe-core/playwright": "4.13.0"
   "@hono/node-server": "2.1.1"
+  "@hookform/resolvers": "5.9.1"
+  "@playwright/test": "1.63.0"
+  "@tailwindcss/postcss": "4.3.3"
+  "@tanstack/react-query": "5.103.1"
   "@types/node": "24.13.5"
   "@types/pg": "8.23.1"
+  "@types/react": "19.3.0"
+  "@types/react-dom": "19.3.0"
+  better-auth: "1.7.5"
+  clsx: "2.1.1"
   drizzle-kit: "0.31.10"
   drizzle-orm: "0.45.2"
+  geist: "1.7.2"
   hono: "4.13.8"
+  "lucide-react": "1.46.0"
+  motion: "13.4.0"
+  next: "16.3.5"
+  nodemailer: "10.0.10"
+  "@types/nodemailer": "8.0.2"
   pg: "8.23.0"
   pino: "10.3.1"
   pino-pretty: "13.1.3"
+  react: "19.3.0"
+  "react-dom": "19.3.0"
+  "react-hook-form": "7.88.0"
+  "tailwind-merge": "3.7.0"
+  tailwindcss: "4.3.3"
   typescript: "7.0.2"
   vitest: "5.0.1"
   zod: "4.6.5"
@@ -36,3 +57,7 @@ minimumReleaseAgeExclude:
   - '@biomejs/cli-linux-x64@2.5.14'
   - '@biomejs/cli-win32-arm64@2.5.14'
   - '@biomejs/cli-win32-x64@2.5.14'
+  - '@tanstack/query-core@5.103.1'
+  - '@tanstack/react-query@5.103.1'
+  - framer-motion@13.4.0
+  - motion@13.4.0

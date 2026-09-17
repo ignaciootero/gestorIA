@@ -7,7 +7,9 @@
 import { crearClienteDb, describirConexion, leerConfigBaseDatos } from "@gestoria/db";
 import { serve } from "@hono/node-server";
 import { crearApp } from "./app.ts";
-import { leerEntornoApi } from "./config/entorno.ts";
+import { crearAuth } from "./auth/crear-auth.ts";
+import { leerConfigSmtp, leerEntornoApi } from "./config/entorno.ts";
+import { crearMensajero } from "./correo/enviar.ts";
 import { crearLogger } from "./logger.ts";
 
 function abortar(mensaje: string, detalle: unknown): never {
@@ -34,7 +36,26 @@ try {
 }
 
 const cliente = crearClienteDb(configBase);
-const app = crearApp({ cliente, logger, entorno });
+
+const configSmtp = leerConfigSmtp(entorno);
+const mensajero = crearMensajero(logger, configSmtp);
+
+if (!configSmtp && entorno.NODE_ENV === "production") {
+  // En producción un correo que no sale deja cuentas nuevas sin poder verificarse.
+  logger.warn("SMTP sin configurar: los correos de verificación NO se van a enviar");
+}
+
+const auth = crearAuth({
+  cliente,
+  secreto: entorno.BETTER_AUTH_SECRET,
+  urlBase: entorno.BETTER_AUTH_URL,
+  urlWeb: entorno.URL_WEB,
+  origenesConfiables: entorno.ORIGENES_PERMITIDOS,
+  enProduccion: entorno.NODE_ENV === "production",
+  mensajero,
+});
+
+const app = crearApp({ cliente, auth, logger, entorno });
 
 const servidor = serve({ fetch: app.fetch, port: entorno.PORT }, (direccion) => {
   logger.info(

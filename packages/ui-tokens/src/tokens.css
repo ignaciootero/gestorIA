@@ -1,0 +1,152 @@
+/*
+ * Tokens del sistema visual como variables CSS.
+ *
+ * Los mismos valores que src/index.ts, en el formato que consume la web. Si
+ * cambia un color, se cambia en los dos lados (hay un test que verifica que no
+ * se desincronicen: packages/ui-tokens/src/tokens.test.ts).
+ *
+ * Modo claro y oscuro desde el inicio. El tema se elige con data-theme en <html>
+ * y, si no hay elección guardada, se sigue la preferencia del sistema.
+ */
+
+:root {
+  /* Superficies y texto */
+  --color-fondo: #fafafa;
+  --color-superficie: #ffffff;
+  --color-superficie-suave: #f4f4f5;
+  --color-texto: #18181b;
+  --color-texto-secundario: #52525b;
+  --color-borde: #e4e4e7;
+  --color-borde-fuerte: #d4d4d8;
+
+  /* Acento: azul petróleo. Una sola acción principal por vista. */
+  --color-acento: #0f766e;
+  --color-acento-texto: #ffffff;
+  --color-acento-suave: #ccfbf1;
+  --color-acento-suave-texto: #134e4a;
+
+  /* Estados */
+  --color-exito: #4d7c0f;
+  --color-exito-fondo: #ecfccb;
+  --color-advertencia: #b45309;
+  --color-advertencia-fondo: #fef3c7;
+  --color-peligro: #b91c1c;
+  --color-peligro-fondo: #fee2e2;
+
+  /* Formas */
+  --radio-control: 0.5rem;
+  --radio-tarjeta: 0.75rem;
+
+  /* Elevación: cada nivel significa algo (ver docs/guias/estetica.md). */
+  --sombra-sutil: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --sombra-elevada: 0 4px 6px -2px rgb(0 0 0 / 0.06), 0 10px 20px -4px rgb(0 0 0 / 0.1);
+  --sombra-flotante: 0 8px 12px -4px rgb(0 0 0 / 0.08), 0 20px 36px -8px rgb(0 0 0 / 0.16);
+
+  /* Animación */
+  --duracion-rapida: 150ms;
+  --duracion-normal: 240ms;
+  --duracion-lenta: 380ms;
+  --levantada: 1px;
+  --curva-salida: cubic-bezier(0.16, 1, 0.3, 1);
+  --curva-entrada: cubic-bezier(0.4, 0, 1, 1);
+  --desplazamiento-entrada: 6px;
+
+  /*
+   * Microinteracciones: el tacto de lo que se puede tocar. Escala aparte de las
+   * duraciones de arriba (ver packages/ui-tokens/src/index.ts).
+   */
+  --anim-duracion: 220ms;
+  --anim-curva: cubic-bezier(0.16, 1, 0.3, 1);
+  --anim-escala-presion: 0.97;
+  /* Solo botones: una tarjeta que se levanta 2 px se siente inestable. */
+  --anim-elevacion-hover: 2px;
+
+  /* Brillo que sigue al puntero por el borde de las superficies. */
+  --borde-brillo-alcance: 250px;
+  --borde-brillo-intensidad: 40%;
+  --borde-brillo-grosor: 1px;
+
+  /* Opacidad del canvas del fondo animado. */
+  --fondo-intensidad: 0.18;
+}
+
+:root[data-theme="dark"] {
+  --color-fondo: #09090b;
+  --color-superficie: #18181b;
+  --color-superficie-suave: #27272a;
+  --color-texto: #fafafa;
+  --color-texto-secundario: #a1a1aa;
+  --color-borde: #27272a;
+  --color-borde-fuerte: #3f3f46;
+
+  --color-acento: #0d9488;
+  --color-acento-texto: #09090b;
+  --color-acento-suave: #134e4a;
+  --color-acento-suave-texto: #ccfbf1;
+
+  --color-exito: #a3e635;
+  --color-exito-fondo: #1a2e05;
+  --color-advertencia: #fbbf24;
+  --color-advertencia-fondo: #292007;
+  --color-peligro: #f87171;
+  --color-peligro-fondo: #300c0c;
+  /* Sobre fondo oscuro una sombra suave no se ve: se compensa con opacidad. */
+  --sombra-sutil: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+  --sombra-elevada: 0 4px 6px -2px rgb(0 0 0 / 0.45), 0 10px 20px -4px rgb(0 0 0 / 0.55);
+  --sombra-flotante: 0 8px 12px -4px rgb(0 0 0 / 0.5), 0 20px 36px -8px rgb(0 0 0 / 0.65);
+
+  /* Sobre fondo casi negro un lavado del 10% no se percibe. */
+  --fondo-intensidad: 0.25;
+}
+
+/*
+ * Sin elección guardada, se respeta la preferencia del sistema. El :not() evita
+ * que esto pise una elección explícita de modo claro.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-fondo: #09090b;
+    --color-superficie: #18181b;
+    --color-superficie-suave: #27272a;
+    --color-texto: #fafafa;
+    --color-texto-secundario: #a1a1aa;
+    --color-borde: #27272a;
+    --color-borde-fuerte: #3f3f46;
+
+    --color-acento: #0d9488;
+    --color-acento-texto: #09090b;
+    --color-acento-suave: #134e4a;
+    --color-acento-suave-texto: #ccfbf1;
+
+    --color-exito: #a3e635;
+    --color-exito-fondo: #1a2e05;
+    --color-advertencia: #fbbf24;
+    --color-advertencia-fondo: #292007;
+    --color-peligro: #f87171;
+    --color-peligro-fondo: #300c0c;
+
+    --sombra-sutil: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+    --sombra-elevada: 0 4px 6px -2px rgb(0 0 0 / 0.45), 0 10px 20px -4px rgb(0 0 0 / 0.55);
+    --sombra-flotante: 0 8px 12px -4px rgb(0 0 0 / 0.5), 0 20px 36px -8px rgb(0 0 0 / 0.65);
+
+    /* Sobre fondo casi negro un lavado del 10% no se percibe. */
+    --fondo-intensidad: 0.25;
+  }
+}
+
+/*
+ * Preferencia de reducir movimiento: se reemplazan desplazamientos y escalas por
+ * cambios de opacidad casi instantáneos, sin quitar la respuesta visual.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duracion-rapida: 1ms;
+    --duracion-normal: 1ms;
+    --duracion-lenta: 1ms;
+    --desplazamiento-entrada: 0px;
+    --levantada: 0px;
+    --anim-duracion: 1ms;
+    --anim-escala-presion: 1;
+    --anim-elevacion-hover: 0px;
+  }
+}

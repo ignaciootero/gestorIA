@@ -1,0 +1,342 @@
+@import "tailwindcss";
+@import "@gestoria/ui-tokens/tokens.css";
+
+/*
+ * El tema se elige con data-theme en <html>, no con la media query sola: así una
+ * persona puede forzar claro u oscuro aunque su sistema diga lo contrario.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Los tokens del sistema visual se exponen como utilidades de Tailwind.
+ * `@theme inline` hace que apunten a las variables CSS en vez de copiar su
+ * valor, que es lo que permite que cambien solas al cambiar de tema.
+ */
+@theme inline {
+  --color-fondo: var(--color-fondo);
+  --color-superficie: var(--color-superficie);
+  --color-superficie-suave: var(--color-superficie-suave);
+  --color-texto: var(--color-texto);
+  --color-texto-secundario: var(--color-texto-secundario);
+  --color-borde: var(--color-borde);
+  --color-borde-fuerte: var(--color-borde-fuerte);
+  --color-acento: var(--color-acento);
+  --color-acento-texto: var(--color-acento-texto);
+  --color-acento-suave: var(--color-acento-suave);
+  --color-acento-suave-texto: var(--color-acento-suave-texto);
+  --color-exito: var(--color-exito);
+  --color-exito-fondo: var(--color-exito-fondo);
+  --color-advertencia: var(--color-advertencia);
+  --color-advertencia-fondo: var(--color-advertencia-fondo);
+  --color-peligro: var(--color-peligro);
+  --color-peligro-fondo: var(--color-peligro-fondo);
+
+  --radius-control: var(--radio-control);
+  --radius-tarjeta: var(--radio-tarjeta);
+
+  /* Elevación: shadow-sutil, shadow-elevada, shadow-flotante. */
+  --shadow-sutil: var(--sombra-sutil);
+  --shadow-elevada: var(--sombra-elevada);
+  --shadow-flotante: var(--sombra-flotante);
+
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --ease-salida: var(--curva-salida);
+
+  --animate-duration-rapida: var(--duracion-rapida);
+  --animate-duration-normal: var(--duracion-normal);
+}
+
+@layer base {
+  html {
+    /* Sin esto, el fondo del navegador parpadea en blanco al cargar en oscuro. */
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) {
+      color-scheme: dark;
+    }
+  }
+
+  body {
+    background-color: var(--color-fondo);
+    color: var(--color-texto);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    /* El texto se lee mejor con esto en pantallas normales. */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Foco visible en todo lo que se pueda enfocar con el teclado. Se usa el
+   * acento, que es el color reservado para el foco (docs/guias/estetica.md).
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-acento);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /*
+   * Anillo de foco como sombra, para los controles que lo integran a su propio
+   * borde (los campos). Donde se usa, se quita el outline: el anillo lo
+   * reemplaza por algo igual de visible, que es lo que exige la guía.
+   *
+   * El color sale del acento con transparencia, no del acento suave: sobre
+   * blanco, el acento suave es demasiado pálido para servir de único indicador.
+   */
+  :root {
+    --anillo-foco: 0 0 0 3px color-mix(in srgb, var(--color-acento) 35%, transparent);
+    --anillo-foco-peligro: 0 0 0 3px color-mix(in srgb, var(--color-peligro) 30%, transparent);
+  }
+
+  /* Números tabulares en montos, fechas y horas: las columnas quedan alineadas. */
+  .numeros-tabulares {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /*
+   * Oculta un elemento a la vista pero lo deja disponible para los lectores de
+   * pantalla. Se usa en etiquetas de campos que ya se entienden por contexto.
+   */
+  .solo-lectores {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /*
+   * Honeypot anti-bots: invisible y fuera del orden de tabulación para una
+   * persona, pero presente en el DOM para un bot que completa todo el
+   * formulario. No usa display:none porque muchos bots ignoran esos campos.
+   */
+  .trampa-bots {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@layer components {
+  /*
+   * Fondo animado (ver componentes/layout/fondo-animado.tsx).
+   *
+   * El canvas se pinta a 1/24 del tamaño de la ventana y acá se estira a
+   * pantalla completa: ese estirado es el que difumina. No hay `filter: blur()`
+   * en ningún lado, y es a propósito (docs/guias/rendimiento.md).
+   *
+   * `width` y `height` además de `inset` porque en el celular `100dvh` sigue a
+   * la barra del navegador cuando aparece y desaparece.
+   */
+  .fondo-animado {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    /* Debajo del contenido, que va en una capa con z-index mayor. */
+    z-index: 0;
+    pointer-events: none;
+    /* La intensidad depende del tema y sale de los tokens. */
+    opacity: var(--fondo-intensidad);
+    /* Al cambiar de tema la intensidad acompaña en vez de saltar. */
+    transition: opacity var(--duracion-lenta) var(--curva-salida);
+  }
+
+  /*
+   * Botones: se levantan al pasar el mouse y se hunden al presionarlos.
+   *
+   * Está en CSS y no en clases de Tailwind porque son tres estados que se pisan
+   * entre sí en la misma propiedad (`transform`), y escrito así se lee de
+   * corrido. El `:not(:disabled)` importa: un botón deshabilitado que reacciona
+   * al mouse miente (docs/guias/usabilidad.md).
+   */
+  .boton-tactil {
+    transition-property: transform, box-shadow, background-color, border-color, filter, opacity;
+    transition-duration: var(--anim-duracion);
+    transition-timing-function: var(--anim-curva);
+    /* Avisa al navegador que esto se va a mover: sin esto el primer hover tira. */
+    will-change: transform;
+  }
+
+  .boton-tactil:hover:not(:disabled) {
+    transform: translateY(calc(var(--anim-elevacion-hover) * -1));
+  }
+
+  /*
+   * Al presionar vuelve a su lugar y escala, con el 40 % de la duración base:
+   * la respuesta al clic tiene que sentirse instantánea, mientras que la del
+   * hover puede acompañar. No espera a que se suelte el botón.
+   */
+  .boton-tactil:active:not(:disabled) {
+    transform: scale(var(--anim-escala-presion));
+    transition-duration: calc(var(--anim-duracion) * 0.4);
+  }
+
+  /*
+   * Brillo de bordes (ver componentes/ui/brillo/).
+   *
+   * La capa sobresale 6 px por lado para que el halo difuminado no quede
+   * cortado por el borde del contenedor.
+   */
+  .con-brillo {
+    position: relative;
+  }
+
+  .brillo-svg {
+    position: absolute;
+    left: -6px;
+    top: -6px;
+    width: calc(100% + 12px);
+    height: calc(100% + 12px);
+    overflow: visible;
+    /* Decorativo: nunca se lleva un clic destinado al contenido. */
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  .brillo-svg.activo {
+    opacity: 1;
+  }
+
+  .brillo-svg rect {
+    fill: none;
+  }
+
+  /*
+   * El único blur del sistema, y es sobre un trazo de unos pocos píxeles: eso
+   * es barato. Lo caro sería difuminar un área del tamaño de la ventana, que es
+   * justamente lo que el fondo animado evita.
+   */
+  .brillo-svg .halo {
+    filter: blur(4px);
+    opacity: 0.6;
+  }
+
+  /*
+   * Casilla (componentes/ui/casilla.tsx).
+   *
+   * El tilde se dibuja: el trazo arranca con el recorrido entero desplazado
+   * fuera de la vista y se anima hasta cero, así parece que alguien lo escribe.
+   * Es la diferencia entre marcar algo y verlo aparecer de la nada.
+   */
+  .casilla-caja {
+    /*
+     * Los colores van acá y no como utilidades de Tailwind: las utilidades
+     * están en una capa posterior a `components`, así que le ganarían a la
+     * regla de :checked por orden de capa, sin importar la especificidad. Es la
+     * clase de detalle que se ve enseguida (la casilla marcada quedaba blanca)
+     * pero que cuesta explicar si uno mira solo la especificidad.
+     */
+    background-color: var(--color-superficie);
+    border: 1px solid var(--color-borde-fuerte);
+    transition-property: background-color, border-color, box-shadow, scale;
+    transition-duration: var(--anim-duracion);
+    transition-timing-function: var(--anim-curva);
+  }
+
+  .casilla-entrada:checked + .casilla-caja {
+    background-color: var(--color-acento);
+    border-color: var(--color-acento);
+  }
+
+  /* El campo real está oculto, así que el anillo de foco lo muestra la caja. */
+  .casilla-entrada:focus-visible + .casilla-caja {
+    box-shadow: var(--anillo-foco);
+  }
+
+  .casilla-entrada:active:not(:disabled) + .casilla-caja {
+    scale: var(--anim-escala-presion);
+    transition-duration: calc(var(--anim-duracion) * 0.4);
+  }
+
+  .casilla-tilde {
+    stroke-dasharray: 18;
+    stroke-dashoffset: 18;
+    transition: stroke-dashoffset var(--anim-duracion) var(--anim-curva);
+  }
+
+  .casilla-entrada:checked + .casilla-caja .casilla-tilde {
+    stroke-dashoffset: 0;
+  }
+
+  /*
+   * Tachado de tareas: una línea que crece de izquierda a derecha. Es una
+   * escala de una línea de 1 px, no un `text-decoration`, justamente para poder
+   * animarla sin tocar el layout.
+   */
+  .casilla-tachado {
+    position: relative;
+  }
+
+  .casilla-tachado::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 55%;
+    width: 100%;
+    height: 1px;
+    background-color: currentColor;
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform var(--anim-duracion) var(--anim-curva);
+  }
+
+  /* Una tarea terminada además se apaga: tachada y gris. */
+  .casilla-entrada:checked ~ .casilla-tachado {
+    color: var(--color-texto-secundario);
+  }
+
+  .casilla-entrada:checked ~ .casilla-tachado::after {
+    transform: scaleX(1);
+  }
+
+  /*
+   * Interruptor (componentes/ui/interruptor.tsx).
+   *
+   * La perilla se desliza y el fondo pasa al acento. Al presionar se estira
+   * hacia el lado contrario al que está apoyada, como si tuviera inercia.
+   */
+  .interruptor {
+    transition-property: background-color, box-shadow;
+    transition-duration: var(--anim-duracion);
+    transition-timing-function: var(--anim-curva);
+  }
+
+  .interruptor-perilla {
+    transition-property: translate, scale;
+    transition-duration: var(--anim-duracion);
+    transition-timing-function: var(--anim-curva);
+    transform-origin: left center;
+  }
+
+  .interruptor[aria-checked="true"] .interruptor-perilla {
+    translate: 1.25rem 0;
+    transform-origin: right center;
+  }
+
+  .interruptor:active:not(:disabled) .interruptor-perilla {
+    scale: 1.18 1;
+    transition-duration: calc(var(--anim-duracion) * 0.4);
+  }
+}

@@ -1,26 +1,18 @@
-// Error de dominio de la API y forma unica de las respuestas de error.
+// Error de dominio de la API.
+//
+// Los codigos y la forma de la respuesta viven en @gestoria/shared, porque son
+// un contrato entre la API y los clientes (ver packages/shared/src/errores).
 
+import {
+  type CampoInvalido,
+  CODIGOS_ERROR,
+  type CodigoError,
+  type RespuestaError,
+} from "@gestoria/shared";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { CODIGOS_ERROR, type CodigoError } from "./codigos.ts";
 
-/** Detalle por campo, solo para errores de validacion. */
-export type CampoInvalido = {
-  campo: string;
-  mensaje: string;
-};
-
-/**
- * Cuerpo de toda respuesta de error de la API.
- * Nunca incluye stack traces, SQL ni detalles internos: eso va al log.
- */
-export type RespuestaError = {
-  error: {
-    codigo: CodigoError;
-    mensaje: string;
-    campos?: CampoInvalido[];
-    idPeticion: string;
-  };
-};
+export type { CampoInvalido, CodigoError, RespuestaError };
+export { CODIGOS_ERROR };
 
 type OpcionesErrorApi = {
   /** Detalle tecnico para el log; nunca se manda al cliente. */
@@ -76,5 +68,16 @@ export const errores = {
       503,
       "El servicio no está disponible en este momento. Probá de nuevo en unos minutos.",
       { causa },
+    ),
+
+  /**
+   * Tras un reseteo de contraseña, la cuenta no puede hacer nada mas que
+   * cambiarla. El cliente reconoce este codigo y lleva a la pantalla de cambio.
+   */
+  debeCambiarPassword: () =>
+    new ErrorApi(
+      CODIGOS_ERROR.DEBE_CAMBIAR_PASSWORD,
+      403,
+      "Tenés que cambiar tu contraseña antes de continuar.",
     ),
 };
