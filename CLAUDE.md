@@ -123,5 +123,6 @@ docs/
   - responde rápido según la guía de rendimiento;
   - está testeada en profundidad, incluidos casos borde, y todos los tests pasan;
   - la documentación en `docs/` y el README están actualizados.
+- **Antes de proponer un commit:** correr `pnpm lint` y `pnpm typecheck`, stagear todo lo que compone el paso (archivos nuevos incluidos, sin dejar nada a medias) y validar con `pnpm exec lefthook run pre-commit`, que revisa el índice y no el árbol de trabajo. Si hay trabajo de otro paso mezclado, avisar antes de seguir. Ver docs/guias/convenciones.md, sección Git.
 - **Al terminar cada paso,** informar: qué se hizo, qué se testeó, el resultado de la revisión de usabilidad, cualquier impacto relevante en rendimiento o seguridad, cómo probarlo y los comandos necesarios. Proponer el mensaje de commit.
 - Si durante el trabajo se toma una decisión que cambia una convención o una guía, actualizar el archivo correspondiente y registrarla en `docs/decisiones.md`.

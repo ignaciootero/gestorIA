@@ -68,7 +68,7 @@ function camposInvalidosDesdeZod(problemas: { path: PropertyKey[]; message: stri
  * honeypot, la validacion completa del registro y el bloqueo de la
  * impersonacion.
  */
-const verificacionesDeEntrada = createAuthMiddleware(async (ctx) => {
+export const verificacionesDeEntrada = createAuthMiddleware(async (ctx) => {
   // Impersonacion desactivada de raiz. El plugin de admin la trae habilitada y
   // no tiene una opcion para apagarla, asi que bloqueamos la ruta: el admin
   // gestiona cuentas pero nunca ve datos ajenos (CLAUDE.md).

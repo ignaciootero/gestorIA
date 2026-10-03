@@ -24,6 +24,7 @@
     "prepare": "lefthook install",
     "usuario:admin": "pnpm --filter @gestoria/api run crear-admin",
     "usuario:aprobar": "pnpm --filter @gestoria/api run aprobar-usuario",
+    "usuario:sembrar": "pnpm --filter @gestoria/api run sembrar",
     "test:e2e": "turbo run test:e2e"
   },
   "devDependencies": {

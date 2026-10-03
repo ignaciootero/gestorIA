@@ -72,6 +72,8 @@ Si un fragmento necesita muchos comentarios para entenderse, primero intentar si
 - **Commits chicos** y enfocados en un solo cambio, con mensajes según **Conventional Commits** en español: `feat: registro de gastos`, `fix: cálculo de fecha en recordatorios`, `docs: guía de testing`, `refactor:`, `test:`, `chore:`.
 - **Una rama por funcionalidad o corrección** (`feat/registro-gastos`, `fix/zona-horaria-recordatorios`), integrada a `main` cuando está terminada según la definición de terminado. `main` siempre funciona.
 - **Hooks con Lefthook:** antes de cada commit, Biome (lint y formato) sobre los archivos modificados y verificación de tipos; antes de cada push, la suite de tests. No saltear los hooks.
+- **El hook revisa el índice, no el árbol de trabajo.** Mientras corre, aparta lo que no está stageado, pero los archivos sin trackear siguen en disco. Un commit parcial (algo stageado, algo no, archivos nuevos sin agregar) produce errores de tipos en cascada aunque `pnpm lint` y `pnpm typecheck` pasen sobre el árbol completo. Por eso: stagear todo lo que compone el paso (incluidos los archivos nuevos), no mezclar en el árbol trabajo de dos pasos al momento de commitear, y antes de proponer el mensaje de commit correr `pnpm lint`, `pnpm typecheck` y `pnpm exec lefthook run pre-commit` (valida el índice tal como se va a commitear).
+- Capturas y archivos de depuración (`_falla.png` y similares) no se commitean: borrarlos o dejarlos fuera del índice.
 - Nunca commitear secretos, archivos `.env`, datos reales ni archivos generados (builds, dependencias).
 - No reescribir el historial de ramas compartidas.
 
@@ -82,4 +84,4 @@ Si un fragmento necesita muchos comentarios para entenderse, primero intentar si
 - Montos: `$ 1.200,50` para pesos uruguayos y `US$ 1.200,50` para dólares. Fechas: `16/09/2026`. Horas en formato de 24 horas.
 - **Montos guardados como enteros en la unidad mínima** (centésimos) o como `numeric` en la base, nunca como números de punto flotante.
 - Fechas y horas guardadas en UTC y mostradas en la zona horaria del usuario.
-- **Múltiples monedas: decisión pendiente.** Todo monto guarda su moneda. Si se convierte entre monedas o se mantienen separadas en totales y reportes se decide al implementar el módulo de gastos; consultar antes de asumir un criterio.
+- **Una sola moneda por usuario**, la de `usuarios.monedaPorDefecto` (decidida al implementar el módulo de ingresos y gastos, ver `docs/decisiones.md`, 2026-09-30). Ningún monto guarda su propia moneda ni hay conversión entre monedas.

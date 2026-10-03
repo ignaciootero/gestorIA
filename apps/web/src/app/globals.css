@@ -8,6 +8,14 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
+ * Igual que el brillo de bordes: en mouse de verdad (no táctil, no trackpad
+ * impreciso) es donde una acción puede quedar oculta hasta pasar el cursor.
+ * En cualquier otro dispositivo la regla ni se evalúa, así que queda como si
+ * no existiera: el contenido se ve siempre (docs/guias/estetica.md).
+ */
+@custom-variant con-mouse (@media (hover: hover) and (pointer: fine));
+
+/*
  * Los tokens del sistema visual se exponen como utilidades de Tailwind.
  * `@theme inline` hace que apunten a las variables CSS en vez de copiar su
  * valor, que es lo que permite que cambien solas al cambiar de tema.
@@ -95,6 +103,10 @@
   :root {
     --anillo-foco: 0 0 0 3px color-mix(in srgb, var(--color-acento) 35%, transparent);
     --anillo-foco-peligro: 0 0 0 3px color-mix(in srgb, var(--color-peligro) 30%, transparent);
+
+    /* Altura del Navbar (h-18): la usan las columnas laterales del marco de la
+       aplicación para saber dónde pegarse con `sticky` (EstructuraDeApp). */
+    --alto-navbar: 4.5rem;
   }
 
   /* Números tabulares en montos, fechas y horas: las columnas quedan alineadas. */
@@ -338,5 +350,69 @@
   .interruptor:active:not(:disabled) .interruptor-perilla {
     scale: 1.18 1;
     transition-duration: calc(var(--anim-duracion) * 0.4);
+  }
+
+  /*
+   * Diálogo (componentes/ui/dialogo.tsx).
+   *
+   * <dialog> pasa a ser el contenedor a pantalla completa que centra la
+   * tarjeta con flex. "display: flex" solo rige mientras está abierto: si se
+   * aplicara siempre, el diálogo se vería (y taparía clics) aunque estuviera
+   * cerrado, porque dejaría de regir el "display: none" por defecto de
+   * <dialog>. `align-items`/`justify-content`, en cambio, van en la regla
+   * base (no en `[open]`): son inofensivas mientras está cerrado
+   * (`display: none` no las usa), pero si solo rigieran con `[open]`
+   * desaparecerían apenas se quita ese atributo para cerrar, a mitad de la
+   * animación de salida, y la tarjeta pegaba un salto a la esquina superior
+   * izquierda mientras se desvanecía (se veía como si apareciera "otro"
+   * diálogo mal ubicado).
+   *
+   * Escalar y desvanecer el propio <dialog> anima igual que si fuera la
+   * tarjeta de adentro: no tiene fondo ni borde propios, así que no se nota
+   * la diferencia, y evita una segunda regla con @starting-style.
+   */
+  .dialogo {
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+    transition:
+      opacity var(--anim-duracion) var(--anim-curva),
+      transform var(--anim-duracion) var(--anim-curva),
+      overlay var(--anim-duracion) var(--anim-curva) allow-discrete,
+      display var(--anim-duracion) var(--anim-curva) allow-discrete;
+  }
+
+  .dialogo[open] {
+    display: flex;
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+
+  @starting-style {
+    .dialogo[open] {
+      opacity: 0;
+      transform: scale(0.95) translateY(8px);
+    }
+  }
+
+  .dialogo::backdrop {
+    background-color: transparent;
+    backdrop-filter: blur(0);
+    transition:
+      background-color var(--anim-duracion) var(--anim-curva),
+      backdrop-filter var(--anim-duracion) var(--anim-curva);
+  }
+
+  .dialogo[open]::backdrop {
+    background-color: color-mix(in srgb, var(--color-fondo) 60%, transparent);
+    backdrop-filter: blur(4px);
+  }
+
+  @starting-style {
+    .dialogo[open]::backdrop {
+      background-color: transparent;
+      backdrop-filter: blur(0);
+    }
   }
 }

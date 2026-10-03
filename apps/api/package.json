@@ -15,6 +15,7 @@
     "test:ver": "vitest",
     "crear-admin": "node --env-file-if-exists=../../.env src/scripts/crear-admin.ts",
     "aprobar-usuario": "node --env-file-if-exists=../../.env src/scripts/aprobar-usuario.ts",
+    "sembrar": "node --env-file-if-exists=../../.env src/scripts/sembrar-datos-de-prueba.ts",
     "start:e2e": "node --env-file-if-exists=../../.env src/index.ts"
   },
   "dependencies": {

@@ -149,6 +149,32 @@ test.describe("crear cuenta", () => {
     await expect(page).toHaveURL(/\/ingresar$/);
   });
 
+  test("volver tras registrarse deja el formulario de entrar usable, no colapsado", async ({
+    page,
+  }) => {
+    await page.goto("/ingresar");
+    await page.getByRole("tab", { name: "Crear cuenta" }).click();
+
+    await page.getByLabel("Nombre").fill("Ana");
+    await page.getByLabel("Apellido").fill("Pérez");
+    await page.getByLabel("Usuario").fill(`ana.${Date.now()}`);
+    await page.getByLabel("Correo").fill(`ana.${Date.now()}@ejemplo.test`);
+    await page.getByLabel("Contraseña").fill("clave-de-prueba");
+    await page.getByRole("button", { name: "Crear cuenta" }).click();
+    await expect(page.getByText(/Revisá tu correo/i)).toBeVisible();
+
+    await page.getByRole("button", { name: "Volver" }).click();
+
+    // El bug real: el contenedor que anima el alto quedaba en 0 para siempre
+    // (el ResizeObserver medía un elemento ya desmontado), así que el
+    // formulario estaba en el DOM pero invisible. Comprobar que el campo
+    // no solo existe sino que es usable cierra ese caso.
+    const campo = page.getByLabel("Usuario o correo");
+    await expect(campo).toBeVisible();
+    await campo.fill("alguien");
+    await expect(campo).toHaveValue("alguien");
+  });
+
   test("ofrece reenviar el correo si no llegó", async ({ page }) => {
     await page.goto("/ingresar");
     await page.getByRole("tab", { name: "Crear cuenta" }).click();

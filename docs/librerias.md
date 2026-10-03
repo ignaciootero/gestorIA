@@ -75,6 +75,7 @@ Todas las licencias son libres y sin costo, según la restricción de `CLAUDE.md
 | `@hookform/resolvers` | 5.9 | MIT | `apps/web` | Conecta react-hook-form con los esquemas Zod de `packages/shared`, para no duplicar reglas entre cliente y servidor. |
 | `clsx` | 2.1 | MIT | `apps/web` | Arma listas de clases condicionales. |
 | `tailwind-merge` | 3.7 | MIT | `apps/web` | Resuelve clases de Tailwind en conflicto, para que lo que pasa quien usa un componente gane sobre el valor por defecto. |
+| `recharts` | 3.10 | MIT | `apps/web` | Gráficos del módulo de ingresos y gastos (gastos por categoría, evolución por período). Es la librería de gráficos para React más usada y mantenida; se eligió antes que armar los gráficos a mano porque la guía de estadísticas pide varios tipos (barras, líneas) con interacción básica, y Recharts los da con poco código, cargados de forma diferida para no engordar el resto de la aplicación. |
 
 ## Pendientes del stack
 

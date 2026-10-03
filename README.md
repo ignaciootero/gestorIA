@@ -8,9 +8,11 @@ El nombre es un juego de palabras entre **gestoría** e **IA**, por la entrada p
 lenguaje natural que se suma al final de la hoja de ruta. Se escribe siempre así, con
 la g minúscula y las dos últimas letras en mayúscula.
 
-Estado actual: **pasos 1 a 4 de la hoja de ruta**, con el 4 empezado. Hay monorepo,
-base de datos, API con autenticación, sistema visual y las pantallas de ingreso e
-inicio. Todavía no hay módulos de negocio ni panel de admin. Ver `CLAUDE.md` para el
+Estado actual: **pasos 1 a 7 de la hoja de ruta**. Hay monorepo, base de datos, API con
+autenticación, sistema visual, panel de admin y el primer módulo de negocio: ingresos y
+gastos, con transferencias entre cuentas, organizados en períodos que abre y cierra cada
+persona (no en meses calendario).
+Todavía no hay móvil ni entrada por lenguaje natural. Ver `CLAUDE.md` para el
 panorama completo.
 
 ## Requisitos
@@ -176,6 +178,12 @@ Una migración ya aplicada **nunca se edita**: se genera una nueva
 | `pnpm usuario:aprobar --listar` | Muestra las solicitudes pendientes y si ya confirmaron el correo |
 | `pnpm usuario:aprobar <usuario>` | Aprueba una cuenta. Acepta el usuario o el correo |
 | `pnpm usuario:aprobar <usuario> --rechazar` | La rechaza y le cierra las sesiones abiertas |
+| `pnpm usuario:sembrar` | Carga cuentas de prueba en distintos estados, pasando por el flujo real |
+| `pnpm usuario:sembrar --listar` | Muestra los escenarios disponibles, sin tocar la base |
+| `pnpm usuario:sembrar --solo aprobada,bloqueada` | Carga solo esos escenarios |
+| `pnpm usuario:sembrar --borrar-todo` | Antes de sembrar, vacía usuarios, sesiones y auditoría (pide confirmación) |
+| `pnpm usuario:sembrar --solo finanzas` | Carga meses de finanzas realistas para el admin (si ya tiene, no toca nada) |
+| `pnpm usuario:sembrar --solo finanzas --reiniciar-finanzas` | Borra las finanzas del admin y las vuelve a sembrar (pide confirmación) |
 
 Hasta que exista el panel de admin, estos comandos son la única forma de aprobar una
 cuenta que se registró y quedó pendiente.
@@ -191,7 +199,7 @@ en modo claro y oscuro. En producción devuelve 404.
 ```
 apps/
   api/        Hono + Pino + Better Auth. Único backend, lo consumen web y móvil
-  web/        Next.js: pantallas de ingreso e inicio
+  web/        Next.js: ingreso, inicio, panel de admin y módulo de ingresos y gastos (por períodos)
   mobile/     Expo (placeholder, paso 6)
 packages/
   config/     tsconfig base y configuración compartida

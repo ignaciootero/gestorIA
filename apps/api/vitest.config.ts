@@ -30,5 +30,9 @@ export default defineConfig({
     maxWorkers: 1,
     isolate: false,
     testTimeout: 15_000,
+    // Cada archivo vacia la base antes de sus propios tests (beforeEach); esto
+    // la vuelve a vaciar al terminar toda la corrida, para no dejarla sucia
+    // con lo que hizo el ultimo test.
+    globalSetup: "./src/pruebas/limpieza-global.ts",
   },
 });

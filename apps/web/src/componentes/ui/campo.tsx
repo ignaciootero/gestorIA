@@ -7,7 +7,7 @@
 
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, type LucideIcon } from "lucide-react";
 import { forwardRef, type InputHTMLAttributes, type ReactNode, useId } from "react";
 import { cn } from "@/lib/clases";
 
@@ -17,10 +17,12 @@ type PropsCampo = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> & {
   ayuda?: ReactNode;
   /** Mensaje de error. Si viene, el campo se marca como inválido. */
   error?: string | undefined;
+  /** Ícono decorativo a la izquierda, por ejemplo la lupa de un buscador. */
+  icono?: LucideIcon;
 };
 
 export const Campo = forwardRef<HTMLInputElement, PropsCampo>(function Campo(
-  { etiqueta, ayuda, error, className, ...resto },
+  { etiqueta, ayuda, error, icono: Icono, className, ...resto },
   ref,
 ) {
   const id = useId();
@@ -37,32 +39,41 @@ export const Campo = forwardRef<HTMLInputElement, PropsCampo>(function Campo(
         {etiqueta}
       </label>
 
-      <input
-        ref={ref}
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={descrito === "" ? undefined : descrito}
-        className={cn(
-          "h-11 rounded-control border bg-superficie px-3 text-base text-texto shadow-sutil",
-          "placeholder:text-texto-secundario",
-          "transition-[border-color,box-shadow,background-color] duration-(--duracion-rapida) ease-salida",
-          "hover:border-acento/40",
-          // Al enfocar, el borde se tiñe de acento y aparece un halo del mismo
-          // color: el campo activo se distingue de un vistazo. Se quita el
-          // outline general porque este anillo lo reemplaza.
-          "focus:border-acento",
-          "focus-visible:border-acento focus-visible:shadow-(--anillo-foco) focus-visible:outline-none",
-          "disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none",
-          error
-            ? cn(
-                "border-peligro focus:border-peligro",
-                "focus-visible:border-peligro focus-visible:shadow-(--anillo-foco-peligro)",
-              )
-            : "border-borde-fuerte",
-          className,
-        )}
-        {...resto}
-      />
+      <div className="relative">
+        {Icono ? (
+          <Icono
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-texto-secundario"
+          />
+        ) : null}
+        <input
+          ref={ref}
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={descrito === "" ? undefined : descrito}
+          className={cn(
+            "h-11 w-full rounded-control border bg-superficie px-3 text-base text-texto shadow-sutil",
+            "placeholder:text-texto-secundario",
+            "transition-[border-color,box-shadow,background-color] duration-(--duracion-rapida) ease-salida",
+            "hover:border-acento/40",
+            // Al enfocar, el borde se tiñe de acento y aparece un halo del mismo
+            // color: el campo activo se distingue de un vistazo. Se quita el
+            // outline general porque este anillo lo reemplaza.
+            "focus:border-acento",
+            "focus-visible:border-acento focus-visible:shadow-(--anillo-foco) focus-visible:outline-none",
+            "disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none",
+            error
+              ? cn(
+                  "border-peligro focus:border-peligro",
+                  "focus-visible:border-peligro focus-visible:shadow-(--anillo-foco-peligro)",
+                )
+              : "border-borde-fuerte",
+            Icono ? "pl-9" : null,
+            className,
+          )}
+          {...resto}
+        />
+      </div>
 
       {ayuda ? (
         <p id={idAyuda} className="text-xs text-texto-secundario">

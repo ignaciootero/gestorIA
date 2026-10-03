@@ -1,0 +1,1 @@
+CREATE INDEX "auditoria_objetivo_idx" ON "auditoria" USING btree ("objetivo_id");

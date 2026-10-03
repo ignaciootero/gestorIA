@@ -5,12 +5,25 @@
 
 import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
-import { ESTADOS_CUENTA, type EstadoCuenta } from "@gestoria/shared";
+import {
+  ACCIONES_AUDITORIA,
+  type AccionAuditoria,
+  ESTADOS_CUENTA,
+  type EstadoCuenta,
+} from "@gestoria/shared";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import type { Mensajero } from "../correo/enviar.ts";
-import { opcionesAuthBase } from "./opciones.ts";
+import { registrarAuditoria } from "../servicios/usuarios/auditoria.ts";
+import { marcarPasswordCambiada } from "../servicios/usuarios/cuentas.ts";
+import { opcionesAuthBase, verificacionesDeEntrada } from "./opciones.ts";
+
+/** Que accion de auditoria corresponde a cada ruta de admin de Better Auth. */
+const ACCION_DE_ADMIN_POR_RUTA: Partial<Record<string, AccionAuditoria>> = {
+  "/admin/ban-user": ACCIONES_AUDITORIA.cuentaBloqueada,
+  "/admin/unban-user": ACCIONES_AUDITORIA.cuentaDesbloqueada,
+};
 
 export type DependenciasAuth = {
   cliente: ClienteDb;
@@ -62,6 +75,53 @@ function motivoDeRechazo(usuario: {
 export function crearAuth(dependencias: DependenciasAuth) {
   const { cliente } = dependencias;
 
+  /**
+   * Efectos propios sobre rutas de Better Auth: apagar `debeCambiarPassword`
+   * despues de un `/change-password` exitoso, y auditar bloquear/desbloquear
+   * del panel de admin (`/admin/ban-user`, `/admin/unban-user`).
+   *
+   * Van como hook y no como endpoints propios porque esas rutas son de Better
+   * Auth: la regla del proyecto es pasarle sus rutas crudas, nunca
+   * reimplementarlas (apps/api/src/rutas/auth.ts). El reseteo de contraseña
+   * del panel es la excepcion: tiene ruta propia porque necesita generar la
+   * contraseña temporal en el servidor (apps/api/src/rutas/admin.ts).
+   *
+   * El hook `after` corre siempre, tambien cuando el endpoint fallo (por
+   * ejemplo con la contraseña actual equivocada, o sin permiso de admin): la
+   * sesion ya esta cargada en `ctx.context.session` antes de que el handler
+   * valide nada. Por eso hace falta descartar el caso de error mirando
+   * `ctx.context.returned`, que Better Auth deja en una instancia de
+   * `APIError` cuando el endpoint tiro.
+   */
+  const despuesDeAutenticar = createAuthMiddleware(async (ctx) => {
+    if (ctx.context.returned instanceof APIError) return;
+
+    if (ctx.path === "/change-password") {
+      const usuarioId = ctx.context.session?.user.id;
+      if (usuarioId) {
+        await marcarPasswordCambiada(cliente, usuarioId);
+      }
+      return;
+    }
+
+    const accion = ACCION_DE_ADMIN_POR_RUTA[ctx.path];
+    if (!accion) return;
+
+    const adminId = ctx.context.session?.user.id;
+    const objetivoId = (ctx.body as { userId?: string } | undefined)?.userId;
+    if (!adminId || !objetivoId) return;
+
+    await registrarAuditoria(cliente, {
+      adminId,
+      accion,
+      objetivoId,
+      detalle:
+        accion === ACCIONES_AUDITORIA.cuentaBloqueada
+          ? ((ctx.body as { banReason?: string }).banReason ?? null)
+          : null,
+    });
+  });
+
   return betterAuth({
     ...opcionesAuthBase({
       secreto: dependencias.secreto,
@@ -76,6 +136,14 @@ export function crearAuth(dependencias: DependenciasAuth) {
       provider: "pg",
       schema: esquema,
     }),
+
+    // Reemplaza el `hooks` de opcionesAuthBase (el spread no hace merge
+    // profundo) para sumar el `after`, que necesita `cliente` y por eso no
+    // puede vivir en opciones.ts (ver el comentario ahi arriba).
+    hooks: {
+      before: verificacionesDeEntrada,
+      after: despuesDeAutenticar,
+    },
 
     databaseHooks: {
       session: {

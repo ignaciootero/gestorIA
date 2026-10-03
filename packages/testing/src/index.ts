@@ -1,6 +1,20 @@
 // Punto de entrada de las utilidades de prueba compartidas.
 // Fabricas de datos y fixtures que reusan los tests de toda la aplicacion.
 
+export type {
+  DatosCategoriaDePrueba,
+  DatosCuentaFinancieraDePrueba,
+  DatosMovimientoDePrueba,
+  DatosPeriodoDePrueba,
+  DatosPresupuestoDePrueba,
+} from "./fabricas/finanzas.ts";
+export {
+  crearCategoriaDePrueba,
+  crearCuentaFinancieraDePrueba,
+  crearMovimientoDePrueba,
+  crearPeriodoDePrueba,
+  crearPresupuestoDePrueba,
+} from "./fabricas/finanzas.ts";
 export type { DatosUsuarioDePrueba } from "./fabricas/usuarios.ts";
 export {
   crearUsuarioDePrueba,

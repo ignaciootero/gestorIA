@@ -9,6 +9,8 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { FondoAnimado } from "@/componentes/layout/fondo-animado";
+import { GuardiaDeCambioPassword } from "@/componentes/layout/guardia-cambio-password";
+import { GuardiaDeAdmin } from "@/componentes/layout/guardia-de-admin";
 import { Navbar } from "@/componentes/layout/navbar";
 import { PieDePagina } from "@/componentes/layout/pie-de-pagina";
 import { Proveedores } from "@/componentes/proveedores";
@@ -51,6 +53,8 @@ export default function LayoutRaiz({ children }: { children: ReactNode }) {
             fondo (docs/guias/estetica.md).
           */}
           <FondoAnimado />
+          <GuardiaDeCambioPassword />
+          <GuardiaDeAdmin />
           {/*
             Columna de alto completo: el contenido crece y empuja el pie hacia
             abajo, así no queda flotando en el medio en las pantallas cortas.

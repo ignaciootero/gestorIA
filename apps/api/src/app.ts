@@ -15,7 +15,9 @@ import type { Logger } from "./logger.ts";
 import { manejadorDeErrores, manejadorNoEncontrado } from "./middlewares/errores.ts";
 import { registrarPeticiones } from "./middlewares/logs.ts";
 import { cargarSesion } from "./middlewares/sesion.ts";
+import { rutasDeAdmin } from "./rutas/admin.ts";
 import { rutasDeAuth } from "./rutas/auth.ts";
+import { rutasDeFinanzas } from "./rutas/finanzas.ts";
 import { rutasDeSalud } from "./rutas/salud.ts";
 import { rutasDeSesion } from "./rutas/yo.ts";
 import type { EntornoHono } from "./tipos.ts";
@@ -73,6 +75,8 @@ export function crearApp({ cliente, auth, logger, entorno }: OpcionesApp): Hono<
 
   app.route("/", rutasDeSalud(cliente));
   app.route("/", rutasDeSesion());
+  app.route("/", rutasDeAdmin(cliente, auth));
+  app.route("/", rutasDeFinanzas(cliente));
 
   app.notFound(manejadorNoEncontrado);
   app.onError(manejadorDeErrores);

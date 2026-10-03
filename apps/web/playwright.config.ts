@@ -19,6 +19,9 @@ const URL_API = `http://localhost:${PUERTO_API}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Corre una sola vez al terminar toda la corrida, para que gestion_test no
+  // quede sucia con lo que dejó el último test.
+  globalTeardown: "./e2e/limpieza-global.ts",
   fullyParallel: false,
   // Los tests comparten la base de pruebas: en paralelo se pisarían.
   workers: 1,

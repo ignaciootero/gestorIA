@@ -51,6 +51,13 @@ export const usuarios = pgTable(
     apellido: text().notNull(),
     /** pendiente | aprobado | rechazado. Ver packages/shared, ESTADOS_CUENTA. */
     estado: text().notNull().default("pendiente"),
+    /**
+     * Cuándo se fijó el `estado` actual: mientras la cuenta sigue pendiente,
+     * coincide con `createdAt` (la fecha de la solicitud); en cuanto se aprueba
+     * o se rechaza, pasa a ser esa fecha. Un solo campo alcanza para las tres
+     * fechas que el panel de admin necesita mostrar y ordenar.
+     */
+    estadoActualizadoEn: timestamp({ withTimezone: true }).notNull().defaultNow(),
     zonaHoraria: text().notNull().default("America/Montevideo"),
     monedaPorDefecto: text().notNull().default("UYU"),
     /** Tras un reseteo de contraseña, obliga a cambiarla en el proximo login. */

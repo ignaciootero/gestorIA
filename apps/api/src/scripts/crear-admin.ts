@@ -11,43 +11,14 @@
 // contraseña; solo se asegura de que quede aprobada y con rol admin.
 
 import { crearClienteDb, describirConexion, leerConfigBaseDatos } from "@gestoria/db";
-import {
-  ESTADOS_CUENTA,
-  esquemaEmail,
-  esquemaPassword,
-  esquemaUsuario,
-  ROLES,
-} from "@gestoria/shared";
-import { z } from "zod";
+import { ESTADOS_CUENTA, esquemaPassword, ROLES } from "@gestoria/shared";
 import { crearAuth } from "../auth/crear-auth.ts";
 import { leerConfigSmtp, leerEntornoApi } from "../config/entorno.ts";
 import { crearMensajero } from "../correo/enviar.ts";
 import { crearLogger } from "../logger.ts";
 import { ascenderAAdmin, buscarCuenta } from "../servicios/usuarios/cuentas.ts";
+import { leerDatosAdmin } from "./datos-admin.ts";
 import { pedirPasswordOculta } from "./pedir-password.ts";
-
-const esquemaDatosAdmin = z.object({
-  ADMIN_USUARIO: esquemaUsuario,
-  ADMIN_NOMBRE: z.string().trim().min(1, "Completá ADMIN_NOMBRE."),
-  ADMIN_APELLIDO: z.string().trim().min(1, "Completá ADMIN_APELLIDO."),
-  ADMIN_EMAIL: esquemaEmail,
-});
-
-function leerDatosAdmin() {
-  const resultado = esquemaDatosAdmin.safeParse(process.env);
-
-  if (!resultado.success) {
-    const detalle = resultado.error.issues
-      .map((problema) => `  - ${problema.path.join(".")}: ${problema.message}`)
-      .join("\n");
-    throw new Error(
-      `Faltan datos del admin en el .env o son inválidos:\n${detalle}\n` +
-        "Están documentados en .env.example.",
-    );
-  }
-
-  return resultado.data;
-}
 
 /**
  * Obtiene la contraseña: de la consola si hay terminal, o de ADMIN_PASSWORD si

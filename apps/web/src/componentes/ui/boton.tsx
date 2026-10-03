@@ -1,7 +1,10 @@
 // Botón del sistema visual.
 //
-// Tres variantes: la principal lleva el acento (como máximo una por pantalla),
-// la secundaria es un borde fino y la sutil no tiene fondo.
+// Cuatro variantes: la principal lleva el acento (como máximo una por
+// pantalla), la secundaria es un borde fino, la sutil no tiene fondo y la de
+// peligro usa el color de estado reservado para acciones destructivas
+// (bloquear una cuenta, por ejemplo) — nunca el acento, que es solo para la
+// acción principal (docs/guias/estetica.md, Colores).
 //
 // Responde a los tres estados que pide docs/guias/estetica.md: al pasar el
 // mouse sube un nivel de elevación y se levanta, al presionarlo baja y se
@@ -16,7 +19,7 @@ import { Loader2 } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/clases";
 
-type Variante = "principal" | "secundario" | "sutil";
+type Variante = "principal" | "secundario" | "sutil" | "peligro";
 type Tamano = "normal" | "chico";
 
 const VARIANTES: Record<Variante, string> = {
@@ -28,6 +31,11 @@ const VARIANTES: Record<Variante, string> = {
   secundario: cn(
     "border border-borde-fuerte bg-superficie text-texto shadow-sutil",
     "hover:border-acento/40 hover:bg-superficie-suave hover:shadow-elevada",
+    "active:shadow-sutil",
+  ),
+  peligro: cn(
+    "border border-peligro/40 bg-superficie text-peligro shadow-sutil",
+    "hover:border-peligro hover:bg-peligro-fondo hover:shadow-elevada",
     "active:shadow-sutil",
   ),
   sutil: cn(

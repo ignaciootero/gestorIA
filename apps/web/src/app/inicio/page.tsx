@@ -8,11 +8,16 @@
 import { tituloDePantalla } from "@gestoria/shared";
 import type { Metadata } from "next";
 import { PanelDeInicio } from "@/componentes/inicio/panel-de-inicio";
+import { EstructuraDeApp } from "@/componentes/layout/estructura-de-app";
 
 export const metadata: Metadata = {
   title: tituloDePantalla("Inicio"),
 };
 
 export default function PaginaDeInicio() {
-  return <PanelDeInicio />;
+  return (
+    <EstructuraDeApp>
+      <PanelDeInicio />
+    </EstructuraDeApp>
+  );
 }

@@ -24,7 +24,7 @@ type App = Hono<EntornoHono>;
  */
 export async function limpiarBase(cliente: ClienteDb): Promise<void> {
   await cliente.db.execute(
-    sql`truncate table ${esquema.usuarios}, ${esquema.sesiones}, ${esquema.cuentas}, ${esquema.verificaciones}, ${esquema.limitesPeticiones} restart identity cascade`,
+    sql`truncate table ${esquema.usuarios}, ${esquema.sesiones}, ${esquema.cuentas}, ${esquema.verificaciones}, ${esquema.limitesPeticiones}, ${esquema.ajustesDeSaldo}, ${esquema.movimientos}, ${esquema.periodos}, ${esquema.presupuestos}, ${esquema.cuentasFinancieras}, ${esquema.categorias} restart identity cascade`,
   );
 }
 
@@ -90,6 +90,14 @@ export async function ponerEstado(
   await cliente.db
     .update(esquema.usuarios)
     .set({ estado })
+    .where(eq(esquema.usuarios.email, email));
+}
+
+/** Marca una cuenta para que tenga que cambiar la contraseña, como haria un reseteo. */
+export async function ponerDebeCambiarPassword(cliente: ClienteDb, email: string): Promise<void> {
+  await cliente.db
+    .update(esquema.usuarios)
+    .set({ debeCambiarPassword: true })
     .where(eq(esquema.usuarios.email, email));
 }
 

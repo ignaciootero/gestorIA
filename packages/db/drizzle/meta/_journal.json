@@ -15,6 +15,83 @@
       "when": 1789599932488,
       "tag": "0001_lively_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789690385422,
+      "tag": "0002_wide_ares",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790115329220,
+      "tag": "0003_bitter_xorn",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790116776360,
+      "tag": "0004_overconfident_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790811626231,
+      "tag": "0005_amazing_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790819099650,
+      "tag": "0006_third_colonel_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790884488302,
+      "tag": "0007_oval_grim_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790890759996,
+      "tag": "0008_shallow_supreme_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790894845531,
+      "tag": "0009_burly_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790895843677,
+      "tag": "0010_colores_por_defecto",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790895865861,
+      "tag": "0011_colores_por_defecto_sin_color",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790910040232,
+      "tag": "0012_importes_bigint",
+      "breakpoints": true
     }
   ]
 }

@@ -88,12 +88,23 @@ export function PanelDeIngreso() {
     // Con ResizeObserver y no una medición única, la tarjeta también acompaña
     // los cambios de alto dentro del mismo formulario: cuando aparece un
     // mensaje de error, crece en vez de dar un tirón.
-    const observador = new ResizeObserver(() => setAlto(elemento.offsetHeight));
+    const observador = new ResizeObserver(() => {
+      // Al desmontarse este div (al registrarse, que reemplaza el formulario
+      // por el aviso de "revisá tu correo"), el navegador dispara un último
+      // aviso sobre un elemento ya fuera del documento: mide 0 y, sin este
+      // chequeo, ese cero quedaba pegado para siempre, porque el efecto no
+      // se repite hasta que la persona vuelve a este mismo formulario.
+      if (!elemento.isConnected) return;
+      setAlto(elemento.offsetHeight);
+    });
     observador.observe(elemento);
     setAlto(elemento.offsetHeight);
 
     return () => observador.disconnect();
-  }, []);
+    // Se repite cuando se vuelve del aviso de verificación al formulario: ese
+    // "Volver" desmonta y remonta este div, así que hace falta un observador
+    // nuevo apuntando al elemento nuevo, no el que quedó huérfano.
+  }, [emailRegistrado]);
 
   function cambiarA(nueva: Pestana): void {
     if (nueva !== pestana) {

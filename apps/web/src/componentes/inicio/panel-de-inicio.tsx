@@ -43,33 +43,33 @@ export function PanelDeInicio() {
     // Esqueleto con la forma del contenido, no una pantalla en blanco
     // (docs/guias/rendimiento.md, Velocidad percibida).
     return (
-      <main className="mx-auto flex flex-1 max-w-3xl flex-col gap-8 p-4 sm:p-8">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4">
           <span className="solo-lectores">Cargando tus datos</span>
-          <div className="h-8 w-48 animate-pulse rounded-control bg-superficie-suave" />
+          <div className="mx-auto h-8 w-48 animate-pulse rounded-control bg-superficie-suave" />
           <div className="h-40 animate-pulse rounded-tarjeta bg-superficie-suave" />
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error) {
     const interpretado = interpretarError(error);
     return (
-      <main className="mx-auto flex flex-1 max-w-3xl flex-col justify-center gap-4 p-4 sm:p-8">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
         <Aviso tono="peligro" titulo="No pudimos cargar tus datos">
           {interpretado.mensaje}
         </Aviso>
         <Boton variante="secundario" onClick={() => router.replace("/ingresar")}>
           Volver a entrar
         </Boton>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto flex flex-1 max-w-3xl flex-col gap-8 p-4 sm:p-8">
-      <header>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+      <header className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Hola, {yo.nombre}</h1>
         <p className="mt-1 text-sm text-texto-secundario">
           Entraste como <span className="font-medium text-texto">{yo.usuario ?? yo.email}</span>
@@ -84,6 +84,6 @@ export function PanelDeInicio() {
           uno. Por ahora lo que funciona es la cuenta: entrar, salir y el control de acceso.
         </p>
       </Tarjeta>
-    </main>
+    </div>
   );
 }

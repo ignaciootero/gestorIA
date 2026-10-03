@@ -16,7 +16,7 @@ export function PieDePagina() {
     // Superficie translúcida como la de la barra: el fondo animado pasa por
     // detrás de todo, y sin esto el pie se confundiría con él.
     <footer className="border-t border-borde bg-fondo/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-texto-secundario sm:px-8">
+      <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-texto-secundario sm:px-8">
         <p>
           {NOMBRE_APP} · {ANIO}
         </p>

@@ -21,7 +21,7 @@ export async function limpiarBaseDePruebas(): Promise<void> {
   const db = cliente();
   try {
     await db.db.execute(
-      sql`truncate table ${esquema.usuarios}, ${esquema.sesiones}, ${esquema.cuentas}, ${esquema.verificaciones}, ${esquema.limitesPeticiones} restart identity cascade`,
+      sql`truncate table ${esquema.usuarios}, ${esquema.sesiones}, ${esquema.cuentas}, ${esquema.verificaciones}, ${esquema.limitesPeticiones}, ${esquema.movimientos}, ${esquema.presupuestos}, ${esquema.cuentasFinancieras}, ${esquema.categorias} restart identity cascade`,
     );
   } finally {
     await db.cerrar();
@@ -43,7 +43,12 @@ let contador = 0;
  * el hash correcto) y después le pone el estado que pida el test.
  */
 export async function crearCuentaAprobada(
-  opciones: { estado?: "pendiente" | "aprobado" | "rechazado"; emailVerificado?: boolean } = {},
+  opciones: {
+    estado?: "pendiente" | "aprobado" | "rechazado";
+    emailVerificado?: boolean;
+    debeCambiarPassword?: boolean;
+    esAdmin?: boolean;
+  } = {},
 ): Promise<CuentaDePrueba> {
   contador += 1;
   const sufijo = `${Date.now().toString(36)}${contador}`;
@@ -81,6 +86,8 @@ export async function crearCuentaAprobada(
       .set({
         estado: opciones.estado ?? "aprobado",
         emailVerified: opciones.emailVerificado ?? true,
+        debeCambiarPassword: opciones.debeCambiarPassword ?? false,
+        role: opciones.esAdmin ? "admin" : "usuario",
       })
       .where(eq(esquema.usuarios.email, cuenta.email));
   } finally {

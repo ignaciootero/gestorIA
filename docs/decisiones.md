@@ -5,6 +5,554 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-10-03 — Campos de importe: texto con separador de miles en lugar de type="number"
+
+Para mostrar los miles separados mientras se escribe se reemplazó el `<input type="number">` de
+los cuatro campos de dinero por un campo de texto (`inputMode="decimal"`, que en el móvil sigue
+abriendo el teclado numérico). *Por qué:* un campo numérico nativo solo admite dígitos, el punto y
+el signo, y el navegador decide cómo mostrarlo; no hay forma de agregarle separadores.
+*Alternativas descartadas:* una librería de máscaras (dependencia nueva para algo acotado, y la
+guía pide consultar antes) y formatear solo al salir del campo (la persona no ve los miles
+mientras escribe, que era el pedido). El formato se arma con `Intl` (no a mano) y vive en
+`packages/shared` para poder probarlo con tests unitarios; el componente solo maneja el cursor y
+los eventos. *Decisiones de comportamiento:* un punto escrito vale como decimal (la tecla del
+teclado numérico) porque los miles se ponen solos y nadie necesita escribirlos; un importe pegado
+se interpreta por una regla (último separador = decimal; uno solo y con tres dígitos detrás =
+miles) en vez de suponer el formato. *Costo:* se pierden las flechitas de subir y bajar del campo
+numérico (en un importe nadie las usaba) y la validación del navegador (`min`, `max`, `step`), que
+ya se hacía con Zod.
+
+---
+
+## 2026-10-03 — Importes en bigint y tope de 9.999.999.999
+
+El tope de un importe pasó de 10.000.000 a 9.999.999.999 (pedido por la persona usuaria). Con
+las columnas `integer` de 32 bits (centésimos, unos 21 millones) no entraba, así que los cinco
+campos de dinero (`movimientos.importe_centavos`, `cuentas_financieras.saldo_inicial_centavos`,
+`ajustes_de_saldo.saldo_indicado_centavos` y `diferencia_centavos`,
+`presupuestos.monto_centavos`) pasaron a `bigint` con la migración `0012`: es un ensanchamiento,
+no pierde ni altera datos. En Drizzle son `bigint({ mode: "number" })`, que se leen como número
+de JavaScript (exacto hasta 2^53 centésimos, unos 90 billones: sobra). *Descartado:* guardar
+como `numeric` (devuelve texto y obliga a convertir en todos lados) o como texto/BigInt de
+JavaScript (complica todo el código por un rango que no hace falta). **Había además un error
+latente**: las sumas SQL (ingresos y gastos del período, saldo de cuentas, estadísticas,
+presupuestos) se convertían con `::integer`, así que sumar varios importes grandes fallaba con
+"integer out of range" mucho antes del tope; ahora se convierten con `::bigint` y `mapWith(Number)`.
+Otro detalle: una consulta cruda (el historial de la cuenta) devuelve las columnas `bigint`
+como texto, por lo que sus montos se convierten con `Number(...)` al armar la respuesta.
+El 9.999.999.999 se interpretó así a partir de "9.999.9999.999" (dígitos repetidos al tipear).
+
+---
+
+## 2026-10-03 — Transferencias: casilla en el formulario y categoría fuera de las listas
+
+Se cambió la forma de cargar una transferencia y se escondió su categoría. Antes había que
+elegir "Transferencia entre Cuentas" en el selector de categorías, y esa categoría aparecía en
+la lista de categorías marcada "Especial" y sin botón de eliminar: no se podía eliminar, ni
+reemplazar y confundía a quien la veía mezclada con las suyas. Ahora el formulario de movimientos
+tiene una casilla "Es una transferencia entre mis cuentas" y la categoría es un detalle interno:
+no se lista, no se ofrece y no se filtra por ella (las transferencias se filtran con
+"Transferencias", que es un tipo). **El modelo de datos y la API no cambian**: la categoría sigue
+existiendo, identificada por `sistema = 'transferencia'`, y el cliente la asigna sola al marcar
+la casilla (la API sigue exigiendo que una transferencia use esa categoría y que nadie más la
+use). *Descartado:* quitar la categoría del modelo y dejar la transferencia sin categoría
+(obligaría a cambiar la columna, las consultas, el reemplazo y los datos ya cargados, para un
+problema que era solo de pantalla). *Consecuencia:* como se filtra en el cliente, quien llame a
+la API directamente la sigue viendo, y la categoría ya no se puede renombrar ni recolorear desde
+la interfaz; su nombre queda reservado (no se puede crear otra categoría igual).
+
+---
+
+## 2026-10-03 — Períodos: reabrir uno cerrado y eliminar uno (con sus movimientos)
+
+**Reabrir.** Se puede reabrir un período cerrado si no hay otro abierto, como se pidió, **y**
+si es el último. La segunda condición no se pidió pero no es opcional: un período cerrado tiene
+un fin, y reabrirlo se lo quita, así que pasa a extenderse hacia adelante; si ya existía uno
+posterior se pisarían, y "dos períodos no se solapan" es una regla de fondo (los movimientos
+caerían en dos períodos a la vez). *Descartado:* reabrir el anterior moviendo o recortando al
+posterior (cambia datos que la persona no tocó) y permitirlo igual (rompe la regla). La barra
+ofrece el botón solo cuando se cumple; la API responde 409 con el nombre del período que lo
+impide. Se mantiene el nombre, la apertura y los movimientos: solo se quita el cierre.
+
+**Eliminar.** Primero se decidió permitirlo solo sin movimientos; se cambió el mismo día: se
+puede eliminar siempre, y si tiene movimientos **se eliminan con el período**, con un aviso que
+dice cuántos y que no hay vuelta atrás. Se hace una baja física de los movimientos (también de los
+ya eliminados por la persona), en una sola transacción: el período de un movimiento es obligatorio,
+así que no hay otro lugar donde dejarlos, y reasignarlos a otro período falsearía su fecha. Es el
+único caso del módulo donde el borrado lógico se vuelve físico. *Alternativa descartada:* un
+borrado lógico del período con sus movimientos (permitiría deshacer, pero obligaría a filtrar
+períodos eliminados en todo el módulo y a liberar su nombre aparte; nadie la pidió y sumaría
+complejidad). **Los saldos no se tocan a mano**: se calculan al leer a partir de los movimientos
+(ver "Cuentas"), así que quitar los movimientos los revierte de forma exacta, incluidas las
+transferencias (una sola fila que afecta a origen y destino). Los ajustes manuales de saldo no
+pertenecen a un período y se conservan; el efecto es que el saldo de una cuenta ajustada puede
+dejar de coincidir con el "saldo indicado" del historial, porque ese número era el saldo en ese
+momento, con los movimientos de entonces. Para que el aviso diga cuántos movimientos se pierden,
+el listado de períodos trae `cantidadMovimientos`, calculado con una sola consulta agrupada. Si un
+movimiento se carga justo mientras se elimina, la clave foránea frena la operación, la transacción
+se revierte y se responde 409 para reintentar.
+
+---
+
+## 2026-10-02 — Categorías con id numérico y color distinto, transferencias entre cuentas y reemplazo en lugar de eliminar
+
+**Id numérico en las categorías.** `categorias.id` pasa de `uuid` a un entero autogenerado, a
+pedido (como `periodos.id`); el nombre sigue siendo único, ahora también por un índice único
+parcial (`lower(nombre)` entre las no eliminadas) y no solo por el servicio. La migración
+(`0009`) crea la columna numérica al lado, reescribe `movimientos.categoria_id` y
+`presupuestos.categoria_id` por join y recién después reemplaza la columna vieja, así que no
+se pierde ninguna relación; probada en una transacción que se revierte con datos de ejemplo
+(incluido un nombre repetido, que se desempata con "(2)" antes de crear el índice). Un
+`ALTER TYPE` directo no servía: los uuid no se convierten en números. El servicio comparaba
+nombres con `ILIKE`, donde `_` y `%` eran comodines ("R_pa" coincidía con "Ropa"); ahora se
+compara con `lower(...) = lower(...)`.
+
+**Colores: una función, no una paleta a ojo.** `colorMasDistinto` (shared) elige entre unos
+~150 candidatos (matices cada 10° en cuatro combinaciones de saturación/luminosidad, más dos
+grises) el que maximiza la distancia mínima a los colores en uso, midiendo en CIE L*a*b* (ΔE
+de 1976, suficiente para esto). Con ella se calculó el set por defecto en cadena empezando por
+el amarillo de las transferencias (11 colores, distancia mínima entre pares ≈ 42, verificada
+por un test) y se usa para las categorías nuevas (también cuando se reemplaza por una nueva).
+Es determinista, lo que permite probarla. *Descartado:* elegir al azar de una paleta corta
+(lo que había: se repetían y se parecían); y una librería de colores (dependencia nueva para
+una cuenta chica). Para las cuentas existentes, dos migraciones de datos (`0010`, `0011`)
+actualizan a los colores nuevos solo las categorías por defecto que nadie tocó (mismo nombre y
+todavía el color de siembra, o el gris previo a los colores); las renombradas o recoloreadas
+quedan como están. Un motivo concreto: "Entretenimiento" estaba en ámbar, casi igual al
+amarillo de las transferencias.
+
+**Transferencias: un movimiento "neutro" con cuenta de origen y de destino.** Se interpretó que
+la "nueva categoría neutro" del pedido es un nuevo **tipo** de movimiento (junto a ingreso y
+gasto), no una categoría más. Se guarda como **una sola fila** (`cuenta_destino_id` nueva,
+nula salvo en transferencias) y no como dos filas enlazadas (una de salida y otra de entrada):
+con una fila, editar o eliminar la transferencia actualiza las dos cuentas atómicamente y no
+puede quedar una mitad huérfana ni con montos distintos; el costo es que las consultas de saldo
+e historial miran las dos columnas. Dos `check` en la base lo sostienen: `tipo = 'neutro'` ⇔
+hay destino, y destino ≠ origen. El saldo resta la transferencia en el origen y la suma en el
+destino; ingresos, gastos, balance, presupuestos y estadísticas ya filtraban por tipo, así que
+la ignoran sin cambios. La cuenta de destino cuenta como "con movimientos" (no se puede
+eliminar) y el listado filtrado por cuenta incluye las transferencias que le llegan.
+
+**Categoría especial identificada por código.** `categorias.sistema = 'transferencia'`
+(índice único parcial: una por usuario) en lugar de buscarla por nombre, porque el nombre se
+puede cambiar. Se puede renombrar y recolorear pero no eliminar ni reemplazar, no admite
+presupuesto, y la regla se cierra en los dos sentidos en el servicio: una transferencia solo
+usa esa categoría y esa categoría solo la usan transferencias. Se crea al pedir las categorías
+(también para quienes ya tenían de antes, con inserción `ON CONFLICT DO NOTHING` que resiste
+pedidos simultáneos); no va en una migración por el mismo criterio de "datos de la cuenta" del
+resto del set. Si había una común con el mismo nombre, se le agrega "(propia)": adoptarla habría
+mezclado ingresos y gastos con la especial.
+
+**Dónde se ofrece.** La categoría aparece en el formulario de movimientos y el botón
+"Transferir" en el panel de cuentas solo con dos o más cuentas **activas** (no ocultas). Elegir
+la categoría cambia el formulario (sin tipo; origen y destino) y el mismo formulario, con una
+bandera, es el diálogo del panel de cuentas: un solo camino de código para las dos entradas. La
+categoría de transferencias no se recuerda como "última usada" (proponerla por defecto sería un
+error esperando). Una transferencia necesita un período como cualquier movimiento: desde el
+panel de cuentas, sin período abierto, el formulario avisa junto a la fecha.
+
+**Color del tipo neutro: amarillo en el punto, ámbar en el texto.** El pedido fue amarillo. El
+amarillo puro no se lee sobre el fondo claro, así que el punto de la categoría usa el amarillo y
+el texto, los montos y las insignias usan el token ámbar (`advertencia`), el mismo que ya usa
+el sistema para ese tono. Ícono propio (flechas cruzadas) y sin signo: no depende solo del
+color.
+
+**Eliminar vs. reemplazar una categoría.** Con movimientos no se elimina (409); se **reemplaza**
+por otra existente o nueva y todo lo histórico se ajusta, en una transacción: todos sus
+movimientos (también los eliminados lógicamente, para que ninguno apunte a una categoría
+borrada) pasan a la elegida, el presupuesto se mueve si el destino no tiene uno (si lo tiene, se
+conserva el del destino), y la original se elimina. *Decisión sobre el presupuesto:* conservar el
+del destino es lo menos destructivo, porque no hay forma de combinar dos límites sin inventar
+una regla. Se rechaza, sin tocar nada, reemplazar por sí misma, por la especial, por una eliminada
+o ajena. No hay "deshacer": hay una confirmación explícita.
+
+---
+
+## 2026-10-02 — Cuentas: ajustes manuales de saldo, historial y ocultar en lugar de eliminar
+
+**El saldo inicial editable se reemplaza por ajustes con historial.** Hasta ahora el
+saldo inicial de una cuenta se podía corregir en cualquier momento (decisión del
+2026-10-01): era un dato pisado, sin rastro de qué había antes. Se pidió poder cargar lo
+que hay "hoy" en cada cuenta sin que sea un movimiento del período **y** que cada cuenta
+lleve su historial de esos cambios. Resultado: la tabla nueva `ajustes_de_saldo`; el saldo
+inicial solo se fija al crear la cuenta (y se muestra en el historial como dato) y todo
+cambio posterior es un ajuste: `saldo = inicial + movimientos + ajustes`. *Descartado:*
+convertir el ajuste en un movimiento especial (rompe "no es del período" y contamina los
+totales); y guardar el saldo como columna actualizada (se desincroniza al editar o borrar
+movimientos, ya se había decidido calcularlo al leer).
+
+**Un ajuste guarda lo indicado y la diferencia.** `saldoIndicadoCentavos` (lo que dijo la
+persona) y `diferenciaCentavos` (lo que movió el saldo, con signo, calculado por el
+servidor contra el saldo que la cuenta mostraba). La diferencia es lo que suma; lo indicado
+es lo que se muestra en el historial ("Saldo indicado: $ X"). No se calcula un "saldo
+después de cada renglón" repitiendo la historia por fecha: con movimientos de fecha futura
+quedaría inconsistente, y no hace falta para entender el historial. Los ajustes son
+inmutables y no se borran. Es una foto de ese momento: si en paralelo se carga un
+movimiento, el saldo resultante puede diferir del indicado (no hay bloqueo entre los dos
+pedidos; con un grupo reducido de usuarios no vale la complejidad).
+
+**Historial unificado con `UNION ALL`.** Movimientos y ajustes se listan juntos con una
+sola consulta paginada (más el total, sumando dos conteos), ordenados por fecha. La API
+devuelve el efecto con signo sobre el saldo en ambos casos, así el cliente no repite la
+regla de ingreso/gasto. Se distinguen con una insignia, no solo con color. Se agregó el
+tono "info" a la insignia (mismos colores que el aviso informativo) para el ajuste manual.
+
+**Saldo calculado con consultas agrupadas separadas.** Unir movimientos y ajustes a la
+cuenta con dos `LEFT JOIN` multiplicaría las filas y descuadraría las sumas; se agrega
+cada uno por cuenta en su propia consulta y se junta en el servicio.
+
+**Ocultar vs. eliminar.** Una cuenta con movimientos no se puede eliminar (409); se puede
+ocultar (`ocultaEn`), y deja de ofrecerse al cargar un movimiento nuevo. Sin movimientos
+(los eliminados lógicamente no cuentan) sí se puede eliminar. Una cuenta oculta **sigue
+sumando al disponible**: es plata que se tiene, el ocultar es sobre qué se ofrece al cargar
+movimientos. Decisión tomada sin consultar: si preferís que no sume, es una línea en
+`obtenerResumen`. Un movimiento existente en una cuenta que luego se oculta se puede seguir
+editando sin cambiarle la cuenta; mover un movimiento a una cuenta oculta o duplicarlo se
+rechaza. *Sobre datos viejos:* las cuentas ya eliminadas lógicamente que tenían movimientos
+(posible hasta ahora) quedan eliminadas, sin convertirlas en ocultas: no se migraron.
+
+---
+
+## 2026-10-01 — Períodos propios en lugar de meses calendario
+
+**Qué.** Resumen, movimientos, presupuestos y estadísticas dejan de agruparse por mes y
+pasan a agruparse por **período**: un tramo de tiempo que abre y cierra la persona, con
+fecha y hora. Reglas (detalle de uso en `docs/funcionalidades.md`): uno solo abierto a la
+vez; sin solapamientos pero con huecos permitidos; al cerrar se ofrece abrir el siguiente,
+que continúa en el instante del cierre; nombre único por usuario, sugerido a partir del
+mes de apertura con número incremental si ya existe; cada movimiento pertenece a un solo
+período.
+
+**Intervalo semiabierto `[apertura, cierre)`.** El período incluye su apertura y no su
+cierre. Así el siguiente puede abrir exactamente en el cierre del anterior —lo que
+significa "continuar"— sin que un movimiento justo en ese instante caiga en los dos.
+
+**El movimiento pasa de `date` a `timestamptz`, y el período se deduce de la fecha.**
+Como los períodos tienen hora, un movimiento solo con día no alcanza para decir a cuál
+pertenece cuando un período cierra a mitad de día. Se guarda además `periodoId` (la
+relación explícita que pidió el requerimiento, indexada para los totales); el servidor lo
+calcula al crear o editar y lo vuelve a verificar al cerrar un período (el cierre debe ser
+posterior al último movimiento). Una fecha fuera de todo período se rechaza: es lo que
+mantiene la invariante "ningún movimiento fuera del rango de su período". *Descartado:*
+dejar `fecha` como día y elegir el período a mano (permite movimientos fuera de rango y
+los totales dejan de coincidir con las fechas); y fecha libre con `periodoId` como simple
+etiqueta (mismo problema).
+
+**Identidad numérica interna.** `periodos.id` es un entero autogenerado que la persona
+nunca ve; los movimientos lo referencian. El nombre es solo una etiqueta única por usuario
+(índice único sobre `lower(nombre)`), así que renombrar no toca ningún movimiento. Es una
+excepción a los `uuid` del resto del módulo, a pedido: el identificador no se expone en la
+interfaz y la API siempre filtra por usuario, así que un id correlativo no filtra nada.
+
+**La base garantiza lo que puede; el solapamiento lo valida el servicio.** Con índices: un
+solo abierto por usuario (índice único parcial), nombre único, y `cierre > apertura`
+(`check`). Que dos períodos no se solapen lo comprueba `abrirPeriodo` en el servicio. Una
+restricción de exclusión (`EXCLUDE USING gist`) lo garantizaría en la base, pero exige la
+extensión `btree_gist`, que no está en el stack definido y habría que habilitarla en cada
+entorno; el riesgo que se acepta es una carrera entre dos pedidos simultáneos de la misma
+persona, muy improbable con un grupo reducido de usuarios. Si el uso crece, se reconsidera.
+Lo que sí se resolvió sin carrera: los dos únicos escenarios simultáneos plausibles (dos
+aperturas a la vez, un nombre repetido) caen en los índices únicos y se traducen a
+errores claros.
+
+**Reglas de fechas.** La apertura no puede ser futura (los movimientos de hoy quedarían
+sin período) ni anterior al cierre de otro período (el abierto no tiene cierre, así que
+pisaría a los siguientes). El cierre no puede ser futuro, tiene que ser posterior a la
+apertura y a todos los movimientos del período. Sin cierre explícito se usa la hora del
+servidor, no la del cliente, para no depender del reloj del dispositivo.
+
+**Presupuestos y estadísticas.** El presupuesto sigue siendo un límite por categoría sin
+historial, y vale igual para todos los períodos; lo que cambia es contra qué gasto se mide
+(el del período elegido). La evolución muestra los últimos 6 períodos hasta el elegido;
+como pueden durar distinto, las barras son orientativas. El resumen compara contra el
+período inmediato anterior por apertura.
+
+**Pantallas.** Una barra de período común a las pestañas (selector, rango, renombrar,
+cerrar y abrir). Sin período abierto, "Agregar movimiento" avisa y ofrece abrir uno. Se
+quitaron los filtros "Desde/Hasta" del listado: dentro de un período no aportaban y el
+período ya recorta la lista. Un hallazgo de implementación: al pasar de un diálogo a otro
+(cerrar un período y ofrecer el siguiente), el evento `close` del primer `<dialog>` llega
+después y limpiaba el estado del segundo; cada diálogo ahora limpia el estado solo si sigue
+siendo el suyo.
+
+**Migración de datos (`0007`).** Los movimientos existentes se convierten a las 12:00
+locales del usuario (no tenían hora) y se les arma un período por cada mes calendario con
+movimientos, en la zona del usuario, con nombre "Setiembre 2026"; el del mes actual queda
+abierto, y las fechas posteriores a este mes caen en ese período abierto (no tiene cierre,
+así no se superpone con uno cerrado). Incluye los movimientos eliminados lógicamente, que
+también necesitan período. El SQL generado por drizzle-kit se retocó a mano porque no sabe
+migrar datos. Se probó con datos de ejemplo en una transacción que se revierte.
+
+**Formato regional.** `Intl` con `es-UY` da "setiembre" (la grafía uruguaya) y no
+"septiembre": es la correcta para la región por defecto del proyecto, y los nombres de
+período sugeridos la usan.
+
+---
+
+## 2026-10-01 — Ajustes al módulo de ingresos y gastos: color por categoría, saldo corregible y un bug de accesibilidad compartido
+
+**Color por categoría.** Se agregó una columna `color` (`#rrggbb`) a `categorias`, con
+`check` de formato en la base. Se eligió un `<input type="color">` nativo en vez de un
+selector de paleta propio: sin dependencia nueva, el navegador ya resuelve su UI y da
+cualquier color, no solo los de una paleta fija. Las categorías nuevas proponen un color
+al azar de una paleta corta (mismo criterio que los colores de las categorías por
+defecto) para no obligar a elegir uno, pero sigue siendo editable.
+
+**Categoría "Ingresos" agregada a las 9 por defecto.** Pensada para sueldos y otras
+entradas de dinero. No hay una partición dura entre "categorías de ingreso" y "de
+gasto": es una categoría más, que el usuario puede usar donde le sirva.
+
+**El saldo inicial de una cuenta ahora se puede corregir en cualquier momento, no solo
+al crearla.** El pedido original lo había dejado fijo tras la creación; en el uso real
+hace falta poder decir "esto es lo que tengo ahora" en cualquier momento (por ejemplo,
+si no se cargó bien al principio), sin que cuente como un ingreso del mes. Como el saldo
+mostrado siempre se calcula al leer (`saldoInicialCentavos` + movimientos), corregirlo
+no reescribe ningún movimiento existente ni genera uno nuevo.
+
+**Bug encontrado al probar en navegador: id fijo en `Dialogo`.** El componente
+compartido `Dialogo` (`apps/web/src/componentes/ui/dialogo.tsx`) usaba
+`id="dialogo-titulo"` fijo para su `<h2>`, referenciado por `aria-labelledby`. Mientras
+una pantalla tuviera un solo diálogo a la vez (como el panel de admin, hasta ahora) no
+se notaba; el módulo de finanzas monta varios a la vez con normalidad (por ejemplo,
+"Agregar movimiento" junto con "Editar"/"Eliminar" de una lista), y ahí los ids
+chocaban: el `aria-labelledby` de un diálogo podía terminar apuntando al título de otro.
+Se cambió a un id generado con `useId()`, único por instancia. Encontrado probando a
+mano en el navegador, no por los tests automáticos de accesibilidad (axe no lo marcaba:
+los diálogos en conflicto estaban cerrados —`<dialog>` sin `open`— al momento del
+chequeo, y el navegador no les da caja ni los incluye en el árbol de accesibilidad).
+
+**Colores de ingreso/gasto: verde y rojo, consistentes en todo el módulo.** Decisión
+anterior (2026-09-30) evitaba el rojo para "gasto" porque el token `peligro` tiene su
+significado reservado (error/vencido). Pedido explícito del usuario: usar rojo para
+egresos y verde para ingresos, con más peso visual (flechas más grandes y de trazo más
+grueso). Se aplicó de punta a punta —flechas y montos en movimientos, barras del
+gráfico de evolución— para que sea un único criterio, no una excepción en un solo lugar.
+
+---
+
+## 2026-09-30 — Módulo de ingresos y gastos: moneda única, nombres de tabla y accesos móviles
+
+**Una sola moneda por usuario.** `docs/guias/convenciones.md` dejaba pendiente si manejar
+varias monedas o no. Se resolvió por **una sola**, la de `usuarios.monedaPorDefecto`: ni
+cuentas ni movimientos guardan su propia moneda, y no hay conversión. Es lo que permite
+que el resumen muestre un balance único y claro "en pocos segundos" (pedido explícito de
+usabilidad); con monedas mezcladas, "el balance" dejaría de ser un solo número. Si más
+adelante hace falta multi-moneda real, es una decisión aparte, no una ampliación de esta.
+
+**`cuentas_financieras`, no `cuentas`.** Better Auth ya usa la tabla `cuentas` para las
+cuentas de proveedor (OAuth). Los medios de pago del usuario (efectivo, banco, tarjeta...)
+se guardan en `cuentas_financieras` para no chocar ni confundirse con esa.
+
+**Categorías y cuentas por defecto, sembradas por usuario, no por migración.** Cada
+persona recibe las 9 categorías y las 4 cuentas por defecto la primera vez que el
+servicio las lista (si todavía no tiene ninguna). Quedan como datos normales de su
+cuenta, que puede renombrar o borrar igual que a las que crea ella misma (CLAUDE.md,
+"Categorías, monedas y similares como datos, no hardcodeadas"), sin tocar el flujo de
+registro de Better Auth.
+
+**Borrado lógico en categorías y cuentas, no solo en movimientos.** La guía de seguridad
+pide borrado lógico para "datos de usuario" como los gastos; acá se extendió a categorías
+y cuentas por una razón distinta: borrarlas de verdad rompería la referencia de los
+movimientos viejos que las usan. Con `eliminadoEn` se ocultan de los selectores sin que un
+movimiento histórico pierda su categoría o su cuenta.
+
+**Recharts para los gráficos.** El stack no tenía ninguna librería de gráficos. Se eligió
+Recharts (MIT) en vez de construir barras y líneas a mano, por ser la opción estándar para
+React con menos código propio que mantener; se carga de forma diferida para no engordar
+las demás pestañas del módulo (ver `docs/librerias.md`).
+
+**Acceso en pantallas angostas: un ícono por módulo, no escalable.** El menú de
+navegación de la izquierda se oculta por debajo de `md`. Hasta ahora "Admin" tenía un
+ícono de respaldo en la barra superior para esos casos; "Finanzas" suma un segundo ícono
+con el mismo patrón. Funciona con dos módulos, pero no escala: el tercer módulo va a
+necesitar un menú propio para pantallas angostas (por ejemplo, un menú desplegable) en vez
+de seguir agregando íconos a la barra.
+
+---
+
+## 2026-09-27 — Marco de tres columnas para las pantallas de la aplicación
+
+**Decisión.** Antes de empezar el primer módulo real, se definió la estructura visual
+que van a compartir todas las pantallas con sesión iniciada: tres columnas —navegación
+a la izquierda, contenido en el medio (la más ancha) y widgets a la derecha, que por
+ahora solo reserva el lugar. `EstructuraDeApp` la implementa con CSS grid
+(`220px_minmax(0,1fr)_260px`), y cada página la compone explícitamente en su
+`page.tsx`, en vez de un layout de ruta implícito: es más fácil de leer en un proyecto
+que también es de aprendizaje (CLAUDE.md, "no ocultar complejidad detrás de magia"), y
+evita que una pantalla quede adentro del marco sin que se note por qué.
+
+**Columnas laterales fijas mientras se scrollea.** Se resolvió con `position: sticky`
+y no `fixed`: `sticky` "acompaña" el scroll hasta que la columna se termina, así que si
+el día de mañana el menú o los widgets crecen más que una pantalla, no quedan cortados
+sin forma de llegar al final (con `fixed` sí pasaría). El tope de la columna coincide
+con la altura del Navbar a través de una variable compartida (`--alto-navbar`), para
+que las dos cosas no se puedan desincronizar si alguna cambia de tamaño.
+
+**Responsivo.** Con las tres columnas fijas en ancho, no entran en una pantalla
+angosta. Se ocultan en dos pasos en vez de uno: primero los widgets (`lg`, 1024px),
+por ser lo menos esencial; si todavía no entra, también la navegación (`md`, 768px).
+El enlace al panel de admin, que ahora vive en el menú de navegación, se duplica en la
+barra superior pero solo visible por debajo de `md` (`md:hidden`): así nunca hay una
+pantalla donde ese destino sea inalcanzable, sin mostrar el mismo enlace dos veces a la
+vez.
+
+**Descartado.** Un layout anidado de Next.js (`app/(app)/layout.tsx`) habría evitado
+repetir `<EstructuraDeApp>` en cada página, pero es exactamente el tipo de "magia" que
+el proyecto evita: qué marco tiene una pantalla dejaría de verse en su propio archivo.
+
+---
+
+## 2026-09-27 — Todas las cuentas sembradas quedan con el correo confirmado
+
+**Decisión.** `pnpm usuario:sembrar` tenía dos escenarios que dejaban el correo sin
+confirmar a propósito (`pendiente-nueva`, `aprobada-sin-confirmar`), para mostrar que
+aprobación y verificación son dos requisitos independientes. Se sacaron: ahora **todas**
+las cuentas sembradas quedan con el correo confirmado, admin incluido. Pedido explícito:
+la verificación de correo de verdad (crear una cuenta y tocar el enlace) se prueba a
+mano, así que dejarla sin confirmar en un escenario sembrado no sumaba nada.
+
+**Por qué se sacaron esos dos escenarios en vez de solo confirmarles el correo.** Con
+todo confirmado, `pendiente-nueva` quedaba idéntico a `pendiente-confirmada` (misma
+cuenta: pendiente y con el correo confirmado) y `aprobada-sin-confirmar` quedaba
+idéntico a `aprobada`. Mantenerlos como alias duplicados de otro escenario no aportaba
+nada y complicaba elegir con `--solo`. `pendiente-confirmada` se renombró a `pendiente`
+al quedar como el único escenario en ese estado.
+
+---
+
+## 2026-09-27 — `pnpm usuario:sembrar` también crea (o reusa) el admin
+
+**Decisión.** `pnpm usuario:sembrar` dejó de depender de que ya exista un admin: ahora se
+asegura de que exista la cuenta de `ADMIN_USUARIO`/`ADMIN_NOMBRE`/`ADMIN_APELLIDO`/
+`ADMIN_EMAIL` del `.env` (los mismos datos que usa `pnpm usuario:admin`) y le atribuye
+**todas** las acciones sembradas. Reemplaza al diseño anterior (2026-09-22): buscar
+cualquier admin existente y, si no había ninguno, dejar las acciones como "Acción por
+consola". Pedido explícito: después de vaciar la base de desarrollo con
+`--borrar-todo`, no quedaba ningún admin y no había forma de entrar al panel sin correr
+otro comando aparte.
+
+**Contraseña fija, pero nunca la de un admin real.** Si la cuenta ya existe (de una
+corrida anterior, o de un `pnpm usuario:admin` de verdad) se reusa tal cual, sin tocarle
+la contraseña. Si no existe, se crea con la contraseña fija `"adminadmin"` — nunca con la
+de un admin real, que sigue pidiéndose por consola y sin guardarse en ningún archivo
+(`crear-admin.ts` no cambió). La lectura de las variables del `.env` se compartía por
+copiar y pegar entre los dos scripts; se extrajo a `apps/api/src/scripts/datos-admin.ts`
+para que no pudieran desincronizarse.
+
+---
+
+## 2026-09-27 — `gestion_test` queda vacía después de correr toda la suite
+
+**Decisión.** Cada test de integración y end-to-end ya vaciaba `gestion_test` antes de
+correr (`beforeEach`/`test.beforeEach`), pero nada la vaciaba después del último: la
+corrida terminaba con lo que hubiera dejado ese último test, no con la base como estaba
+antes de arrancar. Se agregó un `globalSetup` de Vitest
+(`apps/api/src/pruebas/limpieza-global.ts`) y un `globalTeardown` de Playwright
+(`apps/web/e2e/limpieza-global.ts`), cada uno corriendo una sola vez al final de toda la
+corrida (no por test), que vacían las mismas tablas que ya vacía cada test individual.
+
+**Por qué no alcanzaba con el `beforeEach` de cada test.** Ese `beforeEach` garantiza que
+cada test arranca de cero, pero nada corre después del último test de la corrida: ese
+vacío queda para quien mire la base después (o para la _próxima_ corrida, que de todos
+modos la vuelve a vaciar al principio, pero mientras tanto la base no refleja lo que
+había antes).
+
+**Por qué no una transacción con rollback.** Envolver toda la suite en una única
+transacción que se revierte al final evitaría el problema de raíz, pero los tests de
+integración pegan peticiones HTTP reales a través de Hono, que abre su propia conexión
+por pedido: no hay una única transacción que pueda compartirse entre esas conexiones sin
+reescribir cómo se maneja el cliente de base en los tests. Vaciar dos veces (antes de
+cada test y una vez más al final) es más simple y ya usa exactamente el mismo mecanismo
+que ya existía.
+
+**Decisión.** Nuevo script (`apps/api/src/scripts/sembrar-datos-de-prueba.ts`) que carga
+varias cuentas de prueba, cada una pasando por una secuencia de estados con sentido
+(registro → confirmación del correo antes o después de que un admin la resuelva →
+aprobación, rechazo, bloqueo o reseteo de contraseña), en vez de dejarlas directo en el
+estado final. El objetivo es poder mirar el panel de admin (Cuentas, Auditoría, el perfil
+de una cuenta) y ver algo creíble, no una cuenta que "nació aprobada" sin ningún rastro.
+
+**Por qué no reusar las fábricas de los tests.** Tanto `apps/web/e2e/utilidades.ts` como
+`apps/api/src/pruebas/auth-de-prueba.ts` arman el estado con un `UPDATE` directo
+(`ponerEstado`, `verificarEmail`): rápido y sin auditoría, que es exactamente lo que un
+test necesita (no le importa el historial, solo el estado final) y exactamente lo que
+este script no puede usar. Cambiar esas fábricas para que auditen habría roto tests que
+hoy esperan el historial vacío (por ejemplo "sin acciones todavía muestra el estado
+vacío"). Quedan separados a propósito.
+
+**Bloquear y resetear contraseña van directo a la fila, no por Better Auth.** El plugin
+de admin de Better Auth (`auth.api.banUser`, `auth.api.setUserPassword`) exige una sesión
+real en el contexto (`ctx.context.session`), que un script no tiene. En vez de fabricar
+una sesión falsa, el script escribe los mismos campos que esos endpoints tocarían
+(`banned`, `banReason`, `debeCambiarPassword`) directo con Drizzle y registra la
+auditoría a mano, igual que ya se resolvió para `pnpm usuario:aprobar`. Para el reseteo
+de contraseña ni siquiera hace falta generar una contraseña temporal de verdad: lo único
+que el escenario necesita demostrar es `debeCambiarPassword`, no el hash.
+
+**Nombres fijos, no aleatorios, con una forma de evitar choques.** A diferencia de las
+fábricas de test (que generan un sufijo único por llamada para poder correr mil veces
+sin chocar), acá cada escenario tiene usuario y correo fijos y descriptivos
+(`franco.bloqueado`, `carla.aprobada`...), para reconocerlos de un vistazo en el panel.
+El costo es que correrlo dos veces sin `--borrar-todo` pisaría cuentas existentes; se
+resuelve salteando con un aviso el escenario que ya existe, y con `--borrar-todo` (con
+confirmación, o `--forzar` para saltearla) para el que prefiere empezar de cero.
+
+---
+
+## 2026-09-22 — `pnpm usuario:aprobar` también audita
+
+**Decisión.** Aprobar o rechazar una cuenta con `pnpm usuario:aprobar` quedaba fuera de
+la auditoría: el script llama al servicio directo, sin pasar por la ruta del panel que
+registra la acción. Alguien que aprobara así una cuenta la veía activarse, pero la
+acción no aparecía en el historial de nadie —ni en Auditoría ni en el perfil de esa
+cuenta—, sin ningún aviso de que faltaba.
+
+**Con qué admin se registra.** El script no tiene sesión: no hay a quién atribuírsela.
+Se registra con `adminId: null` en vez de inventar una cuenta "sistema" o pedirle un id
+por parámetro. La tabla ya toleraba `adminId` nulo (la FK usa `onDelete: "set null"` para
+cuando se borra el admin), así que no hizo falta ningún cambio de esquema, solo ensanchar
+el tipo `NuevaEntradaAuditoria` que lo exigía como `string`.
+
+**Un texto distinto al de "cuenta eliminada".** Antes, un `adminId` nulo y un `adminId`
+que apuntaba a una cuenta ya borrada cascadeaban al mismo texto ("(cuenta eliminada)"),
+que para una acción que nunca tuvo admin es engañoso. Ahora `EntradaDeAuditoria`
+distingue los dos casos: "Acción por consola" para el primero, "(cuenta eliminada)" solo
+para el segundo.
+
+**Lo que quedó afuera.** El script también permite `--pendiente` (volver una cuenta
+aprobada o rechazada a pendiente), que no tiene un tipo de acción en
+`ACCIONES_AUDITORIA` ni existe como opción en el panel. Inventar uno para un caso de uso
+manual y excepcional no valía la pena todavía; ese camino sigue sin quedar registrado.
+
+---
+
+## 2026-09-22 — Perfil de cuenta: una fecha de estado, una última conexión calculada
+
+**Decisión.** El perfil de una cuenta (`/admin/cuentas/:id`) pedía mostrar tres fechas
+distintas según el estado (solicitud, aprobación, rechazo) y agregar "última conexión".
+En vez de tres columnas para las fechas, `usuarios` tiene una sola,
+`estadoActualizadoEn`: se pisa cada vez que cambia el estado, así que mientras la cuenta
+sigue pendiente coincide con la fecha de creación y en cuanto se resuelve pasa a ser esa
+fecha. También ordena el listado de Cuentas, de la más reciente a la más vieja: al
+revés que Solicitudes (una cola a procesar en orden), Cuentas es un feed de actividad
+donde lo que se acaba de resolver tiene que aparecer primero, no perderse al final.
+
+**Última conexión sin columna propia.** En vez de agregar `ultimaConexionEn` a
+`usuarios` (que habría que recordar tocar en cada login), se calcula con
+`MAX(sesiones.updatedAt)` para esa cuenta. Better Auth ya extiende esa columna en cada
+sesión activa (`session.updateAge`), así que el dato ya estaba ahí; guardarlo de nuevo en
+otro lado era el mismo riesgo de desincronización que ya se había evitado con
+`estadoActualizadoEn` para las otras fechas.
+
+**Historial reutilizado, no reescrito.** El perfil muestra el mismo historial que la
+pestaña de Auditoría, filtrado por `objetivoId` (con su propio índice), a través del
+mismo componente (`EntradaDeAuditoria`). Con el nombre del objetivo siempre a la vista en
+el encabezado de la página, repetirlo en cada fila del historial era redundante; se
+agregó una redacción alternativa por acción ("bloqueó esta cuenta" en vez de "bloqueó
+a") para que la oración no quedara cortada al ocultarlo.
+
+---
+
 ## 2026-09-16 — Nombre y logotipo: gestorIA
 
 **Decisión.** La aplicación se llama **gestorIA**, juego de palabras entre "gestoría" e
@@ -496,3 +1044,91 @@ borde. Se quitó el levantado y el cambio de borde que tenía `Tarjeta interacti
 **Por qué.** Si todo lo que queda debajo del cursor se desplaza, la pantalla se vuelve
 inestable y el movimiento deja de significar algo: cuando todo reacciona igual, nada
 indica qué es lo accionable. Reservarlo para el botón le devuelve el significado.
+
+---
+
+## 2026-09-17 — Bloquear, desbloquear y listar del panel llaman directo a Better Auth
+
+**Decisión.** El panel de admin no tiene rutas propias para bloquear (`ban-user`) ni
+desbloquear (`unban-user`) una cuenta: la web las llama directo con
+`authCliente.admin.banUser` / `unbanUser`, igual que ya hacía `changePassword`. Lo propio
+del proyecto sobre esas dos acciones —dejarlas en la auditoría— lo agrega un hook `after`
+en `crear-auth.ts`, que corre después de la ruta de Better Auth sin envolverla.
+
+**Por qué.** `apps/api/src/rutas/auth.ts` ya establece la regla de no reimplementar rutas
+de Better Auth, y bloquear una cuenta no tiene ninguna lógica propia que agregar: Better
+Auth ya cierra las sesiones abiertas y ya impide que un admin se bloquee a sí mismo. Armar
+un endpoint propio solo para poder auditar hubiera significado reescribir esas dos
+protecciones o confiar en que el cliente nunca las salteara.
+
+**El hook `after` corre también si la ruta de Better Auth falló** (por ejemplo, al
+intentar auto-bloquearse), porque la sesión ya está cargada en el contexto antes de que el
+endpoint valide nada. Por eso el hook descarta el caso de error mirando si
+`ctx.context.returned` es una instancia de `APIError`, tanto acá como en el de
+`/change-password`.
+
+**El reseteo de contraseña es la excepción** con ruta propia
+(`POST /api/admin/cuentas/:id/resetear-password`): necesita generar la contraseña
+temporal en el servidor, y no hay endpoint de Better Auth que la genere y la devuelva.
+
+---
+
+## 2026-09-17 — La contraseña temporal del reseteo la genera el servidor, no el admin
+
+**Decisión.** Al resetear la contraseña de una cuenta desde el panel, no hay ningún campo
+para que el admin escriba una contraseña: el servidor genera 16 caracteres al azar
+(`crypto.randomBytes(12).toString("base64url")`) y los muestra una sola vez, con un botón
+para copiarlos. No queda guardada en ningún lado en texto plano, ni en la base ni en el
+log.
+
+**Por qué.** Dejar que el admin eligiera la contraseña agrega una superficie de error
+(contraseñas débiles, repetidas entre cuentas, anotadas en algún lado) sin ninguna
+ventaja: de cualquier forma hay que comunicársela a la persona por otro medio, y con
+`debeCambiarPassword` prendido esa contraseña dura hasta el primer ingreso.
+
+---
+
+## 2026-09-17 — El diálogo de confirmación usa `<dialog>`, no una librería nueva
+
+**Decisión.** `Dialogo` (bloquear, desbloquear, resetear contraseña, rechazar una
+solicitud) está construido sobre el elemento nativo `<dialog>` con `showModal()`.
+
+**Por qué.** `showModal()` ya trae foco atrapado, cierre con Escape y una capa de fondo
+propia (`::backdrop`), que es exactamente lo que pide docs/guias/usabilidad.md para
+confirmar una acción destructiva o irreversible. Construirlo a mano (o sumar una
+dependencia) habría significado reimplementar el atrapado de foco, que es la parte más
+fácil de hacer mal.
+
+---
+
+## 2026-09-17 — `authCliente` necesita un import de tipos que no se usa en valor
+
+**Decisión.** `apps/web/src/lib/auth-cliente.ts` importa `AccessControl` y `Role` de
+`better-auth/plugins/access` solo para reexportarlos, sin usarlos en ningún valor.
+
+**Por qué.** Con `adminClient()` sumado a los plugins, TypeScript no puede nombrar el tipo
+inferido de `authCliente` sin esos dos tipos (error TS2883, "cannot be named without a
+reference"): `declaration: true` en la config base exige que todo tipo exportado sea
+"portable", y `adminClient()` arma su tipo con `AccessControl`/`Role` de un módulo que el
+archivo no importaba. Traerlos al alcance del archivo —aunque no se usen como valores— es
+lo que le permite al compilador nombrarlos.
+
+---
+
+## 2026-10-03 — Antes de proponer un commit se valida el índice con el hook, y el commit se arma completo
+
+**Decisión.** Al terminar un paso, se hace `git add` de todo lo que lo compone (sin dejar
+archivos a medias entre el índice y el árbol de trabajo) y se corre
+`pnpm exec lefthook run pre-commit` antes de proponer el mensaje de commit. Si hay trabajo
+de otro paso en curso que no entra en el commit, se avisa en vez de dejarlo mezclado.
+
+**Por qué.** El hook `pre-commit` de Lefthook revisa el *índice*: aparta los cambios sin
+stagear mientras corre, pero los archivos sin trackear siguen en disco. Con un commit
+parcial (por ejemplo, el panel de admin en el índice y el módulo de finanzas sin stagear)
+el chequeo de tipos ve archivos nuevos que importan código que "todavía no existe" en esa
+versión del índice y falla con decenas de errores, aunque el árbol completo esté limpio
+(`pnpm lint` y `pnpm typecheck` pasan). Parece un problema de lint, pero es un snapshot
+incoherente.
+
+**Alternativas descartadas.** Quitar el chequeo de tipos del hook (pierde la red de
+seguridad) o saltear los hooks con `--no-verify` (prohibido por docs/guias/convenciones.md).

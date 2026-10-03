@@ -89,7 +89,10 @@
       }
     },
     {
-      "includes": ["apps/web/src/componentes/tema.tsx"],
+      "includes": [
+        "apps/web/src/componentes/tema.tsx",
+        "apps/web/src/componentes/ui/selector-de-segmentos.tsx"
+      ],
       "linter": {
         "rules": {
           "a11y": {

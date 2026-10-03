@@ -1,0 +1,2 @@
+ALTER TABLE "categorias" ADD COLUMN "color" text DEFAULT '#64748b' NOT NULL;--> statement-breakpoint
+ALTER TABLE "categorias" ADD CONSTRAINT "categorias_color_valido" CHECK ("categorias"."color" ~ '^#[0-9a-fA-F]{6}$');

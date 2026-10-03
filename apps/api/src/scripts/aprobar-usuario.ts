@@ -9,7 +9,8 @@
 //   pnpm usuario:aprobar <usuario-o-correo> --rechazar
 
 import { crearClienteDb, leerConfigBaseDatos } from "@gestoria/db";
-import { ESTADOS_CUENTA, type EstadoCuenta } from "@gestoria/shared";
+import { ACCIONES_AUDITORIA, ESTADOS_CUENTA, type EstadoCuenta } from "@gestoria/shared";
+import { registrarAuditoria } from "../servicios/usuarios/auditoria.ts";
 import { cambiarEstadoDeCuenta, listarCuentasPendientes } from "../servicios/usuarios/cuentas.ts";
 
 function estadoPedido(): EstadoCuenta {
@@ -65,6 +66,24 @@ async function principal(): Promise<void> {
 
     if (resultado.sesionesCerradas > 0) {
       console.log(`Se cerraron ${resultado.sesionesCerradas} sesión(es) abiertas.`);
+    }
+
+    // Sin admin logueado no hay a quién atribuírselo (adminId queda null,
+    // "acción hecha desde el servidor"), pero la acción sobre la cuenta
+    // queda igual en el historial: si no, aprobar por acá la dejaba invisible
+    // en la auditoría del panel sin ningún aviso.
+    if (resultado.cuenta.estado === ESTADOS_CUENTA.aprobado) {
+      await registrarAuditoria(cliente, {
+        adminId: null,
+        accion: ACCIONES_AUDITORIA.cuentaAprobada,
+        objetivoId: resultado.cuenta.id,
+      });
+    } else if (resultado.cuenta.estado === ESTADOS_CUENTA.rechazado) {
+      await registrarAuditoria(cliente, {
+        adminId: null,
+        accion: ACCIONES_AUDITORIA.cuentaRechazada,
+        objetivoId: resultado.cuenta.id,
+      });
     }
   } finally {
     await cliente.cerrar();

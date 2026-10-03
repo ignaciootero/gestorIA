@@ -4,30 +4,26 @@
 // hay sesión abierta, quién entró y el botón de salir. Tener un solo lugar para
 // esto evita que cada pantalla arme su propio encabezado y terminen distintos
 // (docs/guias/usabilidad.md, Consistencia).
+//
+// Sin ancho máximo: usa el mismo margen (`px-4 sm:px-8`) que el marco de tres
+// columnas (EstructuraDeApp) y el pie, para que el logo y el menú de abajo
+// queden alineados al mismo borde en vez de que la barra quede en una franja
+// centrada más angosta que el resto.
 
 "use client";
 
-import { LogOut } from "lucide-react";
+import { LogOut, ShieldCheck, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Logotipo } from "@/componentes/marca/logotipo";
 import { SelectorDeTema } from "@/componentes/tema";
 import { Boton } from "@/componentes/ui/boton";
-import { authCliente, useSession } from "@/lib/auth-cliente";
+import { useSession } from "@/lib/auth-cliente";
 import { cn } from "@/lib/clases";
+import { usarCerrarSesion } from "@/lib/usar-cerrar-sesion";
 
 export function Navbar() {
-  const router = useRouter();
   const { data: sesion, isPending } = useSession();
-  const [saliendo, setSaliendo] = useState(false);
-
-  async function salir(): Promise<void> {
-    setSaliendo(true);
-    await authCliente.signOut();
-    router.replace("/ingresar");
-    router.refresh();
-  }
+  const { salir, saliendo } = usarCerrarSesion();
 
   const usuario = sesion?.user;
 
@@ -44,7 +40,7 @@ export function Navbar() {
     >
       <nav
         aria-label="Barra principal"
-        className="mx-auto flex h-18 max-w-5xl items-center justify-between gap-4 px-4 sm:px-8"
+        className="flex h-(--alto-navbar) w-full items-center justify-between gap-4 px-4 sm:px-8"
       >
         <Link
           href={usuario ? "/inicio" : "/ingresar"}
@@ -68,6 +64,38 @@ export function Navbar() {
               <span className="hidden text-sm text-texto-secundario sm:inline">
                 {usuario.displayUsername ?? usuario.username ?? usuario.email}
               </span>
+              {/*
+                Estos accesos solo hacen falta en pantallas angostas: desde
+                `md` en adelante ya están en el menú de navegación de la
+                izquierda (EstructuraDeApp), que ahí se oculta. Un ícono por
+                enlace funciona con uno o dos módulos; si se suman más
+                conviene un menú propio en vez de seguir agregando íconos acá
+                (ver docs/decisiones.md).
+              */}
+              <Link
+                href="/finanzas"
+                aria-label="Finanzas"
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-control text-texto-secundario md:hidden",
+                  "transition-colors duration-(--duracion-rapida) ease-salida",
+                  "hover:bg-superficie-suave hover:text-texto",
+                )}
+              >
+                <Wallet aria-hidden="true" className="size-4" />
+              </Link>
+              {usuario.role === "admin" ? (
+                <Link
+                  href="/admin"
+                  aria-label="Panel de admin"
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-control text-texto-secundario md:hidden",
+                    "transition-colors duration-(--duracion-rapida) ease-salida",
+                    "hover:bg-superficie-suave hover:text-texto",
+                  )}
+                >
+                  <ShieldCheck aria-hidden="true" className="size-4" />
+                </Link>
+              ) : null}
               <Boton
                 variante="secundario"
                 tamano="chico"

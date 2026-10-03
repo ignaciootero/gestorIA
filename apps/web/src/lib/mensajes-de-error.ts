@@ -58,6 +58,10 @@ const POR_CODIGO: Partial<Record<CodigoError, ErrorParaMostrar>> = {
   [CODIGOS_ERROR.NO_AUTENTICADO]: {
     mensaje: "Tu sesión terminó. Volvé a entrar.",
   },
+  [CODIGOS_ERROR.DEBE_CAMBIAR_PASSWORD]: {
+    mensaje: "Tenés que cambiar tu contraseña antes de continuar.",
+    definitivo: true,
+  },
   [CODIGOS_ERROR.SIN_PERMISO]: {
     mensaje: "No tenés permiso para hacer eso.",
   },
@@ -75,6 +79,28 @@ const SIN_CONEXION: ErrorParaMostrar = {
 const DESCONOCIDO: ErrorParaMostrar = {
   mensaje: "Algo salió mal. Probá de nuevo en unos minutos.",
 };
+
+/**
+ * El mensaje específico que mandó la API para un campo inválido, si lo hay.
+ *
+ * `interpretarError` reemplaza el mensaje de una validación por uno genérico
+ * ("Revisá los datos…"), que sirve para el login pero no cuando el problema es
+ * concreto y la persona puede resolverlo ("Esa fecha no cae dentro de ninguno de
+ * tus períodos"). Los formularios del módulo de finanzas prefieren este mensaje
+ * y recién después caen al genérico.
+ */
+export function detalleDeValidacion(problema: unknown): string | undefined {
+  if (estaSinConexion()) return undefined;
+
+  const cuerpo =
+    problema !== null && typeof problema === "object" && "error" in problema
+      ? problema
+      : { error: problema };
+
+  if (!esRespuestaError(cuerpo)) return undefined;
+  if (cuerpo.error.codigo !== CODIGOS_ERROR.VALIDACION_INVALIDA) return undefined;
+  return cuerpo.error.campos?.[0]?.mensaje;
+}
 
 /** true si el navegador sabe que no hay conexión. */
 export function estaSinConexion(): boolean {

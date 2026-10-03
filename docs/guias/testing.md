@@ -17,6 +17,8 @@ Leer antes de implementar o modificar cualquier funcionalidad.
 - **Unitarios (Vitest):** lógica de negocio, esquemas Zod y utilidades.
 - **Integración (Vitest):** endpoints de la API contra una base PostgreSQL de pruebas real (base separada en el PostgreSQL local, por ejemplo `gestion_test`), no mocks de la base. Cada test parte de un estado conocido y no depende del orden de ejecución.
 - **End-to-end (Playwright):** flujos críticos en la web (registro, aprobación, login, reseteo de contraseña y los flujos principales de cada módulo).
+
+Los tests de integración y los end-to-end comparten `gestion_test`. Cada test vacía las tablas relevantes antes de correr (`beforeEach`), así que no depende de lo que dejó el anterior; además, un `globalSetup`/`globalTeardown` propio de cada suite (`apps/api/src/pruebas/limpieza-global.ts`, `apps/web/e2e/limpieza-global.ts`) vuelve a vaciarlas una sola vez al terminar toda la corrida, para que `gestion_test` quede exactamente como antes de correrla y no como la dejó el último test.
 - **Móvil (jest-expo + React Native Testing Library):** pantallas y flujos clave.
 
 ## Datos y archivos de prueba

@@ -5,10 +5,11 @@
 // lenguaje natural usen exactamente las mismas reglas
 // (CLAUDE.md, Principios de arquitectura).
 
+import { randomBytes } from "node:crypto";
 import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
 import { ESTADOS_CUENTA, type EstadoCuenta, ROLES } from "@gestoria/shared";
-import { asc, eq, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, max, or } from "drizzle-orm";
 
 export type ResumenCuenta = {
   id: string;
@@ -96,18 +97,249 @@ export async function listarCuentasPendientes(cliente: ClienteDb): Promise<Resum
   }));
 }
 
+export type CuentaAdmin = ResumenCuenta & {
+  bloqueada: boolean;
+  motivoBloqueo: string | null;
+  bloqueadaHasta: Date | null;
+  /** Fecha de la solicitud, la aprobación o el rechazo, según `estado`. */
+  estadoActualizadoEn: Date;
+};
+
+const LIMITE_MAXIMO_LISTADO = 100;
+
+/**
+ * Listado general de cuentas para el panel de admin: todos los estados,
+ * buscable y paginado.
+ *
+ * A diferencia de `buscarCuenta` y `listarCuentasPendientes`, incluye el
+ * bloqueo: es lo que el panel necesita mostrar y `/inicio` no.
+ */
+export async function listarCuentas(
+  cliente: ClienteDb,
+  opciones: {
+    busqueda?: string | undefined;
+    estado?: EstadoCuenta | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  } = {},
+): Promise<{ cuentas: CuentaAdmin[]; total: number }> {
+  const limit = Math.min(opciones.limit ?? 20, LIMITE_MAXIMO_LISTADO);
+  const offset = opciones.offset ?? 0;
+  const busqueda = opciones.busqueda?.trim();
+
+  const condiciones = [
+    opciones.estado ? eq(esquema.usuarios.estado, opciones.estado) : undefined,
+    busqueda
+      ? or(
+          ilike(esquema.usuarios.username, `%${busqueda}%`),
+          ilike(esquema.usuarios.email, `%${busqueda}%`),
+          ilike(esquema.usuarios.nombre, `%${busqueda}%`),
+          ilike(esquema.usuarios.apellido, `%${busqueda}%`),
+        )
+      : undefined,
+  ].filter((condicion) => condicion !== undefined);
+
+  const donde = condiciones.length > 0 ? and(...condiciones) : undefined;
+
+  const [filas, [totalFila]] = await Promise.all([
+    cliente.db.query.usuarios.findMany({
+      where: () => donde,
+      columns: {
+        id: true,
+        username: true,
+        email: true,
+        nombre: true,
+        apellido: true,
+        estado: true,
+        role: true,
+        emailVerified: true,
+        createdAt: true,
+        estadoActualizadoEn: true,
+        banned: true,
+        banReason: true,
+        banExpires: true,
+      },
+      // Un solo campo alcanza para pendiente/aprobada/rechazada: mientras la
+      // cuenta sigue pendiente coincide con la fecha de la solicitud, y en
+      // cuanto se resuelve pasa a ser la fecha de esa resolución (ver el
+      // comentario de la columna en packages/db/src/esquema/auth.ts).
+      //
+      // Descendente, a diferencia de Solicitudes (que va de la más vieja a la
+      // más nueva, como una cola a procesar en orden): acá es un feed de
+      // actividad, así que lo que se resolvió recién aparece primero.
+      orderBy: (tabla) => desc(tabla.estadoActualizadoEn),
+      limit,
+      offset,
+    }),
+    cliente.db.select({ total: count() }).from(esquema.usuarios).where(donde),
+  ]);
+
+  return {
+    cuentas: filas.map((fila) => ({
+      id: fila.id,
+      usuario: fila.username,
+      email: fila.email,
+      nombre: fila.nombre,
+      apellido: fila.apellido,
+      estado: fila.estado as EstadoCuenta,
+      rol: fila.role,
+      emailVerificado: fila.emailVerified,
+      creadaEn: fila.createdAt,
+      bloqueada: fila.banned,
+      motivoBloqueo: fila.banReason,
+      bloqueadaHasta: fila.banExpires,
+      estadoActualizadoEn: fila.estadoActualizadoEn,
+    })),
+    total: totalFila?.total ?? 0,
+  };
+}
+
 export type ResultadoCambioEstado = {
   cuenta: ResumenCuenta;
   estadoAnterior: EstadoCuenta;
   sesionesCerradas: number;
 };
 
+/** Busca una cuenta por su id, tal como lo tiene el panel tras listar. */
+export async function buscarCuentaPorId(
+  cliente: ClienteDb,
+  id: string,
+): Promise<ResumenCuenta | null> {
+  const fila = await cliente.db.query.usuarios.findFirst({
+    where: (tabla, { eq: eqCol }) => eqCol(tabla.id, id),
+    columns: {
+      id: true,
+      username: true,
+      email: true,
+      nombre: true,
+      apellido: true,
+      estado: true,
+      role: true,
+      emailVerified: true,
+      createdAt: true,
+    },
+  });
+
+  if (!fila) return null;
+
+  return {
+    id: fila.id,
+    usuario: fila.username,
+    email: fila.email,
+    nombre: fila.nombre,
+    apellido: fila.apellido,
+    estado: fila.estado as EstadoCuenta,
+    rol: fila.role,
+    emailVerificado: fila.emailVerified,
+    creadaEn: fila.createdAt,
+  };
+}
+
+export type PerfilDeCuenta = CuentaAdmin & {
+  zonaHoraria: string;
+  monedaPorDefecto: string;
+  debeCambiarPassword: boolean;
+  /** Última vez que tuvo una sesión activa. null si nunca inició sesión. */
+  ultimaConexion: Date | null;
+};
+
 /**
- * Cambia el estado de aprobacion de una cuenta.
+ * El perfil de una cuenta para el panel de admin: todos los datos que se
+ * tienen de ella, para la pantalla a la que se llega al tocar su nombre en el
+ * listado.
+ *
+ * `ultimaConexion` no es una columna propia: se calcula de la sesión más
+ * reciente en vez de duplicar un dato que ya está ahí (y que se desactualizaría
+ * si no se recordara tocarlo en cada inicio de sesión).
+ */
+export async function buscarPerfilDeCuenta(
+  cliente: ClienteDb,
+  id: string,
+): Promise<PerfilDeCuenta | null> {
+  const [fila, [ultimaSesion]] = await Promise.all([
+    cliente.db.query.usuarios.findFirst({
+      where: (tabla, { eq: eqCol }) => eqCol(tabla.id, id),
+      columns: {
+        id: true,
+        username: true,
+        email: true,
+        nombre: true,
+        apellido: true,
+        estado: true,
+        role: true,
+        emailVerified: true,
+        createdAt: true,
+        estadoActualizadoEn: true,
+        banned: true,
+        banReason: true,
+        banExpires: true,
+        zonaHoraria: true,
+        monedaPorDefecto: true,
+        debeCambiarPassword: true,
+      },
+    }),
+    cliente.db
+      .select({ ultimaConexion: max(esquema.sesiones.updatedAt) })
+      .from(esquema.sesiones)
+      .where(eq(esquema.sesiones.userId, id)),
+  ]);
+
+  if (!fila) return null;
+
+  return {
+    id: fila.id,
+    usuario: fila.username,
+    email: fila.email,
+    nombre: fila.nombre,
+    apellido: fila.apellido,
+    estado: fila.estado as EstadoCuenta,
+    rol: fila.role,
+    emailVerificado: fila.emailVerified,
+    creadaEn: fila.createdAt,
+    estadoActualizadoEn: fila.estadoActualizadoEn,
+    bloqueada: fila.banned,
+    motivoBloqueo: fila.banReason,
+    bloqueadaHasta: fila.banExpires,
+    zonaHoraria: fila.zonaHoraria,
+    monedaPorDefecto: fila.monedaPorDefecto,
+    debeCambiarPassword: fila.debeCambiarPassword,
+    ultimaConexion: ultimaSesion?.ultimaConexion ?? null,
+  };
+}
+
+/**
+ * Cambia el estado de aprobacion de una cuenta ya resuelta.
  *
  * Al dejar de estar aprobada, se cierran todas sus sesiones abiertas: si no, la
  * persona seguiria navegando con la cookie que ya tenia hasta que expirara.
  */
+async function aplicarCambioDeEstado(
+  cliente: ClienteDb,
+  cuenta: ResumenCuenta,
+  nuevoEstado: EstadoCuenta,
+): Promise<ResultadoCambioEstado> {
+  const estadoAnterior = cuenta.estado;
+
+  if (estadoAnterior === nuevoEstado) {
+    return { cuenta, estadoAnterior, sesionesCerradas: 0 };
+  }
+
+  await cliente.db
+    .update(esquema.usuarios)
+    .set({ estado: nuevoEstado, estadoActualizadoEn: new Date(), updatedAt: new Date() })
+    .where(eq(esquema.usuarios.id, cuenta.id));
+
+  const sesionesCerradas =
+    nuevoEstado === ESTADOS_CUENTA.aprobado ? [] : await cerrarSesionesDe(cliente, cuenta.id);
+
+  return {
+    cuenta: { ...cuenta, estado: nuevoEstado },
+    estadoAnterior,
+    sesionesCerradas: sesionesCerradas.length,
+  };
+}
+
+/** La usa el script de linea de comandos: identifica la cuenta por usuario o correo. */
 export async function cambiarEstadoDeCuenta(
   cliente: ClienteDb,
   identificador: string,
@@ -119,25 +351,57 @@ export async function cambiarEstadoDeCuenta(
     throw new Error(`No hay ninguna cuenta con usuario o correo "${identificador}".`);
   }
 
-  const estadoAnterior = cuenta.estado;
+  return aplicarCambioDeEstado(cliente, cuenta, nuevoEstado);
+}
 
-  if (estadoAnterior === nuevoEstado) {
-    return { cuenta, estadoAnterior, sesionesCerradas: 0 };
+/** La usa el panel de admin: identifica la cuenta por id, como la tiene tras listar. */
+export async function cambiarEstadoDeCuentaPorId(
+  cliente: ClienteDb,
+  id: string,
+  nuevoEstado: EstadoCuenta,
+): Promise<ResultadoCambioEstado> {
+  const cuenta = await buscarCuentaPorId(cliente, id);
+
+  if (!cuenta) {
+    throw new Error(`No hay ninguna cuenta con id "${id}".`);
   }
 
+  return aplicarCambioDeEstado(cliente, cuenta, nuevoEstado);
+}
+
+/**
+ * Apaga el aviso de cambio de contraseña obligatorio, una vez que la persona ya
+ * la cambio.
+ *
+ * La llama el hook de Better Auth en crear-auth.ts despues de un
+ * `/change-password` exitoso.
+ */
+export async function marcarPasswordCambiada(cliente: ClienteDb, usuarioId: string): Promise<void> {
   await cliente.db
     .update(esquema.usuarios)
-    .set({ estado: nuevoEstado, updatedAt: new Date() })
-    .where(eq(esquema.usuarios.id, cuenta.id));
+    .set({ debeCambiarPassword: false, updatedAt: new Date() })
+    .where(eq(esquema.usuarios.id, usuarioId));
+}
 
-  const sesionesCerradas =
-    nuevoEstado === ESTADOS_CUENTA.aprobado ? [] : await cerrarSesionesDe(cliente, cuenta.id);
+/** Funcion simetrica: la prende un reseteo de contraseña desde el panel de admin. */
+export async function marcarPasswordPendienteDeCambio(
+  cliente: ClienteDb,
+  usuarioId: string,
+): Promise<void> {
+  await cliente.db
+    .update(esquema.usuarios)
+    .set({ debeCambiarPassword: true, updatedAt: new Date() })
+    .where(eq(esquema.usuarios.id, usuarioId));
+}
 
-  return {
-    cuenta: { ...cuenta, estado: nuevoEstado },
-    estadoAnterior,
-    sesionesCerradas: sesionesCerradas.length,
-  };
+/**
+ * Contraseña temporal para un reseteo de admin: al azar, no la elige nadie.
+ *
+ * 12 bytes de `crypto.randomBytes` (96 bits) en base64url dan 16 caracteres,
+ * dentro del largo maximo de contraseña (24) y muy por encima del minimo (8).
+ */
+export function generarPasswordTemporal(): string {
+  return randomBytes(12).toString("base64url");
 }
 
 /** Cierra todas las sesiones abiertas de una cuenta. Devuelve las que cerro. */
