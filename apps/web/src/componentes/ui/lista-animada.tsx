@@ -59,10 +59,22 @@ function variantesDeItem(sinMovimiento: boolean): Variants {
   };
 }
 
-export function ListaAnimada({ children, className }: { children: ReactNode; className?: string }) {
+export function ListaAnimada({
+  children,
+  className,
+  entrada = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  /**
+   * Si los elementos entran en cascada al montarse. Se apaga cuando la lista vive dentro de algo que ya
+   * se anima al abrirse (un `Plegable`): si no, los elementos se deslizarían aparte del contenedor.
+   */
+  entrada?: boolean;
+}) {
   return (
     <motion.ul
-      initial="oculto"
+      initial={entrada ? "oculto" : false}
       animate="visible"
       variants={VARIANTES_CONTENEDOR}
       className={cn("flex flex-col", className)}

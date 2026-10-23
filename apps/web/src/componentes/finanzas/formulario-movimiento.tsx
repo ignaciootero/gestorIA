@@ -21,6 +21,11 @@
 // y ofrece crear una cuenta ahí mismo, con el mismo formulario del panel de
 // cuentas. Al crearla, el formulario del movimiento aparece listo para usar.
 //
+// Monedas: el importe se escribe en la moneda de la cuenta elegida. Si esa moneda no es la
+// base de la persona (o una transferencia cruza dos monedas), aparece el bloque de
+// cotización (seccion-de-cambio.tsx): propone la del día, deja cambiarla y muestra a
+// cuánto equivale el importe. El saldo de cada cuenta se muestra en su propia moneda.
+//
 // Saldo de las cuentas: cada opción de cuenta muestra su saldo actual y, si el
 // movimiento dejaría una cuenta con saldo negativo, al guardar se pide
 // confirmación en vez de guardar en silencio (se puede aceptar: una cuenta en
@@ -41,6 +46,7 @@ import {
   esquemaCamposDeMovimiento,
   formatearMonto,
   MONEDA_POR_DEFECTO,
+  nombreCompletoDeContacto,
   TIPOS_MOVIMIENTO,
   validarDestinoDeTransferencia,
 } from "@gestoria/shared";
@@ -57,6 +63,7 @@ import { CampoDeImporte } from "@/componentes/ui/campo-de-importe";
 import { Casilla } from "@/componentes/ui/casilla";
 import { Selector } from "@/componentes/ui/selector";
 import { SelectorDeSegmentos } from "@/componentes/ui/selector-de-segmentos";
+import { type OpcionDeContacto, obtenerOpcionesDeContactos } from "@/lib/api-contactos";
 import {
   type Categoria,
   type CuentaFinanciera,
@@ -83,6 +90,7 @@ import {
 } from "@/lib/preferencias-finanzas";
 import { FormularioCuenta } from "./formulario-de-cuenta";
 import { claseDeOpcionDeSaldo, claseDeSaldoNegativo } from "./saldo";
+import { type EstadoDelCambio, SeccionDeCambio } from "./seccion-de-cambio";
 
 const TIPOS = [
   { valor: TIPOS_MOVIMIENTO.gasto, etiqueta: "Gasto" },
@@ -111,24 +119,29 @@ function periodoQueContiene(periodos: Periodo[], instante: string): Periodo | un
   );
 }
 
-/** Efecto de un movimiento sobre el saldo de una cuenta (con signo, en centavos). */
+/**
+ * Efecto de un movimiento sobre el saldo de una cuenta (con signo, en centavos de la
+ * moneda de esa cuenta). A la cuenta de destino de una transferencia le llega
+ * `importeDestinoCentavos`, que es el importe convertido a su moneda.
+ */
 function efectoEnCuenta(
   cuentaId: string,
   movimiento: {
     tipo: string;
     importeCentavos: number;
+    importeDestinoCentavos: number;
     cuentaFinancieraId: string;
     cuentaDestinoId?: string | null | undefined;
   },
 ): number {
-  if (movimiento.cuentaDestinoId === cuentaId) return movimiento.importeCentavos;
+  if (movimiento.cuentaDestinoId === cuentaId) return movimiento.importeDestinoCentavos;
   if (movimiento.cuentaFinancieraId !== cuentaId) return 0;
   return movimiento.tipo === TIPOS_MOVIMIENTO.ingreso
     ? movimiento.importeCentavos
     : -movimiento.importeCentavos;
 }
 
-type CuentaConSaldoNegativo = { nombre: string; saldoFinalCentavos: number };
+type CuentaConSaldoNegativo = { nombre: string; moneda: string; saldoFinalCentavos: number };
 
 /**
  * Cuentas que el movimiento dejaría en negativo y que además quedarían peor que
@@ -149,13 +162,18 @@ function cuentasQueQuedanEnNegativo(
       ? efectoEnCuenta(cuenta.id, {
           tipo: original.tipo,
           importeCentavos: original.importeCentavos,
+          importeDestinoCentavos: original.importeConvertidoCentavos,
           cuentaFinancieraId: original.cuentaFinanciera.id,
           cuentaDestinoId: original.cuentaDestino?.id,
         })
       : 0;
     const saldoFinal = cuenta.saldoCentavos - efectoOriginal + efectoEnCuenta(cuenta.id, nuevo);
     if (saldoFinal < 0 && saldoFinal < cuenta.saldoCentavos) {
-      resultado.push({ nombre: cuenta.nombre, saldoFinalCentavos: saldoFinal });
+      resultado.push({
+        nombre: cuenta.nombre,
+        moneda: cuenta.moneda,
+        saldoFinalCentavos: saldoFinal,
+      });
     }
   }
   return resultado;
@@ -177,9 +195,14 @@ export function FormularioMovimiento({
   const categorias = useQuery({ queryKey: ["finanzas", "categorias"], queryFn: obtenerCategorias });
   const cuentas = useQuery({ queryKey: ["finanzas", "cuentas"], queryFn: obtenerCuentas });
   const periodos = useQuery({ queryKey: ["finanzas", "periodos"], queryFn: obtenerPeriodos });
+  // Los contactos son opcionales en un movimiento: si no se pueden traer, el formulario sigue sin ellos.
+  const contactos = useQuery({
+    queryKey: ["contactos", "opciones"],
+    queryFn: obtenerOpcionesDeContactos,
+  });
   const [creandoCuenta, setCreandoCuenta] = useState(false);
 
-  if (categorias.isPending || cuentas.isPending || periodos.isPending) {
+  if (categorias.isPending || cuentas.isPending || periodos.isPending || contactos.isPending) {
     return (
       <div aria-busy="true" aria-live="polite" className="flex flex-col gap-2">
         <span className="solo-lectores">Cargando categorías, cuentas y períodos</span>
@@ -270,6 +293,7 @@ export function FormularioMovimiento({
       categoriaDeTransferencia={puedeTransferir ? categoriaDeTransferencia : undefined}
       cuentas={cuentasElegibles}
       periodos={periodos.data.periodos}
+      contactos={contactos.data?.contactos ?? []}
       movimiento={movimiento}
       soloTransferencia={soloTransferencia}
       cerrar={cerrar}
@@ -292,10 +316,12 @@ function CamposDelFormulario({
   categoriaDeTransferencia,
   cuentas,
   periodos,
+  contactos,
   movimiento,
   soloTransferencia,
   cerrar,
 }: {
+  contactos: OpcionDeContacto[];
   categorias: Categoria[];
   categoriaDeTransferencia: Categoria | undefined;
   cuentas: CuentaFinanciera[];
@@ -306,8 +332,21 @@ function CamposDelFormulario({
 }) {
   const queryClient = useQueryClient();
   const { data: sesion } = useSession();
-  const moneda = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
+  const monedaBase = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
   const esEdicion = movimiento !== undefined;
+  // La cotización elegida (ver seccion-de-cambio.tsx) y si ya se intentó guardar sin completarla.
+  const [estadoCambio, setEstadoCambio] = useState<EstadoDelCambio>({
+    cambio: undefined,
+    importeOrigenCentavos: null,
+    convertidoCentavos: null,
+    error: null,
+  });
+  const [intentoGuardar, setIntentoGuardar] = useState(false);
+  // En una transferencia entre monedas, el importe se puede escribir en la moneda de la cuenta de
+  // origen (lo normal) o en la de la de destino ("quiero que lleguen 100 dólares").
+  const [monedaElegidaDelImporte, setMonedaElegidaDelImporte] = useState<"origen" | "destino">(
+    "origen",
+  );
   // Se pone en true cuando el guardado quedó a la espera de que la persona
   // acepte el saldo negativo (ver más abajo).
   const [pidiendoConfirmacion, setPidiendoConfirmacion] = useState(false);
@@ -316,7 +355,7 @@ function CamposDelFormulario({
   const claseDelSelector = (cuentaId: string | null | undefined) =>
     cn(claseDeSaldoNegativo(cuentas.find((cuenta) => cuenta.id === cuentaId)?.saldoCentavos ?? 0));
   const etiquetaDeCuenta = (cuenta: CuentaFinanciera) =>
-    `${cuenta.nombre} (${formatearMonto(cuenta.saldoCentavos, moneda)})`;
+    `${cuenta.nombre} (${formatearMonto(cuenta.saldoCentavos, cuenta.moneda)})`;
 
   // `categorias` ya son solo las comunes (ver FormularioMovimiento).
   const comunes = categorias;
@@ -345,6 +384,7 @@ function CamposDelFormulario({
           categoriaId: movimiento.categoria.id,
           cuentaFinancieraId: movimiento.cuentaFinanciera.id,
           cuentaDestinoId: movimiento.cuentaDestino?.id,
+          contactoId: movimiento.contacto?.id ?? null,
           fecha: aValorDeFechaHora(new Date(movimiento.fecha)),
         }
       : soloTransferencia
@@ -364,6 +404,22 @@ function CamposDelFormulario({
             fecha: ahoraParaInput(),
           },
   });
+
+  // Los contactos para elegir. El del movimiento que se edita se ofrece siempre, aunque esté en la
+  // papelera, para que guardar otra cosa no se lo quite sin querer.
+  const opcionesDeContacto: (OpcionDeContacto & { eliminado?: boolean })[] =
+    movimiento?.contacto && !contactos.some((contacto) => contacto.id === movimiento.contacto?.id)
+      ? [
+          {
+            id: movimiento.contacto.id,
+            tipo: "persona",
+            nombre: movimiento.contacto.nombre,
+            apellido: movimiento.contacto.apellido,
+            eliminado: movimiento.contacto.eliminado,
+          },
+          ...contactos,
+        ]
+      : contactos;
 
   const origenElegido = watch("cuentaFinancieraId");
   const destinoElegido = watch("cuentaDestinoId");
@@ -404,20 +460,58 @@ function CamposDelFormulario({
     : undefined;
   const sinPeriodo = instanteEscrito !== null && periodoDeDestino === undefined;
 
+  // Las monedas entre las que se convierte (si son distintas, hay cotización que elegir): la
+  // de la cuenta y, en una transferencia, la de la cuenta de destino; si no, la moneda base.
+  const monedaDeOrigen = cuentas.find((cuenta) => cuenta.id === origenElegido)?.moneda;
+  const monedaDeDestino = esTransferencia
+    ? cuentas.find((cuenta) => cuenta.id === destinoElegido)?.moneda
+    : monedaBase;
+  const cruzaMonedas =
+    monedaDeOrigen !== undefined &&
+    monedaDeDestino !== undefined &&
+    monedaDeOrigen !== monedaDeDestino;
+  // Al editar con las mismas cuentas, se puede conservar la cotización que ya tenía guardada.
+  const cambioGuardado =
+    movimiento !== undefined &&
+    movimiento.cuentaFinanciera.id === origenElegido &&
+    (movimiento.cuentaDestino?.id ?? null) === (esTransferencia ? (destinoElegido ?? null) : null)
+      ? {
+          tipoDeCambio: movimiento.tipoDeCambio,
+          manual: movimiento.cambioManual,
+          importeCentavos: movimiento.importeCentavos,
+          importeConvertidoCentavos: movimiento.importeConvertidoCentavos,
+        }
+      : undefined;
+
+  // Solo una transferencia entre monedas distintas puede escribirse en la moneda de destino.
+  const importeEnDestino = esTransferencia && cruzaMonedas && monedaElegidaDelImporte === "destino";
+  const monedaDelImporte = (importeEnDestino ? monedaDeDestino : monedaDeOrigen) ?? monedaBase;
+
   // Lo que dejaría en negativo el movimiento tal como está escrito ahora.
   const importeEscrito = watch("importe");
-  const negativas = Number.isFinite(importeEscrito)
-    ? cuentasQueQuedanEnNegativo(
-        cuentas,
-        {
-          tipo: esTransferencia ? TIPOS_MOVIMIENTO.neutro : watch("tipo"),
-          importeCentavos: centavosDesdeImporte(importeEscrito),
-          cuentaFinancieraId: origenElegido,
-          cuentaDestinoId: esTransferencia ? destinoElegido : undefined,
-        },
-        movimiento,
-      )
-    : [];
+  // Cuánto sale de la cuenta de origen: lo escrito, o lo que se calculó si se escribió lo que llega.
+  const importeDeOrigenCentavos = importeEnDestino
+    ? estadoCambio.importeOrigenCentavos
+    : Number.isFinite(importeEscrito)
+      ? centavosDesdeImporte(importeEscrito)
+      : null;
+  const negativas =
+    Number.isFinite(importeEscrito) && importeDeOrigenCentavos !== null
+      ? cuentasQueQuedanEnNegativo(
+          cuentas,
+          {
+            tipo: esTransferencia ? TIPOS_MOVIMIENTO.neutro : watch("tipo"),
+            importeCentavos: importeDeOrigenCentavos,
+            // Lo que llega a la cuenta de destino, ya convertido; sin cotización todavía, no se avisa.
+            importeDestinoCentavos: cruzaMonedas
+              ? (estadoCambio.convertidoCentavos ?? 0)
+              : centavosDesdeImporte(importeEscrito),
+            cuentaFinancieraId: origenElegido,
+            cuentaDestinoId: esTransferencia ? destinoElegido : undefined,
+          },
+          movimiento,
+        )
+      : [];
   const tipoEscrito = watch("tipo");
 
   // Si la persona cambia algo después de ver el aviso, el aviso ya no vale: se
@@ -439,18 +533,33 @@ function CamposDelFormulario({
       );
       const cuenta = cuentas.find((c) => c.id === datos.cuentaFinancieraId);
       const cuentaDestino = cuentas.find((c) => c.id === datos.cuentaDestinoId);
+      const contactoElegido = contactos.find((c) => c.id === datos.contactoId);
       const optimista: Movimiento = {
         id: movimiento?.id ?? `optimista-${Date.now()}`,
         tipo: datos.tipo,
         importeCentavos: Math.round(datos.importe * 100),
+        tipoDeCambio: 1,
+        importeConvertidoCentavos:
+          estadoCambio.convertidoCentavos ?? Math.round(datos.importe * 100),
+        cambioManual: false,
         descripcion: datos.descripcion,
         fecha: datos.fecha,
         periodoId: periodoDeDestino?.id ?? 0,
         creadoEn: new Date().toISOString(),
         categoria: categoria ?? { id: datos.categoriaId, nombre: "…", color: "#64748b" },
-        cuentaFinanciera: cuenta ?? { id: datos.cuentaFinancieraId, nombre: "…" },
+        cuentaFinanciera: cuenta
+          ? { id: cuenta.id, nombre: cuenta.nombre, moneda: cuenta.moneda }
+          : { id: datos.cuentaFinancieraId, nombre: "…", moneda: monedaBase },
         cuentaDestino: cuentaDestino
-          ? { id: cuentaDestino.id, nombre: cuentaDestino.nombre }
+          ? { id: cuentaDestino.id, nombre: cuentaDestino.nombre, moneda: cuentaDestino.moneda }
+          : null,
+        contacto: contactoElegido
+          ? {
+              id: contactoElegido.id,
+              nombre: contactoElegido.nombre,
+              apellido: contactoElegido.apellido,
+              eliminado: false,
+            }
           : null,
       };
 
@@ -502,6 +611,11 @@ function CamposDelFormulario({
       onSubmit={handleSubmit((valores) => {
         // Sin período la API lo rechazaría igual; se avisa ya, junto al campo.
         if (instanteEscrito === null || sinPeriodo) return;
+        // Falta la cotización (no se pudo traer y no se escribió, o lo escrito no sirve).
+        if (cruzaMonedas && estadoCambio.error !== null) {
+          setIntentoGuardar(true);
+          return;
+        }
         // Saldo negativo: la primera vez se pide confirmación; "Guardar igualmente"
         // vuelve a enviar con la confirmación puesta.
         if (negativas.length > 0 && !pidiendoConfirmacion) {
@@ -510,9 +624,16 @@ function CamposDelFormulario({
         }
         mutacion.mutate({
           ...valores,
+          // Si se escribió lo que llega al destino, a la API le va lo que sale del origen.
+          ...(importeEnDestino && importeDeOrigenCentavos !== null
+            ? { importe: importeDeOrigenCentavos / 100 }
+            : {}),
           fecha: instanteEscrito,
           tipo: esTransferencia ? TIPOS_MOVIMIENTO.neutro : valores.tipo,
           cuentaDestinoId: esTransferencia ? valores.cuentaDestinoId : undefined,
+          // Una transferencia entre cuentas propias no tiene contraparte.
+          contactoId: esTransferencia ? null : (valores.contactoId ?? null),
+          ...(cruzaMonedas && estadoCambio.cambio ? { cambio: estadoCambio.cambio } : {}),
         });
       })}
       noValidate
@@ -555,6 +676,20 @@ function CamposDelFormulario({
         />
       ) : null}
 
+      {esTransferencia && cruzaMonedas ? (
+        <SelectorDeSegmentos
+          id="moneda-del-importe"
+          etiqueta="Moneda en la que escribís el monto"
+          modo="filtro"
+          segmentos={[
+            { valor: "origen", etiqueta: `${monedaDeOrigen} (origen)` },
+            { valor: "destino", etiqueta: `${monedaDeDestino} (destino)` },
+          ]}
+          activo={monedaElegidaDelImporte}
+          onCambiar={setMonedaElegidaDelImporte}
+        />
+      ) : null}
+
       <Controller
         control={control}
         name="importe"
@@ -565,8 +700,16 @@ function CamposDelFormulario({
             value={field.value}
             onChange={field.onChange}
             onBlur={field.onBlur}
+            moneda={monedaDelImporte}
             etiqueta="Importe"
             autoFocus
+            ayuda={
+              importeEnDestino
+                ? `Importe en ${monedaDelImporte}, la moneda de la cuenta de destino.`
+                : monedaDeOrigen !== undefined && monedaDeOrigen !== monedaBase
+                  ? `Importe en ${monedaDeOrigen}, la moneda de esta cuenta.`
+                  : undefined
+            }
             error={errors.importe?.message}
           />
         )}
@@ -578,6 +721,22 @@ function CamposDelFormulario({
         autoComplete="off"
         error={errors.descripcion?.message}
       />
+
+      {esTransferencia ? null : (
+        <Selector
+          {...register("contactoId", { setValueAs: (valor) => (valor === "" ? null : valor) })}
+          etiqueta="Con quién (opcional)"
+          error={errors.contactoId?.message}
+        >
+          <option value="">Nadie en particular</option>
+          {opcionesDeContacto.map((contacto) => (
+            <option key={contacto.id} value={contacto.id}>
+              {nombreCompletoDeContacto(contacto)}
+              {contacto.eliminado ? " (eliminado)" : ""}
+            </option>
+          ))}
+        </Selector>
+      )}
 
       {soloTransferencia || esTransferencia ? null : (
         <Selector
@@ -665,6 +824,21 @@ function CamposDelFormulario({
         }
       />
 
+      {cruzaMonedas ? (
+        <SeccionDeCambio
+          key={`${monedaDeOrigen}-${monedaDeDestino}`}
+          monedaDeOrigen={monedaDeOrigen}
+          monedaDeDestino={monedaDeDestino}
+          importe={importeEscrito}
+          monedaDelImporte={importeEnDestino ? "destino" : "origen"}
+          fecha={instanteEscrito}
+          guardado={cambioGuardado}
+          esTransferencia={esTransferencia}
+          mostrarError={intentoGuardar}
+          onCambiar={setEstadoCambio}
+        />
+      ) : null}
+
       {mutacion.isError ? (
         <Aviso tono="peligro">
           {detalleDeValidacion(mutacion.error) ?? interpretarError(mutacion.error).mensaje}
@@ -676,7 +850,8 @@ function CamposDelFormulario({
           <ul className="list-disc pl-5">
             {negativas.map((cuenta) => (
               <li key={cuenta.nombre}>
-                {cuenta.nombre} quedaría en {formatearMonto(cuenta.saldoFinalCentavos, moneda)}.
+                {cuenta.nombre} quedaría en{" "}
+                {formatearMonto(cuenta.saldoFinalCentavos, cuenta.moneda)}.
               </li>
             ))}
           </ul>

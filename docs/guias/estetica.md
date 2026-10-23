@@ -27,6 +27,7 @@ Detalles:
 - **Base neutra** (escala zinc) para fondos, superficies, bordes y textos: la gran mayoría de la interfaz.
 - **Acento único: azul petróleo** (referencia: teal-700 `#0f766e` como color principal, teal-100 `#ccfbf1` como fondo suave, teal-900 `#134e4a` como texto sobre fondo suave). Solo para la acción principal de cada pantalla, elementos seleccionados, enlaces y foco. Como máximo una acción principal con acento por vista.
 - **Colores de estado** reservados para su significado: éxito/ingreso, advertencia, peligro/error/vencido. El verde de éxito debe diferenciarse claramente del acento (usar un verde más amarillento y siempre acompañado de ícono o texto), y ningún significado depende solo del color.
+- **Colores de origen** (`origen-manual`, `origen-finanzas`, `origen-contactos`, `origen-tareas`, cada uno con su `-fondo` y su `-texto`): una paleta categórica aparte, solo para distinguir de qué módulo viene algo cuando se muestra mezclado con lo de otros (hoy, los eventos del calendario). No son de estado ni de acento: son cuatro tonos (naranja, azul, violeta, rosa) distintos entre sí y de los tres estados. Siempre van con un ícono y el nombre del origen, nunca solos, y el texto sobre su fondo suave cumple 4,5:1 y el color pleno 3:1 sobre la superficie en ambos temas (lo verifica `packages/ui-tokens/src/tokens.test.ts`).
 - **Modo claro y oscuro** desde el inicio, definidos con tokens semánticos (`fondo`, `superficie`, `texto`, `texto-secundario`, `borde`, `acento`, `exito`, `advertencia`, `peligro`). Verificar contraste accesible en ambos modos.
 
 ## Tipografía
@@ -98,8 +99,9 @@ Patrones por componente:
 - **Botones:** al pasar el mouse suben `--anim-elevacion-hover` y refuerzan borde o fondo; al presionar vuelven a su lugar y escalan a `--anim-escala-presion`, con el **40 % de la duración base**. La respuesta al clic no espera a que se suelte el botón. Un botón deshabilitado no reacciona: si lo hiciera, mentiría.
 - **Pestañas y selectores segmentados:** un indicador que se **desliza** hasta la opción elegida, no un fondo que se prende y se apaga.
 - **Interruptores:** la perilla se desliza y el fondo pasa al acento; al presionar, la perilla se estira levemente hacia el lado contrario al que está apoyada.
-- **Casillas y tareas:** el tilde se **dibuja** animando `stroke-dashoffset`, la caja escala al presionar y el texto de una tarea se tacha con una línea que crece de izquierda a derecha.
+- **Casillas y tareas:** el tilde se **dibuja** animando `stroke-dashoffset`, la caja escala al presionar y el texto de una tarea se tacha con una línea que crece de izquierda a derecha. En las tareas la casilla es **circular** (`forma="circular"`): la misma estética que el botón de "fallida" —un círculo con borde y el ícono adentro— pero con un tilde y en verde (borde y fondo verdes al apuntarla, llena al marcarla).
 - **Campos de texto:** al enfocar, el borde toma el acento y aparece un anillo suave.
+- **Secciones plegables** (`Plegable`): el contenido se abre y se cierra **como una sola pieza** —altura y opacidad juntas—, y la lista de adentro no hace su cascada de entrada. Mezclar un contenedor que aparece de golpe con elementos que se deslizan hace que se solapen por un instante.
 - **Listas:** los elementos entran deslizándose unos píxeles y apareciendo, en cascada; las **salidas son más rápidas que las entradas**, porque agregar algo puede acompañar pero borrar tiene que sentirse resuelto.
 - **Valores que cambian** (totales, contadores): pulso breve de escala, para que una actualización que nadie pidió no pase inadvertida.
 

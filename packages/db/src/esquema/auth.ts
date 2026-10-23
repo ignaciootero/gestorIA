@@ -62,6 +62,13 @@ export const usuarios = pgTable(
     monedaPorDefecto: text().notNull().default("UYU"),
     /** Tras un reseteo de contraseña, obliga a cambiarla en el proximo login. */
     debeCambiarPassword: boolean().notNull().default(false),
+    /**
+     * Ya se le crearon (o se decidió no crearle) las etiquetas de contactos por defecto. Es lo que
+     * impide que vuelvan a aparecer después de eliminarlas: ver servicios/contactos/etiquetas.ts.
+     */
+    etiquetasInicialesCreadas: boolean().notNull().default(false),
+    /** Lo mismo para las categorías de tareas por defecto: ver servicios/tareas/categorias.ts. */
+    categoriasDeTareasInicialesCreadas: boolean().notNull().default(false),
   },
   (tabla) => [
     uniqueIndex("usuarios_email_unico").on(tabla.email),

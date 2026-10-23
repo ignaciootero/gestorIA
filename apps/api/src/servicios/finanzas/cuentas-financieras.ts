@@ -2,9 +2,11 @@
 // gastos ("cuentas_financieras" en la base: ver esquema/finanzas.ts para el
 // porqué del nombre, distinto de la tabla "cuentas" de Better Auth).
 //
-// El saldo de una cuenta se calcula siempre al leer, nunca se guarda:
+// Cada cuenta tiene su moneda (la base de la persona, si no elige otra) y su saldo
+// está siempre en esa moneda. El saldo se calcula siempre al leer, nunca se guarda:
 //   saldo inicial (fijado al crearla) + ingresos − gastos + ajustes manuales
-//   − transferencias que salen + transferencias que entran.
+//   − transferencias que salen + transferencias que entran (ya convertidas a la
+//   moneda de esta cuenta: ver `importeConvertidoCentavos` en esquema/finanzas.ts).
 // Un ajuste manual ("hoy tengo $X") NO es un movimiento: no cuenta en ningún
 // período ni infla los ingresos o gastos; solo queda en el historial de la cuenta.
 //
@@ -16,12 +18,15 @@ import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
 import { CUENTAS_FINANCIERAS_POR_DEFECTO } from "@gestoria/shared";
 import { and, count, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { obtenerMonedaBase } from "./moneda-base.ts";
 
 export type CuentaFinanciera = {
   id: string;
   nombre: string;
+  /** Código ISO de la moneda de la cuenta ("UYU", "USD"...). No cambia. */
+  moneda: string;
   saldoInicialCentavos: number;
-  /** Saldo inicial + ingresos − gastos + ajustes − transferencias salientes + entrantes, calculado al leer. */
+  /** Saldo inicial + ingresos − gastos + ajustes − transferencias salientes + entrantes, calculado al leer y en la moneda de la cuenta. */
   saldoCentavos: number;
   /** Oculta: no se ofrece al cargar movimientos nuevos, pero conserva saldo e historial. */
   oculta: boolean;
@@ -39,9 +44,10 @@ async function asegurarCuentasPorDefecto(cliente: ClienteDb, userId: string): Pr
 
   if ((fila?.total ?? 0) > 0) return;
 
+  const moneda = await obtenerMonedaBase(cliente, userId);
   await cliente.db
     .insert(esquema.cuentasFinancieras)
-    .values(CUENTAS_FINANCIERAS_POR_DEFECTO.map((nombre) => ({ userId, nombre })));
+    .values(CUENTAS_FINANCIERAS_POR_DEFECTO.map((nombre) => ({ userId, nombre, moneda })));
 }
 
 /**
@@ -76,11 +82,11 @@ async function cambiosPorCuenta(
       .from(esquema.ajustesDeSaldo)
       .where(eq(esquema.ajustesDeSaldo.userId, userId))
       .groupBy(esquema.ajustesDeSaldo.cuentaFinancieraId),
-    // Las transferencias le suman a la cuenta de destino.
+    // Las transferencias le suman a la cuenta de destino lo que llega, en su moneda.
     cliente.db
       .select({
         cuentaId: esquema.movimientos.cuentaDestinoId,
-        neto: sql<number>`coalesce(sum(${esquema.movimientos.importeCentavos}), 0)::bigint`.mapWith(
+        neto: sql<number>`coalesce(sum(${esquema.movimientos.importeConvertidoCentavos}), 0)::bigint`.mapWith(
           Number,
         ),
         movimientos: count(),
@@ -127,6 +133,7 @@ export async function listarCuentasFinancieras(
       .select({
         id: esquema.cuentasFinancieras.id,
         nombre: esquema.cuentasFinancieras.nombre,
+        moneda: esquema.cuentasFinancieras.moneda,
         saldoInicialCentavos: esquema.cuentasFinancieras.saldoInicialCentavos,
         ocultaEn: esquema.cuentasFinancieras.ocultaEn,
         creadoEn: esquema.cuentasFinancieras.creadoEn,
@@ -147,6 +154,7 @@ export async function listarCuentasFinancieras(
     return {
       id: fila.id,
       nombre: fila.nombre,
+      moneda: fila.moneda,
       saldoInicialCentavos: fila.saldoInicialCentavos,
       saldoCentavos: fila.saldoInicialCentavos + (cambio?.neto ?? 0),
       oculta: fila.ocultaEn !== null,
@@ -189,11 +197,17 @@ async function existeActivaConNombre(
 
 export class NombreDeCuentaEnUso extends Error {}
 
+/**
+ * Crea una cuenta. Sin `moneda`, nace en la moneda base de la persona; con ella, en esa
+ * (por ejemplo una caja de ahorro en dólares). La moneda no se puede cambiar después:
+ * todos los importes de la cuenta están en ella.
+ */
 export async function crearCuentaFinanciera(
   cliente: ClienteDb,
   userId: string,
   nombre: string,
   saldoInicialCentavos: number,
+  moneda?: string,
 ): Promise<CuentaFinanciera> {
   if (await existeActivaConNombre(cliente, userId, nombre)) {
     throw new NombreDeCuentaEnUso(nombre);
@@ -201,10 +215,16 @@ export async function crearCuentaFinanciera(
 
   const [fila] = await cliente.db
     .insert(esquema.cuentasFinancieras)
-    .values({ userId, nombre, saldoInicialCentavos })
+    .values({
+      userId,
+      nombre,
+      saldoInicialCentavos,
+      moneda: moneda ?? (await obtenerMonedaBase(cliente, userId)),
+    })
     .returning({
       id: esquema.cuentasFinancieras.id,
       nombre: esquema.cuentasFinancieras.nombre,
+      moneda: esquema.cuentasFinancieras.moneda,
       saldoInicialCentavos: esquema.cuentasFinancieras.saldoInicialCentavos,
       creadoEn: esquema.cuentasFinancieras.creadoEn,
     });
@@ -368,6 +388,16 @@ export type ItemDeHistorial =
       categoria: { nombre: string; color: string };
       /** Solo en una transferencia: de qué cuenta a cuál. */
       transferencia: { desde: string; hacia: string } | null;
+      /** La conversión del movimiento (ver esquema/finanzas.ts): con qué tasa y a cuánto quedó. */
+      cambio: {
+        tipoDeCambio: number;
+        manual: boolean;
+        /** Ingreso o gasto: lo que vale en la moneda base. Transferencia: lo que llegó a la cuenta de destino. */
+        convertidoCentavos: number;
+        monedaDeOrigen: string;
+        /** Solo en una transferencia: la moneda de la cuenta de destino. */
+        monedaDeDestino: string | null;
+      };
       /** El período al que pertenece el movimiento. Los ajustes manuales no tienen. */
       periodo: { nombre: string };
     }
@@ -403,6 +433,12 @@ type FilaDeHistorial = {
   periodo_nombre: string | null;
   origen_nombre: string | null;
   destino_nombre: string | null;
+  moneda_origen: string | null;
+  moneda_destino: string | null;
+  /** numeric y bigint llegan como texto en una consulta cruda. */
+  tipo_de_cambio: number | string | null;
+  importe_convertido_centavos: number | string | null;
+  cambio_manual: boolean | null;
 };
 
 /**
@@ -441,7 +477,7 @@ export async function historialDeCuenta(
           when ${m.tipo} = 'ingreso' then ${m.importeCentavos}
           when ${m.tipo} = 'gasto' then -${m.importeCentavos}
           when ${m.cuentaFinancieraId} = ${id} then -${m.importeCentavos}
-          else ${m.importeCentavos}
+          else ${m.importeConvertidoCentavos}
         end as monto_centavos,
         ${m.tipo} as tipo,
         ${m.descripcion} as descripcion,
@@ -450,7 +486,12 @@ export async function historialDeCuenta(
         null::bigint as saldo_indicado_centavos,
         ${p.nombre} as periodo_nombre,
         co.nombre as origen_nombre,
-        cd.nombre as destino_nombre
+        cd.nombre as destino_nombre,
+        co.moneda as moneda_origen,
+        cd.moneda as moneda_destino,
+        ${m.tipoDeCambio} as tipo_de_cambio,
+        ${m.importeConvertidoCentavos} as importe_convertido_centavos,
+        ${m.cambioManual} as cambio_manual
       from ${m}
       join ${c} on ${c.id} = ${m.categoriaId}
       join ${p} on ${p.id} = ${m.periodoId}
@@ -473,7 +514,12 @@ export async function historialDeCuenta(
         ${a.saldoIndicadoCentavos},
         null::text,
         null::text,
-        null::text
+        null::text,
+        null::text,
+        null::text,
+        null::numeric,
+        null::bigint,
+        null::boolean
       from ${a}
       where ${a.userId} = ${userId}
         and ${a.cuentaFinancieraId} = ${id}
@@ -491,7 +537,12 @@ export async function historialDeCuenta(
         null::bigint,
         null::text,
         null::text,
-        null::text
+        null::text,
+        null::text,
+        null::text,
+        null::numeric,
+        null::bigint,
+        null::boolean
       from ${cf}
       where ${cf.userId} = ${userId}
         and ${cf.id} = ${id}
@@ -544,6 +595,13 @@ export async function historialDeCuenta(
       descripcion: fila.descripcion ?? "",
       categoria: { nombre: fila.categoria_nombre ?? "", color: fila.categoria_color ?? "#64748b" },
       periodo: { nombre: fila.periodo_nombre ?? "" },
+      cambio: {
+        tipoDeCambio: Number(fila.tipo_de_cambio ?? 1),
+        manual: fila.cambio_manual ?? false,
+        convertidoCentavos: Number(fila.importe_convertido_centavos ?? 0),
+        monedaDeOrigen: fila.moneda_origen ?? "",
+        monedaDeDestino: fila.tipo === "neutro" ? fila.moneda_destino : null,
+      },
       transferencia:
         fila.tipo === "neutro"
           ? { desde: fila.origen_nombre ?? "", hacia: fila.destino_nombre ?? "" }

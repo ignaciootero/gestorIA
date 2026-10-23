@@ -137,6 +137,9 @@ function FormularioPresupuesto({
   cerrar: () => void;
 }) {
   const queryClient = useQueryClient();
+  // Los presupuestos se miden en la moneda base, igual que los totales.
+  const { data: sesion } = useSession();
+  const moneda = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
   const [categoriaId, setCategoriaId] = useState<number>(
     presupuesto?.categoriaId ?? categoriasDisponibles[0]?.id ?? 0,
   );
@@ -201,6 +204,7 @@ function FormularioPresupuesto({
             value={field.value}
             onChange={field.onChange}
             onBlur={field.onBlur}
+            moneda={moneda}
             etiqueta="Límite por período"
             ayuda="El mismo límite vale para todos tus períodos."
             autoFocus={presupuesto !== undefined}

@@ -26,6 +26,7 @@
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "nodemailer": "catalog:",
+    "pg-boss": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"
   },

@@ -30,6 +30,7 @@ Todas las licencias son libres y sin costo, según la restricción de `CLAUDE.md
 | `@hono/node-server` | 2.1 | MIT | `apps/api` | Adaptador para correr Hono sobre Node. |
 | `pino` | 10.3 | MIT | `apps/api` | Logs estructurados en JSON. Es el logger más rápido del ecosistema Node y el que pide la guía de convenciones. |
 | `pino-pretty` | 13.1 | MIT | `apps/api` (solo desarrollo) | Formatea los logs para leerlos en la consola. No se carga en producción. |
+| `pg-boss` | 12.38 | MIT | `apps/api` | Tareas programadas (primero, la limpieza de contactos). Cola de trabajos sobre la misma base de PostgreSQL, en su propio esquema `pgboss`: no hace falta Redis ni otro servicio. Reparte los trabajos entre copias de la API y reintenta los que fallan. Pide Node 22.12 o más. Ver `docs/decisiones.md` (2026-10-20). |
 | `zod` | 4.6 | MIT | `apps/api`, `packages/db` | Validación de variables de entorno hoy, y de toda entrada de la API más adelante. Elegido por `CLAUDE.md` como validador único para formularios, API y las futuras herramientas de la IA. |
 
 ## Base de datos
@@ -77,10 +78,18 @@ Todas las licencias son libres y sin costo, según la restricción de `CLAUDE.md
 | `tailwind-merge` | 3.7 | MIT | `apps/web` | Resuelve clases de Tailwind en conflicto, para que lo que pasa quien usa un componente gane sobre el valor por defecto. |
 | `recharts` | 3.10 | MIT | `apps/web` | Gráficos del módulo de ingresos y gastos (gastos por categoría, evolución por período). Es la librería de gráficos para React más usada y mantenida; se eligió antes que armar los gráficos a mano porque la guía de estadísticas pide varios tipos (barras, líneas) con interacción básica, y Recharts los da con poco código, cargados de forma diferida para no engordar el resto de la aplicación. |
 
+## Servicios externos (sin librería)
+
+| Servicio | Para qué | Dónde se usa | Por qué | Licencia / términos |
+|---|---|---|---|---|
+| fawazahmed0/currency-api (CDN de jsDelivr y Cloudflare Pages) | Cotizaciones de monedas, con histórico por fecha | `apps/api/src/servicios/finanzas/cotizaciones.ts` | Gratis, sin clave ni límite, e incluye UYU y ARS (Frankfurter/BCE no). Es la única fuente: se descartó un respaldo comercial de plan gratuito limitado | Datos públicos; verificar la licencia vigente en el repositorio del proyecto antes de producción |
+
+Son llamadas HTTP desde la API (nunca desde el navegador) y no suman dependencias. Ver `docs/decisiones.md` (2026-10-04).
+
 ## Pendientes del stack
 
 Definidas en `CLAUDE.md` pero todavía sin instalar, porque corresponden a pasos
-posteriores de la hoja de ruta: Expo, NativeWind, Reanimated, FlashList, pg-boss,
+posteriores de la hoja de ruta: Expo, NativeWind, Reanimated, FlashList,
 jest-expo y React Native Testing Library.
 
 **Sobre shadcn/ui.** Está en el stack de `CLAUDE.md` pero todavía no se instaló.

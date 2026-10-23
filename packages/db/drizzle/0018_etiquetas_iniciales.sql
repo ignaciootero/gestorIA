@@ -1,0 +1,1 @@
+ALTER TABLE "usuarios" ADD COLUMN "etiquetas_iniciales_creadas" boolean DEFAULT false NOT NULL;

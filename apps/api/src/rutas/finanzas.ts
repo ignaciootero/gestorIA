@@ -11,6 +11,7 @@ import {
   esquemaAbrirPeriodo,
   esquemaAjusteDeSaldo,
   esquemaCerrarPeriodo,
+  esquemaConsultaDeCotizacion,
   esquemaCrearCategoria,
   esquemaCrearCuentaFinanciera,
   esquemaMovimiento,
@@ -39,6 +40,12 @@ import {
   reemplazarCategoria,
   renombrarCategoria,
 } from "../servicios/finanzas/categorias.ts";
+import { estadisticasComparativas } from "../servicios/finanzas/comparaciones.ts";
+import {
+  type FuenteDeCotizaciones,
+  fuenteDeCotizaciones as fuenteReal,
+  obtenerTasa,
+} from "../servicios/finanzas/cotizaciones.ts";
 import {
   ajustarSaldoDeCuenta,
   CuentaConMovimientos,
@@ -58,7 +65,10 @@ import {
   gastosPorCategoria,
 } from "../servicios/finanzas/estadisticas.ts";
 import {
+  CambioInvalido,
+  CotizacionNoDisponible,
   crearMovimiento,
+  type DatosNuevoMovimiento,
   duplicarMovimiento,
   editarMovimiento,
   eliminarMovimiento,
@@ -95,6 +105,7 @@ import {
   listarPresupuestos,
 } from "../servicios/finanzas/presupuestos.ts";
 import { obtenerResumen } from "../servicios/finanzas/resumen.ts";
+import { obtenerWidgetsDeFinanzas } from "../servicios/finanzas/widgets.ts";
 import type { EntornoHono } from "../tipos.ts";
 
 /** El id de una cuenta o de un movimiento. */
@@ -115,6 +126,7 @@ const esquemaFiltrosMovimientos = z.object({
   categoriaId: esquemaIdCategoria.optional(),
   cuentaFinancieraId: z.uuid().optional(),
   tipo: z.enum(TIPOS_MOVIMIENTO_VALIDOS).optional(),
+  contactoId: z.uuid().optional(),
   busqueda: z.string().trim().max(140).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).optional(),
@@ -125,9 +137,21 @@ const esquemaFiltrosMovimientos = z.object({
  * centésimos en la salida (mismo criterio que ya usan las cuentas: ver
  * `saldoInicial`/`saldoInicialCentavos` más abajo).
  */
-function aMovimientoParaGuardar(datos: z.infer<typeof esquemaMovimiento>) {
-  const { importe, fecha, ...resto } = datos;
-  return { ...resto, fecha: new Date(fecha), importeCentavos: centavosDesdeImporte(importe) };
+function aMovimientoParaGuardar(datos: z.infer<typeof esquemaMovimiento>): DatosNuevoMovimiento {
+  const { importe, fecha, cambio, ...resto } = datos;
+  return {
+    ...resto,
+    fecha: new Date(fecha),
+    importeCentavos: centavosDesdeImporte(importe),
+    // El importe recibido, como el resto de los importes, viaja en la unidad normal.
+    cambio:
+      cambio?.modo === "importe"
+        ? {
+            modo: "importe",
+            importeConvertidoCentavos: centavosDesdeImporte(cambio.importeConvertido),
+          }
+        : cambio,
+  };
 }
 
 function usuarioDe(c: Context<EntornoHono>): string {
@@ -136,10 +160,36 @@ function usuarioDe(c: Context<EntornoHono>): string {
   return sesion.user.id;
 }
 
-export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
+export type OpcionesDeRutasDeFinanzas = {
+  /** De dónde salen las cotizaciones; por defecto, la fuente pública real. */
+  fuenteDeCotizaciones?: FuenteDeCotizaciones | undefined;
+};
+
+export function rutasDeFinanzas(
+  cliente: ClienteDb,
+  { fuenteDeCotizaciones = fuenteReal }: OpcionesDeRutasDeFinanzas = {},
+): Hono<EntornoHono> {
   const rutas = new Hono<EntornoHono>();
 
   rutas.use("/api/finanzas/*", exigirSesion);
+
+  // --- Cotizaciones ---
+
+  /**
+   * La cotización sugerida para convertir de una moneda a otra en una fecha (hoy si no se
+   * pasa). Es lo que propone el formulario de movimientos; la persona puede cambiarla.
+   */
+  rutas.get("/api/finanzas/cotizacion", async (c) => {
+    const consulta = esquemaConsultaDeCotizacion.safeParse(c.req.query());
+    if (!consulta.success) throw errores.validacion(detalleDe(consulta.error));
+
+    const { desde, hacia, fecha } = consulta.data;
+    const tasa = await obtenerTasa(cliente, desde, hacia, fecha ? new Date(fecha) : new Date(), {
+      fuente: fuenteDeCotizaciones,
+    });
+    if (!tasa) throw errores.cotizacionNoDisponible();
+    return c.json(tasa);
+  });
 
   // --- Categorías ---
 
@@ -258,6 +308,7 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
         usuarioDe(c),
         resultado.data.nombre,
         centavosDesdeImporte(resultado.data.saldoInicial),
+        resultado.data.moneda,
       );
       return c.json(cuenta, 201);
     } catch (error) {
@@ -372,9 +423,20 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
         categoriaId: "Elegí una categoría válida.",
         cuentaFinancieraId: "Elegí una cuenta válida.",
         cuentaDestinoId: "Elegí una cuenta de destino válida.",
+        contactoId: "Elegí un contacto válido.",
       }[error.campo];
       const mensaje = error.explicacion ?? generico;
       throw errores.validacion([{ campo: error.campo, mensaje }], mensaje);
+    }
+    if (error instanceof CambioInvalido) {
+      throw errores.validacion(
+        [{ campo: "cambio", mensaje: error.explicacion }],
+        error.explicacion,
+      );
+    }
+    if (error instanceof CotizacionNoDisponible) {
+      const mensaje = "No pudimos traer la cotización de ese día. Escribila vos para seguir.";
+      throw errores.validacion([{ campo: "cambio", mensaje }], mensaje);
     }
     if (error instanceof FechaFueraDePeriodos) {
       const mensaje = error.sinPeriodoAbierto
@@ -402,6 +464,7 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
         cliente,
         usuarioDe(c),
         aMovimientoParaGuardar(resultado.data),
+        { fuente: fuenteDeCotizaciones },
       );
       return c.json(movimiento, 201);
     } catch (error) {
@@ -420,6 +483,7 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
         usuarioDe(c),
         id,
         aMovimientoParaGuardar(resultado.data),
+        { fuente: fuenteDeCotizaciones },
       );
       if (!movimiento) throw errores.noEncontrado("No encontramos ese movimiento.");
       return c.json(movimiento);
@@ -438,7 +502,9 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
   rutas.post("/api/finanzas/movimientos/:id/duplicar", async (c) => {
     const id = esquemaId.parse(c.req.param("id"));
     try {
-      const movimiento = await duplicarMovimiento(cliente, usuarioDe(c), id);
+      const movimiento = await duplicarMovimiento(cliente, usuarioDe(c), id, {
+        fuente: fuenteDeCotizaciones,
+      });
       if (!movimiento) throw errores.noEncontrado("No encontramos ese movimiento.");
       return c.json(movimiento, 201);
     } catch (error) {
@@ -584,6 +650,16 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
     }
   });
 
+  // --- Widgets: un solo pedido con lo que muestran los carruseles ---
+
+  /** Cifras, curiosidades y avisos del período abierto (o el último). Sin parámetros: lo elige el servidor. */
+  rutas.get("/api/finanzas/widgets", async (c) => {
+    const widgets = await obtenerWidgetsDeFinanzas(cliente, usuarioDe(c), {
+      fuente: fuenteDeCotizaciones,
+    });
+    return c.json(widgets);
+  });
+
   // --- Resumen, estadísticas y presupuestos: siempre de un período ---
 
   /** El período que pide la query (`periodoId`), verificado como de la persona. */
@@ -598,7 +674,9 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
 
   rutas.get("/api/finanzas/resumen", async (c) => {
     const userId = usuarioDe(c);
-    const resumen = await obtenerResumen(cliente, userId, await periodoPedido(c, userId));
+    const resumen = await obtenerResumen(cliente, userId, await periodoPedido(c, userId), {
+      fuente: fuenteDeCotizaciones,
+    });
     return c.json(resumen);
   });
 
@@ -606,12 +684,17 @@ export function rutasDeFinanzas(cliente: ClienteDb): Hono<EntornoHono> {
     const userId = usuarioDe(c);
     const periodo = await periodoPedido(c, userId);
 
-    const [porCategoria, evolucion] = await Promise.all([
+    const [porCategoria, evolucion, comparativas] = await Promise.all([
       gastosPorCategoria(cliente, userId, periodo.id),
       evolucionPorPeriodo(cliente, userId, periodo),
+      estadisticasComparativas(cliente, userId, periodo),
     ]);
 
-    return c.json({ gastosPorCategoria: porCategoria, evolucionPorPeriodo: evolucion });
+    return c.json({
+      gastosPorCategoria: porCategoria,
+      evolucionPorPeriodo: evolucion,
+      ...comparativas,
+    });
   });
 
   /** Evolución de lo gastado o ingresado en una categoría en los últimos períodos (hasta el elegido). */

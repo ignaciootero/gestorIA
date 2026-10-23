@@ -17,6 +17,8 @@ const MAXIMO_DE_DECIMALES = 2;
 export type OpcionesDeImporte = {
   /** Deja escribir un signo menos al principio (saldos). Los importes y límites no. */
   permitirNegativo?: boolean;
+  /** Cuántos decimales se dejan escribir: 2 en los importes (por defecto), más en una cotización. */
+  decimales?: number;
   region?: string;
 };
 
@@ -41,7 +43,11 @@ export function separadoresDeImporte(region = REGION_POR_DEFECTO): {
  */
 export function darFormatoAImporteEscrito(
   crudo: string,
-  { permitirNegativo = false, region = REGION_POR_DEFECTO }: OpcionesDeImporte = {},
+  {
+    permitirNegativo = false,
+    decimales: maximoDeDecimales = MAXIMO_DE_DECIMALES,
+    region = REGION_POR_DEFECTO,
+  }: OpcionesDeImporte = {},
 ): string {
   const { decimal } = separadoresDeImporte(region);
   const negativo = permitirNegativo && crudo.trimStart().startsWith("-");
@@ -54,7 +60,7 @@ export function darFormatoAImporteEscrito(
       : crudo
           .slice(posicionDecimal + decimal.length)
           .replace(/\D/g, "")
-          .slice(0, MAXIMO_DE_DECIMALES);
+          .slice(0, maximoDeDecimales);
 
   const enteros = textoEntero
     .replace(/\D/g, "")
@@ -88,12 +94,12 @@ export function interpretarImporteEscrito(
 /** El texto con formato de un importe que ya es número (para mostrarlo en el campo). Vacío si no es un número. */
 export function textoDeImporte(
   valor: number | null | undefined,
-  { region = REGION_POR_DEFECTO }: OpcionesDeImporte = {},
+  { decimales = MAXIMO_DE_DECIMALES, region = REGION_POR_DEFECTO }: OpcionesDeImporte = {},
 ): string {
   if (valor === null || valor === undefined || !Number.isFinite(valor)) return "";
   return new Intl.NumberFormat(region, {
     useGrouping: true,
-    maximumFractionDigits: MAXIMO_DE_DECIMALES,
+    maximumFractionDigits: decimales,
   }).format(valor);
 }
 
@@ -109,7 +115,10 @@ export function textoDeImporte(
  */
 export function normalizarImportePegado(
   pegado: string,
-  { region = REGION_POR_DEFECTO }: OpcionesDeImporte = {},
+  {
+    decimales: maximoDeDecimales = MAXIMO_DE_DECIMALES,
+    region = REGION_POR_DEFECTO,
+  }: OpcionesDeImporte = {},
 ): string {
   const { decimal } = separadoresDeImporte(region);
   const negativo = pegado.trimStart().startsWith("-");
@@ -127,7 +136,7 @@ export function normalizarImportePegado(
       const veces = limpio.split(separador).length - 1;
       const posicion = limpio.lastIndexOf(separador);
       const digitosDespues = limpio.length - posicion - 1;
-      if (veces === 1 && digitosDespues <= MAXIMO_DE_DECIMALES) posicionDecimal = posicion;
+      if (veces === 1 && digitosDespues <= maximoDeDecimales) posicionDecimal = posicion;
     }
   }
 

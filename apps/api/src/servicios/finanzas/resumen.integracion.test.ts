@@ -473,6 +473,41 @@ describe("GET /api/finanzas/estadisticas", () => {
     ]);
   });
 
+  it("calcula el balance de cada período: positivo, negativo y cero", async () => {
+    const entorno = await prepararAgostoYSetiembre();
+    // Agosto: sobró (1000 - 300). Setiembre: se gastó de más (200 - 500).
+    const movimientos = [
+      { tipo: "ingreso", importe: 1000, fecha: "2026-08-05T12:00:00.000Z" },
+      { tipo: "gasto", importe: 300, fecha: "2026-08-10T12:00:00.000Z" },
+      { tipo: "ingreso", importe: 200, fecha: "2026-09-05T12:00:00.000Z" },
+      { tipo: "gasto", importe: 500, fecha: "2026-09-10T12:00:00.000Z" },
+    ] as const;
+    for (const movimiento of movimientos) {
+      await crearMovimiento(entorno.cookies, entorno, movimiento);
+    }
+
+    const cuerpo = await leerJson<{
+      evolucionPorPeriodo: { nombre: string; balanceCentavos: number }[];
+    }>(
+      await pedir(entorno.cookies, `/api/finanzas/estadisticas?periodoId=${entorno.setiembre.id}`),
+    );
+
+    expect(cuerpo.evolucionPorPeriodo.map((p) => [p.nombre, p.balanceCentavos])).toEqual([
+      ["Agosto", 70_000],
+      ["Setiembre", -30_000],
+    ]);
+  });
+
+  it("el balance de un período sin movimientos es cero", async () => {
+    const entorno = await prepararAgostoYSetiembre();
+
+    const cuerpo = await leerJson<{ evolucionPorPeriodo: { balanceCentavos: number }[] }>(
+      await pedir(entorno.cookies, `/api/finanzas/estadisticas?periodoId=${entorno.setiembre.id}`),
+    );
+
+    expect(cuerpo.evolucionPorPeriodo.map((p) => p.balanceCentavos)).toEqual([0, 0]);
+  });
+
   it("no mezcla los períodos de otra persona en la evolución", async () => {
     const primero = await prepararAgostoYSetiembre();
     const segundo = await prepararEntorno();

@@ -10,7 +10,9 @@
 // en la base vive en packages/shared/src/formato/moneda.ts, no acá.
 
 import { z } from "zod";
+import { TASA_MAXIMA, TASA_MINIMA } from "./cambio.ts";
 import { TIPOS_MOVIMIENTO, TIPOS_MOVIMIENTO_VALIDOS } from "./constantes.ts";
+import { CODIGOS_DE_MONEDA } from "./monedas.ts";
 
 export const LARGO_MAXIMO_NOMBRE = 40;
 export const LARGO_MAXIMO_DESCRIPCION = 140;
@@ -108,9 +110,35 @@ export const esquemaReemplazarCategoria = z
   });
 export type DatosReemplazarCategoria = z.infer<typeof esquemaReemplazarCategoria>;
 
+export const esquemaMoneda = z.enum(CODIGOS_DE_MONEDA, { error: "Elegí una moneda de la lista." });
+
+/** Cuántas unidades de la moneda de destino vale 1 de la de origen (ver cambio.ts). */
+export const esquemaTasaDeCambio = z
+  .number("Escribí la cotización.")
+  .finite("Esa cotización no es válida.")
+  .min(TASA_MINIMA, "La cotización tiene que ser mayor que cero.")
+  .max(TASA_MAXIMA, "Esa cotización es demasiado grande.");
+
+/**
+ * Cómo se fija el tipo de cambio de un movimiento entre monedas distintas:
+ * - "automatico": el servidor usa la cotización de la fecha del movimiento.
+ * - "tasa": la persona escribe la cotización.
+ * - "importe": la persona escribe cuánto se recibió, en la otra moneda, y la
+ *   cotización se deduce de ahí.
+ * Sin `cambio`, al crear se usa el automático y al editar se conserva el guardado.
+ */
+export const esquemaCambio = z.discriminatedUnion("modo", [
+  z.object({ modo: z.literal("automatico") }),
+  z.object({ modo: z.literal("tasa"), tasa: esquemaTasaDeCambio }),
+  z.object({ modo: z.literal("importe"), importeConvertido: esquemaImporte }),
+]);
+export type DatosCambio = z.infer<typeof esquemaCambio>;
+
 export const esquemaCrearCuentaFinanciera = z.object({
   nombre: esquemaNombreCuentaFinanciera,
   saldoInicial: esquemaSaldoInicial.default(0),
+  /** Sin moneda, la cuenta nace en la moneda base de la persona. */
+  moneda: esquemaMoneda.optional(),
 });
 export type DatosCuentaFinanciera = z.infer<typeof esquemaCrearCuentaFinanciera>;
 
@@ -143,7 +171,19 @@ export const esquemaCamposDeMovimiento = z.object({
   cuentaDestinoId: z.uuid("Elegí la cuenta de destino.").nullish(),
   /** Fecha y hora del movimiento: de ella se deduce el período al que pertenece. */
   fecha: esquemaFechaHora,
+  /** Solo si el movimiento cruza monedas (ver esquemaCambio). */
+  cambio: esquemaCambio.nullish(),
+  /** Con quién fue (opcional). Una transferencia entre cuentas propias no lleva contacto. */
+  contactoId: z.uuid("Elegí un contacto válido.").nullish(),
 });
+
+/** Qué cotización pedir: de qué moneda a cuál, y para qué día (por defecto, hoy). */
+export const esquemaConsultaDeCotizacion = z.object({
+  desde: esquemaMoneda,
+  hacia: esquemaMoneda,
+  fecha: esquemaFechaHora.optional(),
+});
+export type DatosConsultaDeCotizacion = z.infer<typeof esquemaConsultaDeCotizacion>;
 
 /** Reglas entre campos: una transferencia lleva destino distinto del origen; el resto no lleva. */
 export function validarDestinoDeTransferencia(

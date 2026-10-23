@@ -333,3 +333,59 @@ describe("contraste sobre el fondo animado", () => {
     });
   }
 });
+
+describe("colores de origen", () => {
+  type Rgb = [number, number, number];
+
+  function desdeHex(hex: string): Rgb {
+    const limpio = hex.replace("#", "");
+    return [0, 2, 4].map((desde) => Number.parseInt(limpio.slice(desde, desde + 2), 16)) as Rgb;
+  }
+
+  function luminancia([r, g, b]: Rgb): number {
+    const canal = (valor: number) => {
+      const normalizado = valor / 255;
+      return normalizado <= 0.03928 ? normalizado / 12.92 : ((normalizado + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b);
+  }
+
+  function contraste(uno: string, otro: string): number {
+    const [claro, oscuro] = [luminancia(desdeHex(uno)), luminancia(desdeHex(otro))].sort(
+      (a, b) => b - a,
+    );
+    return ((claro as number) + 0.05) / ((oscuro as number) + 0.05);
+  }
+
+  const ORIGENES = ["Manual", "Finanzas", "Contactos", "Tareas"] as const;
+
+  for (const [nombreTema, tema] of [
+    ["claro", TEMA_CLARO],
+    ["oscuro", TEMA_OSCURO],
+  ] as const) {
+    for (const origen of ORIGENES) {
+      it(`${origen}: el texto se lee sobre su fondo suave en el tema ${nombreTema} (4,5:1)`, () => {
+        expect(
+          contraste(tema[`origen${origen}Texto`], tema[`origen${origen}Fondo`]),
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+
+      it(`${origen}: el color pleno se distingue de la superficie en el tema ${nombreTema} (3:1)`, () => {
+        // 3:1 es el mínimo de WCAG para elementos gráficos (los puntos y bordes).
+        expect(contraste(tema[`origen${origen}`], tema.superficie)).toBeGreaterThanOrEqual(3);
+      });
+    }
+  }
+
+  it("los cuatro colores plenos son distintos entre sí y de los estados y el acento", () => {
+    const plenos = ORIGENES.map((origen) => TEMA_CLARO[`origen${origen}`]);
+    const reservados = [
+      TEMA_CLARO.acento,
+      TEMA_CLARO.exito,
+      TEMA_CLARO.advertencia,
+      TEMA_CLARO.peligro,
+    ];
+    expect(new Set(plenos).size).toBe(4);
+    for (const pleno of plenos) expect(reservados).not.toContain(pleno);
+  });
+});

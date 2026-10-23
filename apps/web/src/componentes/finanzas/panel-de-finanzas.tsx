@@ -23,6 +23,7 @@ import { obtenerPeriodos, type Periodo, type PeriodoListado } from "@/lib/api-fi
 import { interpretarError } from "@/lib/mensajes-de-error";
 import { BarraDePeriodo } from "./barra-de-periodo";
 import { CuentasYCategorias } from "./cuentas-y-categorias";
+import { DeudasDeFinanzas } from "./deudas-de-finanzas";
 import { EstadisticasDeFinanzas } from "./estadisticas-de-finanzas";
 import { FormularioMovimiento } from "./formulario-movimiento";
 import {
@@ -36,7 +37,7 @@ import { ListadoDeMovimientos } from "./listado-de-movimientos";
 import { PresupuestosDeFinanzas } from "./presupuestos-de-finanzas";
 import { ResumenDeFinanzas } from "./resumen-de-finanzas";
 
-type Seccion = "resumen" | "movimientos" | "presupuestos" | "estadisticas" | "cuentas";
+type Seccion = "resumen" | "movimientos" | "presupuestos" | "estadisticas" | "cuentas" | "deudas";
 
 const SECCIONES = [
   { valor: "resumen", etiqueta: "Resumen" },
@@ -44,6 +45,7 @@ const SECCIONES = [
   { valor: "presupuestos", etiqueta: "Presupuestos" },
   { valor: "estadisticas", etiqueta: "Estadísticas" },
   { valor: "cuentas", etiqueta: "Cuentas" },
+  { valor: "deudas", etiqueta: "Deudas" },
 ] as const;
 
 /** Qué diálogo está abierto. Uno solo a la vez. */
@@ -95,30 +97,28 @@ export function PanelDeFinanzas() {
     return () => setDialogo((actual) => (actual?.tipo === tipo ? null : actual));
   }
 
-  const necesitaPeriodo = seccion !== "cuentas";
+  // Cuentas y deudas no dependen de ningún período.
+  const necesitaPeriodo = seccion !== "cuentas" && seccion !== "deudas";
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SelectorDeSegmentos
-          id="seccion-finanzas"
-          etiqueta="Sección del módulo de finanzas"
-          segmentos={SECCIONES}
-          activo={seccion}
-          onCambiar={setSeccion}
-          className="sm:max-w-xl"
-        />
-
-        <Boton onClick={agregarMovimiento} disabled={periodos.isPending} className="shrink-0">
-          <Plus aria-hidden="true" className="size-4" />
-          Agregar movimiento
-        </Boton>
-      </div>
+      {/* El selector ocupa todo el ancho de la columna, igual que el resto del contenido. En una
+          pantalla angosta las secciones se desplazan dentro de su propio contenedor. */}
+      <SelectorDeSegmentos
+        id="seccion-finanzas"
+        etiqueta="Sección del módulo de finanzas"
+        segmentos={SECCIONES}
+        activo={seccion}
+        onCambiar={setSeccion}
+        className="w-full overflow-x-auto [&>button]:px-2 sm:[&>button]:px-4"
+      />
 
       {periodos.error ? (
         <Aviso tono="peligro">{interpretarError(periodos.error).mensaje}</Aviso>
       ) : null}
 
+      {/* "Agregar movimiento" vive en la barra del período, arriba a la derecha. Sin ningún período
+          el botón queda solo, en la misma esquina. En Cuentas y Deudas no se muestra. */}
       {periodo !== null && necesitaPeriodo ? (
         <BarraDePeriodo
           periodos={lista}
@@ -129,7 +129,16 @@ export function PanelDeFinanzas() {
           onReabrir={() => setDialogo({ tipo: "reabrir", periodo })}
           onEliminar={() => setDialogo({ tipo: "eliminar", periodo })}
           onAbrir={() => setDialogo({ tipo: "abrir" })}
+          onAgregarMovimiento={agregarMovimiento}
+          cargando={periodos.isPending}
         />
+      ) : necesitaPeriodo ? (
+        <div className="flex justify-end">
+          <Boton onClick={agregarMovimiento} disabled={periodos.isPending}>
+            <Plus aria-hidden="true" className="size-4" />
+            Agregar movimiento
+          </Boton>
+        </div>
       ) : null}
 
       <div
@@ -138,6 +147,7 @@ export function PanelDeFinanzas() {
         aria-labelledby={`seccion-finanzas-${seccion}`}
       >
         {seccion === "cuentas" ? <CuentasYCategorias /> : null}
+        {seccion === "deudas" ? <DeudasDeFinanzas /> : null}
 
         {necesitaPeriodo && periodos.isPending ? (
           <div aria-busy="true" aria-live="polite">

@@ -15,12 +15,14 @@ import {
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { Isotipo, Logotipo } from "@/componentes/marca/logotipo";
+import { BotonDeFallida } from "@/componentes/tareas/fila-de-tarea";
 import { Aviso } from "@/componentes/ui/aviso";
 import { Boton } from "@/componentes/ui/boton";
 import { Campo } from "@/componentes/ui/campo";
 import { Casilla } from "@/componentes/ui/casilla";
 import { Interruptor } from "@/componentes/ui/interruptor";
 import { ItemAnimado, ListaAnimada } from "@/componentes/ui/lista-animada";
+import { Plegable } from "@/componentes/ui/plegable";
 import { Tarjeta } from "@/componentes/ui/tarjeta";
 import { ValorConPulso } from "@/componentes/ui/valor-con-pulso";
 
@@ -38,6 +40,10 @@ const COLORES = [
   { nombre: "exito", variable: "--color-exito" },
   { nombre: "advertencia", variable: "--color-advertencia" },
   { nombre: "peligro", variable: "--color-peligro" },
+  { nombre: "origen-manual", variable: "--color-origen-manual" },
+  { nombre: "origen-finanzas", variable: "--color-origen-finanzas" },
+  { nombre: "origen-contactos", variable: "--color-origen-contactos" },
+  { nombre: "origen-tareas", variable: "--color-origen-tareas" },
 ];
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -54,6 +60,7 @@ export function GuiaDeEstilo() {
   const [animando, setAnimando] = useState(0);
   const [casilla, setCasilla] = useState(false);
   const [tarea, setTarea] = useState(true);
+  const [plegableAbierto, setPlegableAbierto] = useState(false);
   const [interruptor, setInterruptor] = useState(true);
   const [filas, setFilas] = useState([1, 2, 3]);
   const reducirMovimiento = useReducedMotion();
@@ -118,7 +125,9 @@ export function GuiaDeEstilo() {
       <Seccion titulo="Colores">
         <p className="text-sm text-texto-secundario">
           Base neutra para casi todo y un único acento (azul petróleo) para la acción principal, lo
-          seleccionado, los enlaces y el foco.
+          seleccionado, los enlaces y el foco. Los cuatro colores de origen (naranja, azul, violeta
+          y rosa) marcan de qué módulo viene algo que se muestra mezclado con lo de otros, como los
+          eventos del calendario; siempre van con un ícono y el nombre.
         </p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {COLORES.map(({ nombre, variable }) => (
@@ -272,6 +281,49 @@ export function GuiaDeEstilo() {
           <Casilla etiqueta="Recibir un resumen semanal" marcada={casilla} onCambio={setCasilla} />
           <Casilla tachar etiqueta="Pagar el alquiler" marcada={tarea} onCambio={setTarea} />
           <Casilla etiqueta="Deshabilitada" marcada={false} onCambio={() => {}} disabled />
+          <Casilla
+            tachar
+            nombre="Regar las plantas"
+            etiqueta="Regar las plantas"
+            forma="circular"
+            debajo={<span className="text-sm text-texto-secundario">Ayer · Casa</span>}
+            junto={<BotonDeFallida titulo="Regar las plantas" alFallar={() => {}} />}
+            marcada={false}
+            onCambio={() => {}}
+          />
+        </Tarjeta>
+        <p className="text-sm text-texto-secundario">
+          En una fila de lista, la caja queda centrada respecto de todo el bloque (título y
+          detalle), con algo a su derecha si hace falta. En las tareas la caja es circular, con la
+          misma estética que el botón de “fallida” pero con un tilde y en verde: al apuntarla se
+          pinta de verde y, marcada, queda llena.
+        </p>
+      </Seccion>
+
+      <Seccion titulo="Secciones plegables">
+        <p className="text-sm text-texto-secundario">
+          El contenido se abre y se cierra como una sola pieza: la altura y la opacidad se animan
+          juntas y lo de adentro no hace su propia cascada, así nada se solapa. Las salidas son más
+          rápidas que las entradas.
+        </p>
+        <Tarjeta className="flex flex-col gap-3 p-6">
+          <Boton
+            variante="secundario"
+            tamano="chico"
+            className="self-start"
+            aria-expanded={plegableAbierto}
+            aria-controls="demo-plegable"
+            onClick={() => setPlegableAbierto((abierto) => !abierto)}
+          >
+            {plegableAbierto ? "Cerrar" : "Abrir"}
+          </Boton>
+          <Plegable abierto={plegableAbierto} id="demo-plegable">
+            <ul className="flex flex-col gap-2 text-sm text-texto">
+              <li>Primer elemento</li>
+              <li>Segundo elemento</li>
+              <li>Tercer elemento</li>
+            </ul>
+          </Plegable>
         </Tarjeta>
       </Seccion>
 

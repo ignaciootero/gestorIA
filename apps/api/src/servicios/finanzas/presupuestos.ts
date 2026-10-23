@@ -23,7 +23,9 @@ export async function listarPresupuestos(
   periodoId: number,
 ): Promise<PresupuestoConGasto[]> {
   const gastadoCentavos =
-    sql<number>`coalesce(sum(${esquema.movimientos.importeCentavos}), 0)::bigint`.mapWith(Number);
+    sql<number>`coalesce(sum(${esquema.movimientos.importeConvertidoCentavos}), 0)::bigint`.mapWith(
+      Number,
+    );
 
   const filas = await cliente.db
     .select({

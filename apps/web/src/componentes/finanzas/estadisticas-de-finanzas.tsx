@@ -1,18 +1,26 @@
-// Estadísticas: gastos por categoría del período, la evolución de ingresos/gastos
-// de los últimos períodos y la evolución de una categoría a elección (de lo
-// gastado o de lo ingresado en ella).
+// Estadísticas: datos rápidos del período (siempre arriba) y cinco bloques que se
+// presentan en orden aleatorio: la evolución de ingresos/gastos (y su balance) de los
+// últimos períodos, el ritmo de gasto y qué categorías subieron o bajaron contra el
+// período anterior (estos dos en estadisticas-comparativas.tsx), la evolución de lo
+// gastado en una categoría y los gastos por categoría del período.
+//
+// El orden se sortea una vez cada vez que se entra a la pestaña (o se cambia de período) y
+// no cambia mientras se está en ella, ni siquiera al actualizarse los datos: que algo se
+// mueva mientras se lee sería peor que el problema que resuelve. Se hace para que ningún
+// bloque quede siempre al final, donde es más fácil no llegar a verlo.
 // Los gráficos en sí viven en graficos-finanzas.tsx y se cargan de forma diferida
 // (ver ese archivo): acá solo se piden los datos y se arma la pantalla alrededor.
 
 "use client";
 
-import { MONEDA_POR_DEFECTO } from "@gestoria/shared";
+import { elegirAlAzar, MONEDA_POR_DEFECTO, mezclar } from "@gestoria/shared";
 import { useQuery } from "@tanstack/react-query";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Aviso } from "@/componentes/ui/aviso";
+import { Insignia } from "@/componentes/ui/insignia";
 import { Selector } from "@/componentes/ui/selector";
-import { SelectorDeSegmentos } from "@/componentes/ui/selector-de-segmentos";
 import { Tarjeta } from "@/componentes/ui/tarjeta";
 import {
   type Categoria,
@@ -20,23 +28,17 @@ import {
   obtenerEstadisticas,
   obtenerEvolucionDeCategoria,
   type Periodo,
-  type TipoDeEvolucion,
+  type PeriodoDeEvolucion,
 } from "@/lib/api-finanzas";
 import { useSession } from "@/lib/auth-cliente";
 import { interpretarError } from "@/lib/mensajes-de-error";
-
-function EsqueletoDeGrafico({ alto }: { alto: number }) {
-  return (
-    <div
-      aria-busy="true"
-      aria-live="polite"
-      className="animate-pulse rounded-control bg-superficie-suave"
-      style={{ height: alto }}
-    >
-      <span className="solo-lectores">Cargando gráfico</span>
-    </div>
-  );
-}
+import { EsqueletoDeGrafico } from "./esqueleto-de-grafico";
+import {
+  DatosRapidosDelPeriodo,
+  RitmoDeGastoDelPeriodo,
+  VariacionPorCategoriaDelPeriodo,
+} from "./estadisticas-comparativas";
+import { Saldo } from "./saldo";
 
 const GraficoEvolucion = dynamic(
   () => import("./graficos-finanzas").then((modulo) => modulo.GraficoEvolucion),
@@ -53,40 +55,87 @@ const GraficoGastosPorCategoria = dynamic(
   { ssr: false, loading: () => <EsqueletoDeGrafico alto={160} /> },
 );
 
-const TIPOS_DE_EVOLUCION = [
-  { valor: "gasto", etiqueta: "Gastos" },
-  { valor: "ingreso", etiqueta: "Ingresos" },
-] as const;
+/**
+ * El resultado de cada período dicho con palabras: lo que sobró o lo que faltó. Acompaña
+ * al gráfico para que el balance no dependa de distinguir verde de rojo (ni de apuntar con
+ * el mouse a un punto). Un período sin ingresos ni gastos se dice así, no "en cero".
+ */
+function BalancePorPeriodo({
+  periodos,
+  moneda,
+}: {
+  periodos: PeriodoDeEvolucion[];
+  moneda: string;
+}) {
+  return (
+    <ul aria-label="Balance de cada período" className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {periodos.map((periodo) => (
+        <li
+          key={periodo.periodoId}
+          className="flex flex-col gap-1 rounded-control border border-borde p-3"
+        >
+          <span className="text-xs text-texto-secundario">{periodo.nombre}</span>
+          <Saldo
+            centavos={periodo.balanceCentavos}
+            moneda={moneda}
+            className="text-sm font-medium tabular-nums"
+          />
+          <span>
+            {periodo.balanceCentavos > 0 ? (
+              <Insignia tono="exito" icono={TrendingUp}>
+                Sobró plata
+              </Insignia>
+            ) : periodo.balanceCentavos < 0 ? (
+              <Insignia tono="peligro" icono={TrendingDown}>
+                Gastaste de más
+              </Insignia>
+            ) : (
+              <Insignia icono={Minus}>
+                {periodo.ingresosCentavos === 0 && periodo.gastosCentavos === 0
+                  ? "Sin movimientos"
+                  : "Quedó parejo"}
+              </Insignia>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
- * Lo gastado o ingresado en una categoría período a período. La categoría se elige en
- * un selector (por defecto, la que más se gastó en el período que se está mirando) y
- * además se elige si mirar los gastos o los ingresos: una misma categoría puede tener
- * ambos, y más de uno que del otro según el mes.
+ * Lo gastado en una categoría período a período. La categoría se elige en un selector (al
+ * abrir, una al azar entre las que tuvieron gastos en el período, para ir descubriendo todas
+ * y no mirar siempre la misma).
  */
 function EvolucionDeUnaCategoria({
   periodo,
   categorias,
-  porDefecto,
+  propuestas,
   moneda,
 }: {
   periodo: Periodo;
   categorias: Categoria[];
-  /** La categoría que se propone si la persona todavía no eligió ninguna. */
-  porDefecto: number | undefined;
+  /** Las categorías entre las que se sortea la que se muestra al abrir (las que tienen gastos). */
+  propuestas: number[];
   moneda: string;
 }) {
   const [elegida, setElegida] = useState<number | null>(null);
-  const [tipo, setTipo] = useState<TipoDeEvolucion>("gasto");
-  // Una elegida que ya no está en la lista (se eliminó o reemplazó) vuelve a la propuesta.
+  // Se sortea una sola vez: un valor al azar calculado en cada render cambiaría la
+  // categoría en cada actualización.
+  const [sorteada] = useState(() =>
+    elegirAlAzar(propuestas.filter((id) => categorias.some((categoria) => categoria.id === id))),
+  );
+  // Una elegida que ya no está en la lista (se eliminó o reemplazó) vuelve a la sorteada;
+  // si ninguna tuvo gastos, a la primera de la lista.
   const categoria =
     categorias.find((candidata) => candidata.id === elegida) ??
-    categorias.find((candidata) => candidata.id === porDefecto) ??
+    categorias.find((candidata) => candidata.id === sorteada) ??
     categorias[0];
 
   const { data, isPending, error } = useQuery({
-    queryKey: ["finanzas", "estadisticas", "categoria", periodo.id, categoria?.id, tipo],
-    queryFn: () => obtenerEvolucionDeCategoria(periodo.id, categoria?.id ?? 0, tipo),
+    queryKey: ["finanzas", "estadisticas", "categoria", periodo.id, categoria?.id],
+    queryFn: () => obtenerEvolucionDeCategoria(periodo.id, categoria?.id ?? 0),
     enabled: categoria !== undefined,
   });
 
@@ -102,28 +151,18 @@ function EvolucionDeUnaCategoria({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="w-full sm:max-w-xs">
-          <Selector
-            etiqueta="Categoría"
-            value={categoria.id}
-            onChange={(evento) => setElegida(Number(evento.target.value))}
-          >
-            {categorias.map((opcion) => (
-              <option key={opcion.id} value={opcion.id}>
-                {opcion.nombre}
-              </option>
-            ))}
-          </Selector>
-        </div>
-        <SelectorDeSegmentos
-          id="tipo-de-evolucion"
-          etiqueta="Qué mirar"
-          modo="filtro"
-          segmentos={TIPOS_DE_EVOLUCION}
-          activo={tipo}
-          onCambiar={setTipo}
-        />
+      <div className="w-full sm:max-w-xs">
+        <Selector
+          etiqueta="Categoría"
+          value={categoria.id}
+          onChange={(evento) => setElegida(Number(evento.target.value))}
+        >
+          {categorias.map((opcion) => (
+            <option key={opcion.id} value={opcion.id}>
+              {opcion.nombre}
+            </option>
+          ))}
+        </Selector>
       </div>
 
       {error ? (
@@ -133,7 +172,6 @@ function EvolucionDeUnaCategoria({
       ) : hayMovimientos ? (
         <GraficoEvolucionDeCategoria
           datos={data.periodos}
-          tipo={tipo}
           color={categoria.color}
           nombreDeCategoria={categoria.nombre}
           presupuestoCentavos={data.presupuestoCentavos}
@@ -141,15 +179,28 @@ function EvolucionDeUnaCategoria({
         />
       ) : (
         <p className="py-6 text-center text-sm text-texto-secundario">
-          No hay {tipo === "gasto" ? "gastos" : "ingresos"} en {categoria.nombre} en los últimos
-          períodos.
+          No hay gastos en {categoria.nombre} en los últimos períodos.
         </p>
       )}
     </div>
   );
 }
 
+/** Los bloques que se presentan en orden aleatorio, con el nombre con el que se anuncian. */
+const BLOQUES = {
+  evolucion: "Ingresos y gastos de los últimos períodos",
+  ritmo: "Ritmo de gasto",
+  variacion: "Qué subió y qué bajó",
+  categoria: "Evolución de gastos por categoría",
+  gastos: "Gastos por categoría",
+} as const;
+
+type Bloque = keyof typeof BLOQUES;
+
+const IDS_DE_BLOQUES = Object.keys(BLOQUES) as Bloque[];
+
 export function EstadisticasDeFinanzas({ periodo }: { periodo: Periodo }) {
+  const [orden] = useState(() => mezclar(IDS_DE_BLOQUES));
   const { data: sesion } = useSession();
   const moneda = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
 
@@ -163,6 +214,7 @@ export function EstadisticasDeFinanzas({ periodo }: { periodo: Periodo }) {
   if (isPending) {
     return (
       <div className="flex flex-col gap-4">
+        <div className="h-28 animate-pulse rounded-tarjeta bg-superficie-suave" />
         <div className="h-64 animate-pulse rounded-tarjeta bg-superficie-suave" />
         <div className="h-64 animate-pulse rounded-tarjeta bg-superficie-suave" />
         <div className="h-40 animate-pulse rounded-tarjeta bg-superficie-suave" />
@@ -174,20 +226,31 @@ export function EstadisticasDeFinanzas({ periodo }: { periodo: Periodo }) {
     return <Aviso tono="peligro">{interpretarError(error).mensaje}</Aviso>;
   }
 
-  return (
-    <div className="flex flex-col gap-4">
+  const bloques: Record<Bloque, ReactNode> = {
+    evolucion: (
       <Tarjeta className="p-4">
-        <h2 className="mb-3 text-sm font-medium text-texto">
+        <h2 className="text-sm font-medium text-texto">
           Ingresos y gastos de los últimos períodos
         </h2>
-        <GraficoEvolucion datos={data.evolucionPorPeriodo} moneda={moneda} />
-      </Tarjeta>
-
-      <Tarjeta className="p-4">
-        <h2 className="text-sm font-medium text-texto">Evolución de categorías</h2>
         <p className="mb-3 text-xs text-texto-secundario">
-          Elegí una categoría y si querés ver lo gastado o lo ingresado en ella. Barras: el monto en
-          pesos. Línea: ese monto como porcentaje de los ingresos de cada período.
+          Cada barra es un período: lo rojo es lo gastado y, si sobró plata, lo verde completa lo
+          que entró. Si lo gastado pasa la raya negra (lo que entró), el tramo rayado es lo gastado
+          de más.
+        </p>
+        <GraficoEvolucion datos={data.evolucionPorPeriodo} moneda={moneda} />
+        <BalancePorPeriodo periodos={data.evolucionPorPeriodo} moneda={moneda} />
+      </Tarjeta>
+    ),
+    ritmo: <RitmoDeGastoDelPeriodo ritmo={data.ritmoDeGasto} periodo={periodo} moneda={moneda} />,
+    variacion: (
+      <VariacionPorCategoriaDelPeriodo variacion={data.variacionPorCategoria} moneda={moneda} />
+    ),
+    categoria: (
+      <Tarjeta className="p-4">
+        <h2 className="text-sm font-medium text-texto">Evolución de gastos por categoría</h2>
+        <p className="mb-3 text-xs text-texto-secundario">
+          Elegí una categoría para ver lo gastado en ella. Barras: el monto en pesos. Línea: ese
+          monto como porcentaje de los ingresos de cada período.
         </p>
         {categorias.isPending ? (
           <div className="h-64 animate-pulse rounded-control bg-superficie-suave" />
@@ -195,19 +258,20 @@ export function EstadisticasDeFinanzas({ periodo }: { periodo: Periodo }) {
           <Aviso tono="peligro">{interpretarError(categorias.error).mensaje}</Aviso>
         ) : (
           <EvolucionDeUnaCategoria
-            // Al cambiar de período se vuelve a proponer la categoría más gastada.
+            // Al cambiar de período se vuelve a sortear la categoría.
             key={periodo.id}
             periodo={periodo}
             // La categoría interna de transferencias no es para mirar gastos.
             categorias={categorias.data.categorias.filter(
               (categoria) => categoria.sistema === null,
             )}
-            porDefecto={data.gastosPorCategoria[0]?.categoriaId}
+            propuestas={data.gastosPorCategoria.map((gasto) => gasto.categoriaId)}
             moneda={moneda}
           />
         )}
       </Tarjeta>
-
+    ),
+    gastos: (
       <Tarjeta className="p-4">
         <h2 className="mb-3 text-sm font-medium text-texto">
           Gastos por categoría en {periodo.nombre}
@@ -220,6 +284,24 @@ export function EstadisticasDeFinanzas({ periodo }: { periodo: Periodo }) {
           <GraficoGastosPorCategoria datos={data.gastosPorCategoria} moneda={moneda} />
         )}
       </Tarjeta>
+    ),
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <DatosRapidosDelPeriodo
+        datos={data.datosRapidos}
+        diasTranscurridos={data.ritmoDeGasto.diasTranscurridos}
+        moneda={moneda}
+      />
+
+      {/* Cada bloque es una región con nombre: se puede saltar de uno a otro con un lector
+          de pantalla y ubicarlo sin depender de dónde cayó en el sorteo. */}
+      {orden.map((id) => (
+        <section key={id} aria-label={BLOQUES[id]}>
+          {bloques[id]}
+        </section>
+      ))}
     </div>
   );
 }

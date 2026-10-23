@@ -106,6 +106,19 @@ export async function obtenerPeriodoAbierto(
   return fila ? aPeriodo(fila) : null;
 }
 
+/** El período de apertura más reciente (el abierto, si lo hay, siempre lo es), o null sin ninguno. */
+export async function obtenerUltimoPeriodo(
+  cliente: ClienteDb,
+  userId: string,
+): Promise<Periodo | null> {
+  const fila = await cliente.db.query.periodos.findFirst({
+    where: (tabla, { eq: eqCol }) => eqCol(tabla.userId, userId),
+    columns: COLUMNAS_PERIODO,
+    orderBy: (tabla, { desc: descCol }) => descCol(tabla.aperturaEn),
+  });
+  return fila ? aPeriodo(fila) : null;
+}
+
 /** El período que contiene un instante, o null si cae en un hueco o antes del primero. */
 export async function obtenerPeriodoQueContiene(
   cliente: ClienteDb,

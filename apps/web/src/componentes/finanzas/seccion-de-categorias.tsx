@@ -18,12 +18,13 @@ import { colorMasDistinto, esquemaColorCategoria, esquemaNombreCategoria } from 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Replace, Trash2 } from "lucide-react";
-import { type InputHTMLAttributes, useId, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Aviso } from "@/componentes/ui/aviso";
 import { Boton } from "@/componentes/ui/boton";
 import { Campo } from "@/componentes/ui/campo";
+import { CampoColor } from "@/componentes/ui/campo-de-color";
 import { Dialogo } from "@/componentes/ui/dialogo";
 import { Selector } from "@/componentes/ui/selector";
 import { Tarjeta } from "@/componentes/ui/tarjeta";
@@ -43,27 +44,6 @@ function mensajeDe(error: unknown): string {
 
 function invalidarFinanzas(queryClient: ReturnType<typeof useQueryClient>): void {
   void queryClient.invalidateQueries({ queryKey: ["finanzas"] });
-}
-
-/** Igual que Campo, pero para un `<input type="color">`. */
-function CampoColor({
-  etiqueta,
-  ...resto
-}: { etiqueta: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type">) {
-  const id = useId();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-texto">
-        {etiqueta}
-      </label>
-      <input
-        id={id}
-        type="color"
-        className="h-11 w-16 cursor-pointer rounded-control border border-borde-fuerte bg-superficie p-1"
-        {...resto}
-      />
-    </div>
-  );
 }
 
 // --- Crear / editar ---

@@ -52,6 +52,48 @@ export const ESTADO = {
   peligro: { claro: "#b91c1c", oscuro: "#f87171", fondo: "#fee2e2", fondoOscuro: "#300c0c" },
 } as const;
 
+/**
+ * Colores de origen: distinguen de qué módulo viene algo que se muestra mezclado con lo de otros
+ * (los eventos del calendario). No son de estado ni de acento: cuatro tonos bien distintos entre sí y
+ * de los tres estados (el rosa no es el rojo de peligro ni el naranja el ámbar de advertencia).
+ * Cada uno tiene el color pleno (puntos, bordes, íconos), un fondo suave y un texto para apoyar sobre
+ * ese fondo. Ningún significado depende solo del color: siempre va con un ícono y el nombre del origen.
+ */
+export const ORIGEN = {
+  manual: {
+    claro: "#c2410c",
+    oscuro: "#fb923c",
+    fondo: "#ffedd5",
+    fondoOscuro: "#431407",
+    texto: "#7c2d12",
+    textoOscuro: "#fed7aa",
+  },
+  finanzas: {
+    claro: "#2563eb",
+    oscuro: "#60a5fa",
+    fondo: "#dbeafe",
+    fondoOscuro: "#172554",
+    texto: "#1e3a8a",
+    textoOscuro: "#bfdbfe",
+  },
+  contactos: {
+    claro: "#7c3aed",
+    oscuro: "#a78bfa",
+    fondo: "#ede9fe",
+    fondoOscuro: "#2e1065",
+    texto: "#4c1d95",
+    textoOscuro: "#ddd6fe",
+  },
+  tareas: {
+    claro: "#db2777",
+    oscuro: "#f472b6",
+    fondo: "#fce7f3",
+    fondoOscuro: "#500724",
+    texto: "#831843",
+    textoOscuro: "#fbcfe8",
+  },
+} as const;
+
 /** Tokens semánticos: lo que usan los componentes. Nunca la escala cruda. */
 export const TEMA_CLARO = {
   fondo: NEUTRO[50],
@@ -73,6 +115,18 @@ export const TEMA_CLARO = {
   advertenciaFondo: ESTADO.advertencia.fondo,
   peligro: ESTADO.peligro.claro,
   peligroFondo: ESTADO.peligro.fondo,
+  origenManual: ORIGEN.manual.claro,
+  origenManualFondo: ORIGEN.manual.fondo,
+  origenManualTexto: ORIGEN.manual.texto,
+  origenFinanzas: ORIGEN.finanzas.claro,
+  origenFinanzasFondo: ORIGEN.finanzas.fondo,
+  origenFinanzasTexto: ORIGEN.finanzas.texto,
+  origenContactos: ORIGEN.contactos.claro,
+  origenContactosFondo: ORIGEN.contactos.fondo,
+  origenContactosTexto: ORIGEN.contactos.texto,
+  origenTareas: ORIGEN.tareas.claro,
+  origenTareasFondo: ORIGEN.tareas.fondo,
+  origenTareasTexto: ORIGEN.tareas.texto,
 } as const;
 
 export const TEMA_OSCURO = {
@@ -93,6 +147,18 @@ export const TEMA_OSCURO = {
   advertenciaFondo: ESTADO.advertencia.fondoOscuro,
   peligro: ESTADO.peligro.oscuro,
   peligroFondo: ESTADO.peligro.fondoOscuro,
+  origenManual: ORIGEN.manual.oscuro,
+  origenManualFondo: ORIGEN.manual.fondoOscuro,
+  origenManualTexto: ORIGEN.manual.textoOscuro,
+  origenFinanzas: ORIGEN.finanzas.oscuro,
+  origenFinanzasFondo: ORIGEN.finanzas.fondoOscuro,
+  origenFinanzasTexto: ORIGEN.finanzas.textoOscuro,
+  origenContactos: ORIGEN.contactos.oscuro,
+  origenContactosFondo: ORIGEN.contactos.fondoOscuro,
+  origenContactosTexto: ORIGEN.contactos.textoOscuro,
+  origenTareas: ORIGEN.tareas.oscuro,
+  origenTareasFondo: ORIGEN.tareas.fondoOscuro,
+  origenTareasTexto: ORIGEN.tareas.textoOscuro,
 } as const;
 
 export type TokensDeTema = typeof TEMA_CLARO;

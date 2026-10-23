@@ -38,6 +38,18 @@
   --color-advertencia-fondo: var(--color-advertencia-fondo);
   --color-peligro: var(--color-peligro);
   --color-peligro-fondo: var(--color-peligro-fondo);
+  --color-origen-manual: var(--color-origen-manual);
+  --color-origen-manual-fondo: var(--color-origen-manual-fondo);
+  --color-origen-manual-texto: var(--color-origen-manual-texto);
+  --color-origen-finanzas: var(--color-origen-finanzas);
+  --color-origen-finanzas-fondo: var(--color-origen-finanzas-fondo);
+  --color-origen-finanzas-texto: var(--color-origen-finanzas-texto);
+  --color-origen-contactos: var(--color-origen-contactos);
+  --color-origen-contactos-fondo: var(--color-origen-contactos-fondo);
+  --color-origen-contactos-texto: var(--color-origen-contactos-texto);
+  --color-origen-tareas: var(--color-origen-tareas);
+  --color-origen-tareas-fondo: var(--color-origen-tareas-fondo);
+  --color-origen-tareas-texto: var(--color-origen-tareas-texto);
 
   --radius-control: var(--radio-control);
   --radius-tarjeta: var(--radio-tarjeta);
@@ -61,6 +73,9 @@
     /* Sin esto, el fondo del navegador parpadea en blanco al cargar en oscuro. */
     color-scheme: light;
     -webkit-text-size-adjust: 100%;
+    /* Reserva siempre el lugar de la barra de scroll: sin esto, al pasar de una pantalla corta a
+       una larga (por ejemplo cambiando de pestaña) el contenido se corre unos píxeles. */
+    scrollbar-gutter: stable;
   }
 
   html[data-theme="dark"] {
@@ -288,8 +303,36 @@
     transition: stroke-dashoffset var(--anim-duracion) var(--anim-curva);
   }
 
+  /* Casilla circular: el tilde se ve siempre (como la cruz del botón de fallida), con el color del círculo. */
+  .casilla-circular .casilla-tilde {
+    stroke: currentColor;
+    stroke-dashoffset: 0;
+  }
+
   .casilla-entrada:checked + .casilla-caja .casilla-tilde {
     stroke-dashoffset: 0;
+  }
+
+  /*
+   * Casilla circular (las tareas): la misma estética que el botón de "fallida" —un círculo con borde y el
+   * ícono adentro, siempre a la vista—, pero con un tilde y en verde. Al apuntarla el círculo se pinta de verde;
+   * marcada, queda llena. Va después de las reglas de .casilla-caja para ganarles por orden.
+   */
+  .casilla-circular {
+    background-color: transparent;
+    color: var(--color-texto-secundario);
+  }
+
+  .casilla-circular:hover {
+    border-color: var(--color-exito);
+    background-color: var(--color-exito-fondo);
+    color: var(--color-exito);
+  }
+
+  .casilla-entrada:checked + .casilla-circular {
+    background-color: var(--color-exito);
+    border-color: var(--color-exito);
+    color: var(--color-exito-fondo);
   }
 
   /*
@@ -320,6 +363,15 @@
   }
 
   .casilla-entrada:checked ~ .casilla-tachado::after {
+    transform: scaleX(1);
+  }
+
+  /* Lo mismo cuando el campo no es hermano del texto (la casilla que se despliega al apuntar a la fila). */
+  .casilla-raiz:has(.casilla-entrada:checked) .casilla-tachado {
+    color: var(--color-texto-secundario);
+  }
+
+  .casilla-raiz:has(.casilla-entrada:checked) .casilla-tachado::after {
     transform: scaleX(1);
   }
 

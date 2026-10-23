@@ -11,6 +11,7 @@ import { crearAuth } from "./auth/crear-auth.ts";
 import { leerConfigSmtp, leerEntornoApi } from "./config/entorno.ts";
 import { crearMensajero } from "./correo/enviar.ts";
 import { crearLogger } from "./logger.ts";
+import { iniciarProgramador, type Programador } from "./tareas/programador.ts";
 
 function abortar(mensaje: string, detalle: unknown): never {
   // Todavía no hay logger cuando falla la configuración, así que va a stderr.
@@ -68,13 +69,27 @@ const servidor = serve({ fetch: app.fetch, port: entorno.PORT }, (direccion) => 
   );
 });
 
+// Las tareas programadas no se arrancan en los tests: ahí cada tarea se prueba como
+// una función común. Si no pueden arrancar, la API sigue sirviendo: lo único que se
+// atrasa es la limpieza, que no corta nada de lo que ve la persona.
+let programador: Programador | null = null;
+if (entorno.NODE_ENV !== "test") {
+  try {
+    programador = await iniciarProgramador({ cliente, config: configBase, logger });
+  } catch (error) {
+    logger.error({ err: error }, "no se pudieron iniciar las tareas programadas");
+  }
+}
+
 /**
- * Apagado ordenado: dejamos de aceptar conexiones y cerramos el pool antes de
- * salir, para no dejar conexiones colgadas en PostgreSQL en cada reinicio.
+ * Apagado ordenado: dejamos de aceptar conexiones, terminamos las tareas en curso y
+ * cerramos el pool antes de salir, para no dejar conexiones colgadas en PostgreSQL en
+ * cada reinicio.
  */
 async function apagar(senal: string): Promise<void> {
   logger.info({ senal }, "apagando API");
   servidor.close();
+  await programador?.detener();
   await cliente.cerrar();
   process.exit(0);
 }

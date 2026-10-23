@@ -92,6 +92,139 @@
       "when": 1790910040232,
       "tag": "0012_importes_bigint",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791076780722,
+      "tag": "0013_multimoneda",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792534613049,
+      "tag": "0014_contactos",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792540329500,
+      "tag": "0015_recordatorios_por_periodicidad",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792543220037,
+      "tag": "0016_deudas_y_contacto_en_movimientos",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792599479655,
+      "tag": "0017_deudas_con_nombre_libre",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792600340968,
+      "tag": "0018_etiquetas_iniciales",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792601159199,
+      "tag": "0019_deudas_fecha_limite",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792619518789,
+      "tag": "0020_pagos_con_movimiento",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792625984567,
+      "tag": "0021_tareas",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792634385854,
+      "tag": "0022_categorias_de_tareas",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792637189674,
+      "tag": "0023_tareas_varios_dias_de_semana",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792637203390,
+      "tag": "0024_tareas_quitar_dia_de_semana",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792674048986,
+      "tag": "0025_eventos_de_calendario",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792701108423,
+      "tag": "0026_tareas_falladas",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792702626937,
+      "tag": "0027_tareas_falla_sola",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792703824808,
+      "tag": "0028_tareas_cada_tantos_dias",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792706808305,
+      "tag": "0029_tareas_reactivada",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792712598297,
+      "tag": "0030_historial_de_recordatorios",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792730172883,
+      "tag": "0031_importante",
+      "breakpoints": true
     }
   ]
 }

@@ -14,8 +14,7 @@
 // atrás desde hoy (los períodos arrancan el día 5, "día de cobro"), de modo que
 // siempre hay un período abierto con movimientos de esta semana.
 //
-// No pisa nada: si la cuenta ya tiene períodos, no hace nada (ver
-// `--reiniciar-finanzas` en sembrar-datos-de-prueba.ts).
+// Es parte de la carga general de sembrar-datos-de-prueba.ts, que decide si corre (no pisa datos).
 
 import { type ClienteDb, esquema } from "@gestoria/db";
 import { and, count, eq, isNull } from "drizzle-orm";
@@ -35,7 +34,10 @@ import {
   renombrarCuentaFinanciera,
 } from "../servicios/finanzas/cuentas-financieras.ts";
 import {
+  type CambioPedido,
+  CotizacionNoDisponible,
   crearMovimiento,
+  type DatosNuevoMovimiento,
   duplicarMovimiento,
   editarMovimiento,
   eliminarMovimiento,
@@ -123,7 +125,13 @@ type Entrada = {
   /** Hora local (0 a 23.99). */
   hora: number;
   tipo: "ingreso" | "gasto" | "neutro";
+  /** En la moneda de la cuenta (el nombre quedó de cuando todo era en pesos). */
   pesos: number;
+  /**
+   * Cómo se fijó la cotización, si cruza monedas: lo recibido en la otra moneda (la
+   * cotización se deduce) o la que escribió la persona. Sin esto, la de la fecha.
+   */
+  cambio?: { modo: "recibido"; importe: number } | { modo: "tasa"; tasa: number };
   descripcion: string;
   /** Nombre de la categoría (en una transferencia no hace falta). */
   categoria?: string;
@@ -139,21 +147,6 @@ type Contexto = {
   userId: string;
   ahora: Date;
 };
-
-/** Borra todas las finanzas de la cuenta (para volver a sembrar desde cero). */
-export async function borrarFinanzasDe(cliente: ClienteDb, userId: string): Promise<void> {
-  await cliente.db.transaction(async (tx) => {
-    // El orden respeta las claves foráneas: lo que apunta a otras tablas, primero.
-    await tx.delete(esquema.movimientos).where(eq(esquema.movimientos.userId, userId));
-    await tx.delete(esquema.presupuestos).where(eq(esquema.presupuestos.userId, userId));
-    await tx.delete(esquema.ajustesDeSaldo).where(eq(esquema.ajustesDeSaldo.userId, userId));
-    await tx.delete(esquema.periodos).where(eq(esquema.periodos.userId, userId));
-    await tx.delete(esquema.categorias).where(eq(esquema.categorias.userId, userId));
-    await tx
-      .delete(esquema.cuentasFinancieras)
-      .where(eq(esquema.cuentasFinancieras.userId, userId));
-  });
-}
 
 /** true si la cuenta ya tiene finanzas cargadas (alcanza con un período). */
 export async function tieneFinanzas(cliente: ClienteDb, userId: string): Promise<boolean> {
@@ -504,6 +497,77 @@ function movimientosDelPeriodo(k: number, azar: ReturnType<typeof crearAzar>): E
     });
   }
 
+  // --- Un mes en el que no alcanzó ---
+  // En el mes del viaje se juntan dos gastos grandes e imprevistos. Los gastos de ese período
+  // pasan por bastante a los ingresos (balance negativo), para ver cómo se muestra en las
+  // estadísticas un período que cerró en rojo.
+  if (k === 3) {
+    agregar({
+      dia: 8,
+      hora: 17,
+      tipo: "gasto",
+      pesos: 48_000,
+      descripcion: "Notebook nueva",
+      categoria: "Compras",
+      cuenta: "Tarjeta",
+    });
+    agregar({
+      dia: 14,
+      hora: 11,
+      tipo: "gasto",
+      pesos: 22_000,
+      descripcion: "Arreglo del auto: caja de cambios",
+      categoria: "Transporte",
+      cuenta: "Tarjeta",
+    });
+  }
+
+  // --- La cuenta en dólares ---
+  // Se compran dólares con una cotización ligeramente mejor que la del mercado (la del banco):
+  // la persona indica cuánto entregó y cuánto recibió, y la cotización se deduce.
+  agregar({
+    dia: 6,
+    hora: 11,
+    tipo: "neutro",
+    pesos: k < 3 ? 8_000 : 10_000,
+    descripcion: "Compra de dólares",
+    cuenta: "BROU",
+    destino: "Ahorro en dólares",
+    cambio: { modo: "recibido", importe: k < 3 ? 203.5 : 254.5 },
+  });
+  agregar({
+    dia: 4,
+    hora: 20,
+    tipo: "gasto",
+    pesos: 12,
+    descripcion: "Suscripción de streaming (USD)",
+    categoria: "Suscripciones",
+    cuenta: "Ahorro en dólares",
+  });
+  if (k === 2) {
+    agregar({
+      dia: 16,
+      hora: 21,
+      tipo: "gasto",
+      pesos: 45,
+      descripcion: "Curso online en dólares",
+      categoria: "Educación",
+      cuenta: "Ahorro en dólares",
+    });
+  }
+  if (k === 4) {
+    agregar({
+      dia: 10,
+      hora: 17,
+      tipo: "ingreso",
+      pesos: 320,
+      descripcion: "Trabajo para el exterior",
+      categoria: "Ingresos",
+      cuenta: "Ahorro en dólares",
+      cambio: { modo: "tasa", tasa: 39.2 },
+    });
+  }
+
   // --- Transferencias entre cuentas ---
   agregar({
     dia: 2,
@@ -562,11 +626,21 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
   const buscarCuenta = (nombre: string) =>
     cuentasExistentes.find((c) => c.nombre.toLowerCase() === nombre.toLowerCase());
 
-  /** Usa la cuenta si ya existe; si no, la crea con ese saldo inicial. */
-  async function cuentaConNombre(nombre: string, saldoInicialPesos: number): Promise<string> {
+  /** Usa la cuenta si ya existe; si no, la crea con ese saldo inicial (y en esa moneda, si se indica). */
+  async function cuentaConNombre(
+    nombre: string,
+    saldoInicialPesos: number,
+    moneda?: string,
+  ): Promise<string> {
     const existente = buscarCuenta(nombre);
     if (existente) return existente.id;
-    const nueva = await crearCuentaFinanciera(cliente, userId, nombre, saldoInicialPesos * 100);
+    const nueva = await crearCuentaFinanciera(
+      cliente,
+      userId,
+      nombre,
+      saldoInicialPesos * 100,
+      moneda,
+    );
     return nueva.id;
   }
 
@@ -592,6 +666,8 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
   cuentas.set("Mercado Pago", await renombrarOCrear("Billetera digital", "Mercado Pago", 0));
   // Con saldo desde el principio: su "Carga inicial" figura en el historial.
   cuentas.set("Ahorros", await cuentaConNombre("Ahorros", 150_000));
+  // Una cuenta en dólares, con saldo desde el principio: sus movimientos se convierten a pesos.
+  cuentas.set("Ahorro en dólares", await cuentaConNombre("Ahorro en dólares", 1_200, "USD"));
   const santander = await cuentaConNombre("Santander (vieja)", 8_500);
   cuentas.set("Santander (vieja)", santander);
 
@@ -671,7 +747,14 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
       ? (categoriaDeTransferencia?.id ?? 0)
       : await categoriaConNombre(entrada.categoria ?? "Otros");
 
-    const movimiento = await crearMovimiento(cliente, userId, {
+    const cambio: CambioPedido | undefined =
+      entrada.cambio?.modo === "recibido"
+        ? {
+            modo: "importe",
+            importeConvertidoCentavos: Math.round(entrada.cambio.importe * 100),
+          }
+        : entrada.cambio;
+    const datos: DatosNuevoMovimiento = {
       tipo: entrada.tipo,
       importeCentavos: Math.round(entrada.pesos * 100),
       descripcion: entrada.descripcion,
@@ -679,6 +762,12 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
       cuentaFinancieraId: cuentas.get(entrada.cuenta) as string,
       cuentaDestinoId: esTransferencia ? (cuentas.get(entrada.destino ?? "") ?? null) : null,
       fecha,
+      cambio,
+    };
+    // La cotización de cada día se trae de la fuente pública; si no hay red, se carga con 40.
+    const movimiento = await crearMovimiento(cliente, userId, datos).catch((error: unknown) => {
+      if (!(error instanceof CotizacionNoDisponible)) throw error;
+      return crearMovimiento(cliente, userId, { ...datos, cambio: { modo: "tasa", tasa: 40 } });
     });
     if (entrada.clave) porClave.set(entrada.clave, movimiento);
     return movimiento;

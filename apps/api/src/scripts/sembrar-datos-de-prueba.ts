@@ -15,8 +15,7 @@
 //   pnpm usuario:sembrar                       siembra todos los escenarios
 //   pnpm usuario:sembrar --listar               los lista, sin tocar la base
 //   pnpm usuario:sembrar --solo aprobada,bloqueada
-//   pnpm usuario:sembrar --solo finanzas        solo los datos de finanzas del admin
-//   pnpm usuario:sembrar --reiniciar-finanzas   borra las finanzas del admin y las vuelve a sembrar
+//   pnpm usuario:sembrar --solo datos           solo la carga general del admin (finanzas, contactos, deudas y tareas)
 //   pnpm usuario:sembrar --borrar-todo          antes de sembrar, vacía usuarios/sesiones/auditoría
 //   pnpm usuario:sembrar --test                 contra gestion_test en vez de gestion
 //
@@ -55,7 +54,9 @@ import {
   marcarPasswordPendienteDeCambio,
 } from "../servicios/usuarios/cuentas.ts";
 import { leerDatosAdmin } from "./datos-admin.ts";
-import { borrarFinanzasDe, sembrarFinanzasDe, tieneFinanzas } from "./sembrar-finanzas.ts";
+import { sembrarContactosDe, tieneContactos } from "./sembrar-contactos.ts";
+import { sembrarFinanzasDe, tieneFinanzas } from "./sembrar-finanzas.ts";
+import { sembrarTareasDe } from "./sembrar-tareas.ts";
 
 const PASSWORD_DE_PRUEBA = "prueba1234";
 const PASSWORD_ADMIN_DE_PRUEBA = "adminadmin";
@@ -254,25 +255,28 @@ const ESCENARIOS: Escenario[] = [
     },
   },
   {
-    nombre: "finanzas",
+    nombre: "datos",
     descripcion:
-      "Varios meses de finanzas realistas para el admin: cuentas, categorías, períodos, movimientos, transferencias, presupuestos y correcciones.",
+      "La carga general de datos del admin: varios meses de finanzas (cuentas, categorías, períodos, movimientos, transferencias, presupuestos y correcciones), contactos con etiquetas, recordatorios y su historial, deudas de todos los tipos con pagos que generan su movimiento, y tareas (repetitivas, también cada varios días y que fallan solas, sueltas, atrasadas, fallidas y tres semanas de historial).",
     async ejecutar({ cliente, adminId }) {
-      if (process.argv.includes("--reiniciar-finanzas")) {
-        const sigue = await confirmar(
-          "Esto borra TODAS las finanzas del admin (cuentas, categorías, períodos y movimientos).",
-        );
-        if (!sigue) return "salteado";
-        await borrarFinanzasDe(cliente, adminId);
-      } else if (await tieneFinanzas(cliente, adminId)) {
+      if ((await tieneFinanzas(cliente, adminId)) || (await tieneContactos(cliente, adminId))) {
         console.log(
-          "  El admin ya tiene finanzas cargadas; no se toca nada. Usá --reiniciar-finanzas para sembrarlas de nuevo.",
+          "  El admin ya tiene datos cargados; no se toca nada. Usá --borrar-todo para empezar de cero.",
         );
         return "salteado";
       }
-      const resumen = await sembrarFinanzasDe({ cliente, userId: adminId, ahora: new Date() });
+      const ahora = new Date();
+      const finanzas = await sembrarFinanzasDe({ cliente, userId: adminId, ahora });
       console.log(
-        `  Se cargaron ${resumen.periodos} períodos, ${resumen.movimientos} movimientos y ${resumen.cuentas} cuentas para el admin.`,
+        `  Finanzas: ${finanzas.periodos} períodos, ${finanzas.movimientos} movimientos y ${finanzas.cuentas} cuentas.`,
+      );
+      const contactos = await sembrarContactosDe({ cliente, userId: adminId, ahora });
+      console.log(
+        `  Contactos: ${contactos.contactos} contactos, ${contactos.recordatorios} recordatorios (${contactos.historial} entradas en su historial), ${contactos.deudas} deudas y ${contactos.pagos} pagos.`,
+      );
+      const tareas = await sembrarTareasDe({ cliente, userId: adminId, ahora });
+      console.log(
+        `  Tareas: ${tareas.repetitivas} repetitivas y ${tareas.tareas} sueltas, con ${tareas.hechas} hechas en el historial.`,
       );
     },
   },

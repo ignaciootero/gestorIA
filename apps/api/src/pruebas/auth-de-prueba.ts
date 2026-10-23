@@ -24,7 +24,7 @@ type App = Hono<EntornoHono>;
  */
 export async function limpiarBase(cliente: ClienteDb): Promise<void> {
   await cliente.db.execute(
-    sql`truncate table ${esquema.usuarios}, ${esquema.sesiones}, ${esquema.cuentas}, ${esquema.verificaciones}, ${esquema.limitesPeticiones}, ${esquema.ajustesDeSaldo}, ${esquema.movimientos}, ${esquema.periodos}, ${esquema.presupuestos}, ${esquema.cuentasFinancieras}, ${esquema.categorias} restart identity cascade`,
+    sql`truncate table ${esquema.usuarios}, ${esquema.sesiones}, ${esquema.cuentas}, ${esquema.verificaciones}, ${esquema.limitesPeticiones}, ${esquema.ajustesDeSaldo}, ${esquema.movimientos}, ${esquema.periodos}, ${esquema.presupuestos}, ${esquema.cuentasFinancieras}, ${esquema.categorias}, ${esquema.cotizaciones}, ${esquema.contactos}, ${esquema.etiquetasDeContactos}, ${esquema.recordatoriosDeContactos}, ${esquema.deudas}, ${esquema.pagosDeDeudas}, ${esquema.tareas}, ${esquema.tareasRepetitivas}, ${esquema.categoriasDeTareas}, ${esquema.eventosDeCalendario} restart identity cascade`,
   );
 }
 

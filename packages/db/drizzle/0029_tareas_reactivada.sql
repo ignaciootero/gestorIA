@@ -1,0 +1,1 @@
+ALTER TABLE "tareas" ADD COLUMN "reactivada_en" timestamp with time zone;

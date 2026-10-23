@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   esquemaAbrirPeriodo,
   esquemaAjusteDeSaldo,
+  esquemaCambio,
   esquemaCerrarPeriodo,
+  esquemaConsultaDeCotizacion,
   esquemaCrearCategoria,
   esquemaCrearCuentaFinanciera,
   esquemaMovimiento,
@@ -242,6 +244,80 @@ describe("esquemaCrearCuentaFinanciera", () => {
       saldoInicial: -500,
     });
     expect(resultado.success).toBe(true);
+  });
+});
+
+describe("esquemaCrearCuentaFinanciera: moneda", () => {
+  it("la moneda es opcional: sin ella la cuenta nace en la moneda base", () => {
+    expect(esquemaCrearCuentaFinanciera.parse({ nombre: "Banco" }).moneda).toBeUndefined();
+  });
+
+  it("acepta una moneda de la lista", () => {
+    expect(esquemaCrearCuentaFinanciera.parse({ nombre: "Banco USD", moneda: "USD" }).moneda).toBe(
+      "USD",
+    );
+  });
+
+  it.each(["usd", "XYZ", "", "DOLARES"])("rechaza la moneda %j", (moneda) => {
+    expect(esquemaCrearCuentaFinanciera.safeParse({ nombre: "Banco", moneda }).success).toBe(false);
+  });
+});
+
+describe("esquemaCambio y el cambio en un movimiento", () => {
+  it("acepta el modo automático, una tasa o un importe convertido", () => {
+    expect(esquemaCambio.safeParse({ modo: "automatico" }).success).toBe(true);
+    expect(esquemaCambio.safeParse({ modo: "tasa", tasa: 40.25 }).success).toBe(true);
+    expect(esquemaCambio.safeParse({ modo: "importe", importeConvertido: 4025 }).success).toBe(
+      true,
+    );
+  });
+
+  it.each([0, -1, Number.NaN, 2_000_000])("rechaza la tasa %s", (tasa) => {
+    expect(esquemaCambio.safeParse({ modo: "tasa", tasa }).success).toBe(false);
+  });
+
+  it("rechaza un importe convertido en cero o negativo", () => {
+    expect(esquemaCambio.safeParse({ modo: "importe", importeConvertido: 0 }).success).toBe(false);
+    expect(esquemaCambio.safeParse({ modo: "importe", importeConvertido: -5 }).success).toBe(false);
+  });
+
+  it("rechaza un modo desconocido o un modo sin su dato", () => {
+    expect(esquemaCambio.safeParse({ modo: "otro" }).success).toBe(false);
+    expect(esquemaCambio.safeParse({ modo: "tasa" }).success).toBe(false);
+  });
+
+  it("un movimiento acepta el cambio, o no tenerlo", () => {
+    expect(esquemaMovimiento.safeParse(MOVIMIENTO_VALIDO).success).toBe(true);
+    expect(esquemaMovimiento.safeParse({ ...MOVIMIENTO_VALIDO, cambio: null }).success).toBe(true);
+    expect(
+      esquemaMovimiento.safeParse({ ...MOVIMIENTO_VALIDO, cambio: { modo: "tasa", tasa: 40 } })
+        .success,
+    ).toBe(true);
+  });
+});
+
+describe("esquemaConsultaDeCotizacion", () => {
+  it("pide las dos monedas y acepta una fecha opcional", () => {
+    expect(esquemaConsultaDeCotizacion.safeParse({ desde: "USD", hacia: "UYU" }).success).toBe(
+      true,
+    );
+    expect(
+      esquemaConsultaDeCotizacion.safeParse({
+        desde: "USD",
+        hacia: "UYU",
+        fecha: "2026-09-15T14:30:00.000Z",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rechaza monedas desconocidas o una fecha inválida", () => {
+    expect(esquemaConsultaDeCotizacion.safeParse({ desde: "XYZ", hacia: "UYU" }).success).toBe(
+      false,
+    );
+    expect(esquemaConsultaDeCotizacion.safeParse({ desde: "USD" }).success).toBe(false);
+    expect(
+      esquemaConsultaDeCotizacion.safeParse({ desde: "USD", hacia: "UYU", fecha: "ayer" }).success,
+    ).toBe(false);
   });
 });
 

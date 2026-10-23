@@ -15,6 +15,7 @@ import { Navbar } from "@/componentes/layout/navbar";
 import { PieDePagina } from "@/componentes/layout/pie-de-pagina";
 import { Proveedores } from "@/componentes/proveedores";
 import { SCRIPT_TEMA_INICIAL } from "@/componentes/tema";
+import { SCRIPT_COLUMNAS_INICIAL } from "@/lib/columnas-plegables";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,13 +37,21 @@ export const viewport: Viewport = {
 
 export default function LayoutRaiz({ children }: { children: ReactNode }) {
   return (
-    <html lang="es-UY" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    // Los scripts de abajo ponen atributos en <html> antes de que React hidrate (tema y
+    // columnas escondidas), así que ahí el servidor y el cliente difieren a propósito.
+    <html
+      lang="es-UY"
+      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/*
           Aplica el tema antes del primer pintado. Sin esto hay un destello
           blanco al entrar con el tema oscuro.
         */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
+        {/* Lo mismo con las columnas laterales que la persona dejó escondidas. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_COLUMNAS_INICIAL }} />
       </head>
       <body>
         <Proveedores>

@@ -4,7 +4,13 @@
 
 "use client";
 
-import { esquemaNombreCuentaFinanciera, esquemaSaldoInicial } from "@gestoria/shared";
+import {
+  esquemaMoneda,
+  esquemaNombreCuentaFinanciera,
+  esquemaSaldoInicial,
+  MONEDA_POR_DEFECTO,
+  MONEDAS_ADMITIDAS,
+} from "@gestoria/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
@@ -13,7 +19,9 @@ import { Aviso } from "@/componentes/ui/aviso";
 import { Boton } from "@/componentes/ui/boton";
 import { Campo } from "@/componentes/ui/campo";
 import { CampoDeImporte } from "@/componentes/ui/campo-de-importe";
+import { Selector } from "@/componentes/ui/selector";
 import { type CuentaFinanciera, crearCuenta, renombrarCuenta } from "@/lib/api-finanzas";
+import { useSession } from "@/lib/auth-cliente";
 import { detalleDeValidacion, interpretarError } from "@/lib/mensajes-de-error";
 
 function mensajeDe(error: unknown): string {
@@ -25,6 +33,7 @@ function mensajeDe(error: unknown): string {
 const esquemaFormularioCuenta = z.object({
   nombre: esquemaNombreCuentaFinanciera,
   saldoInicial: esquemaSaldoInicial,
+  moneda: esquemaMoneda,
 });
 type DatosFormularioCuenta = z.infer<typeof esquemaFormularioCuenta>;
 
@@ -37,21 +46,28 @@ export function FormularioCuenta({
   cerrar: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { data: sesion } = useSession();
+  const monedaBase = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
   const {
     control,
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<DatosFormularioCuenta>({
     resolver: zodResolver(esquemaFormularioCuenta),
-    defaultValues: { nombre: cuenta?.nombre ?? "", saldoInicial: 0 },
+    defaultValues: {
+      nombre: cuenta?.nombre ?? "",
+      saldoInicial: 0,
+      moneda: (cuenta?.moneda ?? monedaBase) as DatosFormularioCuenta["moneda"],
+    },
   });
 
   const mutacion = useMutation({
     mutationFn: (datos: DatosFormularioCuenta) =>
       cuenta
         ? renombrarCuenta(cuenta.id, datos.nombre)
-        : crearCuenta(datos.nombre, datos.saldoInicial),
+        : crearCuenta(datos.nombre, datos.saldoInicial, datos.moneda),
     // Se espera a que las listas se refresquen antes de cerrar: quien lo abre desde
     // otro formulario (movimientos) ya ve la cuenta nueva cuando vuelve.
     onSuccess: async () => {
@@ -69,6 +85,16 @@ export function FormularioCuenta({
       <Campo {...register("nombre")} etiqueta="Nombre" autoFocus error={errors.nombre?.message} />
 
       {cuenta ? null : (
+        <Selector {...register("moneda")} etiqueta="Moneda" error={errors.moneda?.message}>
+          {MONEDAS_ADMITIDAS.map((moneda) => (
+            <option key={moneda.codigo} value={moneda.codigo}>
+              {moneda.nombre} ({moneda.codigo})
+            </option>
+          ))}
+        </Selector>
+      )}
+
+      {cuenta ? null : (
         <Controller
           control={control}
           name="saldoInicial"
@@ -80,8 +106,9 @@ export function FormularioCuenta({
               onChange={field.onChange}
               onBlur={field.onBlur}
               permitirNegativo
+              moneda={watch("moneda")}
               etiqueta="Saldo inicial"
-              ayuda="Lo que tenés hoy en esta cuenta. Después lo podés actualizar con “Actualizar saldo”, y queda en el historial de la cuenta."
+              ayuda="Lo que tenés hoy en esta cuenta, en su moneda. Después lo podés actualizar con “Actualizar saldo”, y queda en el historial de la cuenta. La moneda no se puede cambiar una vez creada."
               error={errors.saldoInicial?.message}
             />
           )}

@@ -4,10 +4,12 @@ Qué hace el sistema hoy, cómo funciona a grandes rasgos y dónde está en el c
 Se actualiza con cada funcionalidad nueva (ver `docs/guias/convenciones.md`).
 
 Estado: **pasos 1 a 7 de la hoja de ruta**. Hay infraestructura, autenticación, sistema
-visual, panel de admin y el primer módulo de negocio: ingresos y gastos (núcleo
+visual, panel de admin y dos módulos de negocio: ingresos y gastos (núcleo
 completo — dashboard, movimientos, categorías, cuentas, presupuestos y estadísticas;
-los gastos recurrentes quedan para una etapa aparte). Todavía no hay móvil ni entrada
-por lenguaje natural.
+los gastos recurrentes quedan para una etapa aparte) y contactos (personas y empresas o
+servicios, con etiquetas, favoritos y recordatorios), tareas (to-do con tareas repetitivas e historial)
+y un calendario que junta los vencimientos de deudas, los recordatorios de contactos y las tareas
+pendientes, y permite anotar eventos a mano. Todavía no hay móvil ni entrada por lenguaje natural.
 
 ---
 
@@ -323,20 +325,35 @@ Scripts disponibles:
   ya existe se reusa tal cual, sin tocarle la contraseña; si no, se crea ahí mismo con la
   contraseña fija `adminadmin` (nunca con la de un admin real, que se pide por consola y
   no se guarda en ningún archivo). Pensado para desarrollo, nunca se corre en producción.
-- El escenario `finanzas` (`apps/api/src/scripts/sembrar-finanzas.ts`) carga para el **admin**
-  seis meses de finanzas que simulan el uso real, pasando por los mismos servicios que usa la
+- El escenario `datos` es la **única carga general de datos de prueba**: siempre carga a la misma cuenta
+  (el **admin**), primero las finanzas (`sembrar-finanzas.ts`) y sobre ellas los contactos y deudas
+  (`sembrar-contactos.ts`) y las tareas (`sembrar-tareas.ts`: 11 repetitivas de todos los tipos —también *cada varios días* y una que se da por
+  fallida sola—, tareas sueltas, atrasadas (una a punto de darse por fallida), fallidas a mano y solas,
+  lo hecho hoy de otros días y tres semanas de historial con lo hecho y lo que quedó sin hacer). Los contactos
+  suman dos personas con fecha de nacimiento (una con el recordatorio de cumpleaños automático y otra sin) y
+  recordatorios con historia —uno diario, uno semanal, uno mensual y uno anual creados semanas atrás, y tres
+  de una sola vez que ya pasaron— que se pasan al histórico de recordatorios. Para volver a empezar se usa `--borrar-todo`, que vacía la base antes.
+  Las finanzas son seis meses que simulan el uso real, pasando por los mismos servicios que usa la
   API: cuentas (BROU, Efectivo, Tarjeta, Mercado Pago, Ahorros y una cuenta vieja), categorías
   propias, seis períodos que arrancan el día 5 (el último abierto, con movimientos de esta
   semana), unos 190 movimientos —sueldo, alquiler, servicios, supermercado, transporte,
-  suscripciones, salidas, un viaje, ingresos extra—, transferencias (retiros, ahorro, pago de la
-  tarjeta, recarga de la billetera), presupuestos y también lo que hace la gente: corregir un
+  suscripciones, salidas, un viaje, ingresos extra—, un mes que cierra **en rojo** (el del viaje:
+  una notebook y un arreglo del auto llevan los gastos a $ 147.200 contra $ 82.500 de ingresos),
+  transferencias (retiros, ahorro, pago de la tarjeta, recarga de la billetera), presupuestos y también lo que hace la gente: corregir un
   importe mal tipeado y una categoría equivocada, borrar movimientos repetidos, duplicar y editar
   uno, reemplazar una categoría por otra nueva, renombrar categorías y un período, ocultar la
   cuenta vieja, contar el efectivo y ajustar el saldo, eliminar un período de "pruebas" con sus
   movimientos y reabrir el período actual. Las fechas se calculan hacia atrás desde hoy y el
-  "azar" tiene semilla fija, así que sale igual en cada corrida. **No pisa nada**: si el admin
-  ya tiene períodos, lo saltea; `--reiniciar-finanzas` (pide confirmación) borra primero sus
-  cuentas, categorías, períodos y movimientos y siembra de nuevo.
+  "azar" tiene semilla fija, así que sale igual en cada corrida.
+  Los contactos y deudas son 13 contactos —personas y empresas, con teléfonos, correos, notas,
+  favoritos, las etiquetas por defecto (Familia, Amigos, Trabajo, Servicios) y una propia—, 6 recordatorios y 11 deudas que
+  cubren los casos: las que le deben y las que debe; con un contacto o con alguien que no lo es
+  (un vecino, el almacén, un club); sin fecha límite, con una ya vencida, por vencer y lejana;
+  sin pagos, con pagos parciales y saldadas; y pagos que generan su ingreso o gasto en BROU o en la
+  cuenta en dólares, incluso uno en dólares cobrado en pesos con la cotización acordada. Pasa por
+  los mismos servicios que la API y las fechas se calculan hacia atrás desde hoy. Los pagos que
+  generan movimiento usan el período abierto y las cuentas de las finanzas. **No pisa nada**: si el
+  admin ya tiene finanzas, contactos o deudas, el escenario se saltea.
 
 Siguen existiendo aunque ya haya panel: siguen siendo la única forma de operar desde la
 terminal, por ejemplo en un despliegue sin acceso todavía a la web.
@@ -411,11 +428,11 @@ frecuente de todo el módulo. Debajo de las pestañas está la **barra del perí
 (ver "Períodos"): resumen, movimientos, presupuestos y estadísticas muestran siempre
 los datos del período elegido ahí.
 
-**Una sola moneda por usuario**, la de `usuarios.monedaPorDefecto`: ningún movimiento
-ni cuenta guarda su propia moneda, ni hay conversión entre monedas. Es lo que decidió
-`docs/decisiones.md` (2026-09-30) para que el resumen pueda mostrar un balance único y
-claro. Los montos se guardan como enteros en centésimos y se formatean siempre con
-`Intl` (`formatearMonto`, en `packages/shared`).
+**Varias monedas, una base.** Cada cuenta tiene su moneda y sus importes están en ella; la
+moneda base de la persona (`usuarios.monedaPorDefecto`, UYU) es en la que se expresan todos los
+totales (ver "Monedas y cotizaciones" más abajo y `docs/decisiones.md`, 2026-10-04). Los montos se
+guardan como enteros en centésimos y se formatean siempre con `Intl` (`formatearMonto`, en
+`packages/shared`).
 
 ### Períodos
 
@@ -543,6 +560,11 @@ cacheado, para que no se pueda desincronizar de los movimientos reales:
 > saldo inicial (fijado al crearla) + ingresos − gastos + ajustes manuales
 > − transferencias que salen + transferencias que entran
 
+**Siempre en la moneda de la cuenta**: las transferencias que entran suman lo que llegó, ya
+convertido a la moneda de esta cuenta. Cada fila de la lista muestra el saldo y la moneda
+("US$ 2.777,00 · USD"). La moneda se elige al crear la cuenta (por defecto, la base) y **no se puede
+cambiar después**, porque todos sus importes están en ella.
+
 En la base, la tabla se llama `cuentas_financieras` y no `cuentas`, porque Better Auth ya
 usa ese nombre para las cuentas de proveedor (OAuth).
 
@@ -665,11 +687,74 @@ cálculo se hace en el cliente con el saldo que la API ya devolvió (`cuentasQue
 en `formulario-movimiento.tsx`), así que si el saldo cambió desde otro dispositivo con el
 formulario abierto puede estar un poco desactualizado.
 
+### Monedas y cotizaciones
+
+Cada cuenta tiene su moneda (UYU, USD, ARS, EUR o BRL; lista en
+`packages/shared/src/finanzas/monedas.ts`). Al cargar un movimiento, **el importe se escribe en la
+moneda de la cuenta** (el formulario lo aclara: "Importe en USD, la moneda de esta cuenta") y se
+convierte para los totales:
+
+- **Ingreso o gasto**: a la moneda base de la persona. El resumen, los presupuestos y todas las
+  estadísticas suman ese importe ya convertido (`importe_convertido_centavos`).
+- **Transferencia**: a la moneda de la cuenta de destino (lo que llega). Entre cuentas de la misma
+  moneda no hay conversión.
+
+**Cada movimiento guarda el tipo de cambio que se usó** (`tipo_de_cambio`), el importe convertido y si la
+cotización fue manual (`cambio_manual`). Por eso los totales de un período pasado no cambian cuando se
+mueve el dólar. El formulario muestra, solo cuando el movimiento cruza monedas, un bloque
+**"Cotización"**: "1 USD = 40,2857 UYU · del 03/10/2026" y "Equivale a $ 1.007,14." Lo habitual no pide nada
+más. El botón **Cambiar** (con lápiz, en el encabezado del bloque) ofrece tres caminos, y una vez abierto el mismo
+botón pasa a **Usar la del día** (o **Volver a la guardada**, al editar) para deshacer el cambio:
+
+1. **La del día** (la de la fecha del movimiento), que trae la API.
+2. **Escribir la cotización**, por ejemplo la de un banco que da mejor cambio.
+3. **Indicar el importe del otro lado** ("recibí US$ 98" por $ 4.000): la cotización se calcula sola.
+
+**En una transferencia entre monedas el importe se puede escribir en cualquiera de las dos**: un selector
+("Moneda en la que escribís el monto") ofrece la de la cuenta de origen (la de siempre) y la de destino. Si se escribe
+la de destino ("quiero que lleguen US$ 100"), el formulario calcula cuánto sale del origen con la cotización a la
+vista ("Salen $ 4.000,00 de la cuenta de origen.") y a la API le manda los dos importes exactos (`importe` del origen
+y `cambio: { modo: "importe" }` con lo que llega), así que el destino queda justo en lo escrito, sin un centésimo de
+desvío por redondeo. El costo: la cotización guardada es la que sale de esos dos importes (casi igual a la del día) y
+queda marcada como fijada por la persona. También se pueden indicar los dos importes ("Indicar el importe en UYU").
+El backend no cambia: sigue recibiendo el importe en la moneda de origen. El selector solo aparece si las dos
+cuentas tienen monedas distintas; un gasto o ingreso siempre se escribe en la moneda de su cuenta.
+
+La cotización se dice siempre con la moneda que más vale como unidad ("1 USD = 40,28 UYU", también en
+una transferencia de pesos a dólares) y es lo que se escribe. **Si no hay cotización disponible** (la fuente
+no responde y no hay ninguna guardada), el bloque lo avisa y pide escribirla: nunca se bloquea cargar un
+movimiento. Al **editar**, se propone la cotización guardada ("la que se escribió al cargarlo" o "la del día en
+que se cargó"), no la de hoy; se puede volver a la del día. Al **duplicar**, una cotización fijada por la persona
+se repite y una automática se actualiza a la de hoy. En el listado, el historial de la cuenta y el
+resumen, cada movimiento muestra su importe en la moneda de la cuenta y debajo "Equivale a $ 385,00 · 1
+USD = 38,50 UYU (la fijaste vos)".
+
+**De dónde salen las cotizaciones.** Las trae la API (nunca el navegador) de la fuente pública
+*fawazahmed0/currency-api* (la única fuente) y las guarda en la tabla `cotizaciones`. **Siempre se consulta
+primero la base**: un pedido a la fuente trae las cinco monedas de un día y se guardan todas, así que se pide como
+mucho una vez por día (un día pasado, una vez en la vida; la de hoy no se renueva hasta que cambia el día). Si la
+fuente cae se usa la guardada más cercana de la última semana, marcada "desactualizada". `GET
+/api/finanzas/cotizacion?desde=USD&hacia=UYU&fecha=…` devuelve `{ tasa, fechaDeLaFuente, desactualizada }`
+(503 `COTIZACION_NO_DISPONIBLE` si no hay ninguna). Hay cotizaciones desde el 02/03/2024; una fecha futura usa
+la de hoy. Por qué esta fuente y no otra: ver `docs/decisiones.md` (2026-10-04).
+
+**Reglas de la API** (`POST/PATCH /api/finanzas/movimientos`, campo opcional `cambio`): `{ modo:
+"automatico" }`, `{ modo: "tasa", tasa }` o `{ modo: "importe", importeConvertido }`. Sin `cambio`, al crear
+se usa la automática y al editar se conserva la guardada (si las cuentas no cambiaron). Pedir un cambio
+manual entre cuentas de la misma moneda, una tasa inválida o un importe que convertido da menos de un
+centésimo se rechaza (400, campo `cambio`). La conversión la hace el servidor
+(`convertirCentavos`, `packages/shared`): enteros grandes, redondeo al centésimo más cercano.
+
+**Disponible.** Suma el saldo de cada cuenta; las de otra moneda se convierten con la cotización de hoy, así
+que el resumen lo marca **"(estimado)"** y, si de alguna moneda no hay cotización, esas cuentas no suman y un
+aviso lo dice.
+
 ### Resumen (dashboard)
 
 Lo primero que se ve al entrar: **balance** del período (ingresos menos gastos),
 **ingresos**, **gastos** (los dos con el total del **período anterior** al lado, para
-comparar), **disponible** (la suma del saldo de todas las cuentas activas — no es lo
+comparar), **disponible** (la suma del saldo de todas las cuentas activas, convertidas a la moneda
+base — no es lo
 mismo que el balance: es lo que hay, no lo que entró o salió en el período) y los
 últimos movimientos **del período elegido** (no se mezclan los de otros períodos). Las
 transferencias entre cuentas **no suman** a ingresos, gastos ni balance, y por eso tampoco
@@ -695,7 +780,10 @@ categoría de transferencias no admite presupuesto, y las transferencias no cuen
 
 ### Estadísticas
 
-Tres gráficos simples con **Recharts** (única librería de gráficos del stack, ver
+La pestaña arranca siempre con los **datos rápidos** y sigue con cinco bloques: la **evolución de
+ingresos y gastos con su balance**, el **ritmo de gasto**, **qué subió y qué bajó**, la
+**evolución de gastos por categoría** y los **gastos por categoría**. Esos cinco se presentan **en orden
+aleatorio** (ver abajo). Los gráficos usan **Recharts** (única librería de gráficos del stack, ver
 `docs/librerias.md`): gastos por categoría del período (de mayor a menor, cada barra con el
 color propio de su categoría) y la evolución de ingresos/gastos de los últimos 6
 períodos hasta el elegido, con el nombre de cada uno en el eje (verde para ingresos, rojo
@@ -703,48 +791,310 @@ para gastos — mismo color que las flechas del listado de
 movimientos). Los gráficos se cargan de forma diferida (`next/dynamic`, `ssr: false`)
 para no engordar el paquete inicial de las otras pestañas del módulo.
 
-**Evolución de categorías.** Un selector elige una categoría (por defecto, la que más se gastó
-en el período que se está mirando; la interna de transferencias no se ofrece) y otro, "Qué
-mirar", si se ven sus **gastos** o sus **ingresos**, cada uno en su propio gráfico: una misma
-categoría puede tener las dos cosas, y en un mes más ingresos que gastos y en otro al revés. El
-gráfico muestra, en **dos gráficas en una**, los últimos hasta **12 períodos** terminando en el
-elegido:
+**Ingresos y gastos, con su balance.** Una **sola barra por período**, desde cero, que cuenta
+qué pasó con lo que entró: lo **rojo** es lo gastado y, si sobró plata, lo **verde** completa hasta
+lo que entró. Una **raya negra** marca hasta dónde llegó lo ingresado; si el gasto la pasa, el
+tramo de arriba (**rojo rayado**) es lo gastado de más. Así el resultado de cada período se lee de
+un vistazo: verde arriba de lo rojo, sobró; rayado arriba de la raya, faltó. La altura de la barra
+es la mayor de las dos cifras, por lo que un déficit grande no estira el eje hacia abajo ni aprieta
+al resto (se descartó dibujar el balance como una línea o como barras con valores negativos: ver
+`docs/decisiones.md`). Una leyenda propia explica cada tramo y la raya (el rayado, además del
+color, es lo que distingue "gastado de más"). Al apuntar a una barra, un globito dice cuánto entró,
+cuánto salió y el resultado con palabras ("Sobró plata: …" o "Gastaste de más: …"). Las etiquetas
+del eje van inclinadas y todas visibles, y los nombres largos se acortan con "…" (el completo está
+en el globito y en la lista de abajo). Debajo, una lista con una tarjeta por período dice lo mismo
+**con texto**, para que no dependa del color: el monto con su signo y una insignia con ícono
+("Sobró plata", "Gastaste de más", "Quedó parejo" o, si no hubo ingresos ni gastos, "Sin
+movimientos"). El balance lo calcula la API (`balanceCentavos` en cada elemento de
+`evolucionPorPeriodo` de `GET /api/finanzas/estadisticas`), con el mismo criterio que el balance
+del resumen; las transferencias no cuentan.
 
-- **Barras (eje izquierdo): el valor bruto** gastado (o ingresado) en la categoría en cada
-  período, con el color de la categoría. Con gastos, si la categoría tiene **presupuesto**, una
-  línea punteada marca su límite (con ingresos no se muestra: un presupuesto es un tope de gasto).
-- **Línea (eje derecho): ese valor como porcentaje de los ingresos del período** (todos los
-  ingresos, no solo los de esa categoría), con un decimal. Con gastos es "cuánto de lo que entró
-  se fue en esta categoría" (250 gastados sobre 2.000 de ingresos son 12,5 %, y puede pasar del
-  100 %); con ingresos es "qué parte de lo que entró vino de esta categoría". En un período
-  **sin ingresos no hay porcentaje** y la línea se corta, en vez de mostrar un 0 % o un valor
-  inventado.
+**Orden aleatorio.** Para que ningún bloque quede siempre al final, donde es más fácil no
+llegar a verlo, los cinco bloques se mezclan: el orden se sortea **una vez cada vez que se entra a
+la pestaña** (o se cambia de período) y **no cambia mientras se está en ella**, ni siquiera al
+actualizarse los datos: que algo se mueva mientras se lee sería peor que el problema. Los datos
+rápidos no participan: van siempre arriba. Cada bloque es una región con nombre
+(`<section aria-label>`), para saltar de uno a otro con un lector de pantalla. El sorteo usa
+`mezclar` y `elegirAlAzar` de `packages/shared/src/azar.ts`.
 
-Todos los períodos aparecen, con 0 si no hubo movimientos del tipo elegido, para que el gráfico no
-salte; si no hubo en ninguno, en lugar del gráfico se explica que no hay gastos (o ingresos) en esa
-categoría. Cuenta solo el tipo elegido: ni las transferencias ni los movimientos eliminados. Como
-los períodos pueden durar distinto, los puntos no son del todo comparables. Viene de
-`GET /api/finanzas/estadisticas/categoria?periodoId=&categoriaId=&tipo=gasto|ingreso` (sin
-`tipo`, gasto), que devuelve `{ tipo, periodos: [{ periodoId, nombre, totalCentavos,
-ingresosCentavos, porcentajeDeIngresos }], presupuestoCentavos }` y responde 404 si el período o
-la categoría no son de la persona y 400 con un tipo inválido.
+**Datos rápidos.** Tres tarjetas arriba de todo: el **gasto promedio por día** del período (gasto
+total sobre los días transcurridos, redondeado al centavo), el **gasto más grande** (monto,
+descripción, categoría y fecha; a igual importe, el más reciente; "—" si no hay gastos) y la
+**cantidad de movimientos** (ingresos y gastos; las transferencias no cuentan).
+
+**Ritmo de gasto.** Un gráfico de líneas con lo gastado **acumulado día a día** desde la
+apertura del período, contra el período anterior (línea punteada, con su nombre en la
+leyenda). Arriba, el resultado en palabras: lo que se lleva gastado, lo que se llevaba en el
+anterior **a esta misma altura** (mismo número de día) y una insignia con ícono y texto, "$ X
+más que en {anterior}" (rojo), "$ X menos que en {anterior}" (verde) o "Igual que en {anterior}".
+En un período cerrado se compara el período completo hasta su último día. Con un solo período
+se dibuja una sola línea y se explica que falta uno para comparar; sin gastos, se dice con
+palabras en vez de dibujar una línea plana.
+
+**Qué subió y qué bajó.** Los gastos de cada categoría contra el período anterior, de la que más
+cambió a la que menos (hasta 8; las que quedaron iguales no aparecen). Cada una es una barra que
+sale del centro —a la derecha, gastaste más (rojo); a la izquierda, menos (verde)— y mide la
+diferencia en plata. El texto dice lo mismo sin depender del color: "Subió $ 200,00 (200%)",
+"Bajó $ 50,00 (100%)" o "Nueva: $ 40,00" para una categoría que antes no tenía gastos (sin
+porcentaje: dividir por cero no da un porcentaje), y debajo "antes → ahora". En el primer
+período se explica que no hay con qué comparar.
+
+**Qué es un "día".** Para el ritmo y el promedio, un día es un **bloque de 24 horas contado desde
+la apertura del período** (día 1 son las primeras 24 horas), no un día de calendario. Así no
+depende de la zona horaria y períodos que no son meses calendario se comparan por igual. En un
+período abierto, los días son los que van hasta ahora (mínimo 1); si hay un gasto cargado por
+adelantado con fecha posterior a hoy, el período se extiende hasta su día para no perderlo (el
+total siempre coincide con el del resumen). El cálculo está en
+`apps/api/src/servicios/finanzas/comparaciones.ts` y llega en la misma respuesta de
+`GET /api/finanzas/estadisticas`, con tres campos nuevos: `variacionPorCategoria` (null en el
+primer período), `ritmoDeGasto` y `datosRapidos`. Los tres cuentan solo ingresos y gastos
+activos del período (ni transferencias ni movimientos eliminados).
+
+**Evolución de gastos por categoría.** Lo **gastado** en una categoría, período a período. Un selector
+elige la categoría (al abrir, **una al azar entre las que tuvieron gastos en el período que se
+está mirando**, así nunca cae en una vacía; la interna de transferencias no se ofrece). Solo
+muestra gastos: los ingresos de la categoría no entran. El gráfico muestra, en **dos gráficas en
+una**, los últimos hasta **12 períodos** terminando en el elegido:
+
+- **Barras (eje izquierdo): el valor bruto** gastado en la categoría en cada período, con el color
+  de la categoría. Si la categoría tiene **presupuesto**, una línea punteada marca su límite.
+- **Línea (eje derecho): ese gasto como porcentaje de los ingresos del período** (todos los
+  ingresos, no solo los de esa categoría), con un decimal: "cuánto de lo que entró se fue en esta
+  categoría" (250 gastados sobre 2.000 de ingresos son 12,5 %, y puede pasar del 100 %). En un
+  período **sin ingresos no hay porcentaje** y la línea se corta, en vez de mostrar un 0 % o un
+  valor inventado.
+
+Todos los períodos aparecen, con 0 si no hubo gastos, para que el gráfico no salte; si no hubo en
+ninguno, en lugar del gráfico se explica que no hay gastos en esa categoría. No cuenta las
+transferencias ni los movimientos eliminados. Como los períodos pueden durar distinto, los puntos
+no son del todo comparables. Viene de
+`GET /api/finanzas/estadisticas/categoria?periodoId=&categoriaId=&tipo=gasto|ingreso`, que
+devuelve `{ tipo, periodos: [{ periodoId, nombre, totalCentavos, ingresosCentavos,
+porcentajeDeIngresos }], presupuestoCentavos }` y responde 404 si el período o la categoría no son
+de la persona y 400 con un tipo inválido. **La API todavía sabe dar lo ingresado** (`tipo=ingreso`,
+y sin `tipo`, gasto), pero la pantalla siempre pide `gasto`.
+
+### Widgets de Finanzas
+
+Cifras, curiosidades y avisos en tarjetas, en dos lugares: **dos carruseles** apilados en
+la columna lateral de `/finanzas` (texto arriba, gráficos abajo) y una **cuadrícula** de tarjetas chicas en `/inicio`. Los dos salen de la misma lista y del
+mismo pedido, `GET /api/finanzas/widgets`, que **no recibe parámetros**: el servidor mira el período
+abierto o, si no hay, el más reciente (en la moneda base de la persona). Devuelve datos y no frases;
+el texto de cada widget lo escribe el cliente (`armar-widgets-de-finanzas.ts`, una función pura). Una
+tarjeta es un **aviso** (lleva la insignia "Aviso") o un **dato**; los avisos van primero, de los más
+graves a los más leves.
+
+Avisos (aparecen solo cuando corresponden):
+
+- **Cuenta en rojo:** cuentas visibles con saldo negativo, en su propia moneda. Una cuenta oculta no se
+  avisa (la persona la sacó de su vista), aunque su saldo siga sumando al disponible.
+- **Presupuesto superado** y **por agotarse** (80 % o más sin pasarse del límite): hasta tres de cada
+  tipo, los más pasados primero. Llegar justo al límite no es pasarse.
+- **Disponible incompleto:** monedas de cuentas sin cotización; esas cuentas no suman al total.
+- **Sin períodos / Sin período abierto:** invita a abrir el primero o el siguiente.
+- **Sin movimientos todavía** y **Hace días que no cargás nada** (tres días o más desde el último
+  movimiento del período abierto).
+
+Cifras y curiosidades. No son todas iguales: cada una tiene la forma que mejor cuenta su dato.
+
+| Widget | Forma |
+|---|---|
+| **Disponible** (estimado si hay cuentas en otra moneda) | Cifra sola |
+| **Balance** del período | Cifra y dos barras horizontales (lo que entró y lo que salió) a la misma escala |
+| **Ritmo de gasto** (cuánto más o menos se lleva gastado que el período anterior *a esta misma altura*) | Cifra y **línea**: el gasto acumulado día a día de este período, y punteado el del anterior |
+| **Donde más gastás** | Cifra y **anillo** con el porcentaje del gasto total, del color de la categoría |
+| **Gasto por período** | Cifra y **barras**, una por período (hasta 6), con el actual resaltado |
+| **Presupuestos del período** | Cifra y **barra de avance** (lo gastado sobre lo presupuestado): acento hasta el 80 %, ámbar desde ahí y roja al pasarse |
+| **Tu gasto más grande** | Cifra sola |
+| **Tus mayores gastos** | **Ranking** de las tres categorías con más gasto: nombre, monto y barra proporcional |
+| **Gasto por día** | Promedio y **barras** de los últimos días (hasta 7) |
+| **Movimientos cargados** | Cifra sola |
+
+Un gráfico solo aparece si dice algo: el ritmo necesita un período anterior y gastos en los dos, el gasto
+por período necesita al menos dos períodos, el ranking al menos dos categorías, y los presupuestos
+al menos un límite fijado. Los gráficos son mini gráficos hechos a mano con SVG y `div`s, sin
+librería (a este tamaño no hacen falta ejes ni leyendas, y así no se carga una librería de gráficos en
+cada pantalla con widgets), con los mismos colores que los gráficos grandes del módulo (verde ingresos,
+rojo gastos). **Nunca son la única fuente de información**: el título, la cifra y el detalle dicen lo
+mismo con palabras, y los gráficos son decorativos para un lector de pantalla (salvo el ranking, cuyo
+texto sí es la información). En la pantalla de inicio la lista intercala las formas (cifra, gráfico, anillo...) para
+que las tarjetas contiguas no se parezcan; la columna lateral las separa por categoría.
+
+**Categorías.** Cada widget tiene una categoría, que decide en qué carrusel de la columna lateral va:
+
+| Categoría | Qué es | Dónde va |
+|---|---|---|
+| **Texto** | Una cifra, una curiosidad o un aviso, sin gráfico, con datos de apoyo | Carrusel de arriba |
+| **Gráficos** | Cualquiera con mini gráfico (línea, barras, comparación, anillo, avance o ranking) | Carrusel de abajo |
+
+Las formas ya existentes (cifra sola, línea, barras, comparación, anillo, avance y ranking) no son
+categorías sino la manera de dibujar un widget: la cifra sola es de *texto* y todas las demás, de
+*gráficos*. Se pueden agregar más categorías (cada una sería un carrusel más) agregándolas a
+`CATEGORIAS_DE_WIDGET` en `componentes/widgets/tipos.ts`.
+
+En la columna lateral, los widgets se separan por categoría: el carrusel de **arriba** es de texto (los
+avisos, primero, de los más graves a los más leves) y el de **abajo**, de gráficos. Son **grandes**
+(de 256 a 320 px de alto cada uno según el alto de la ventana —256 px por debajo de 800 px de alto, 288 px
+desde 800 px y 320 px desde 900 px—, con la cifra y los gráficos más grandes) y las tarjetas de texto agregan
+**datos de apoyo** debajo del detalle (por ejemplo, en *Disponible*: lo que entró y salió en el
+período; en *Tu gasto más grande*: cuánto pesa en tus gastos; en *Movimientos cargados*: promedio por
+día y cuándo fue el último; en *Cuenta en rojo*: cada cuenta con su saldo; en *Presupuestos del
+período*: cuánto te queda o te pasaste). El contenido **llena el alto de la tarjeta**: los gráficos
+crecen, y una tarjeta de texto con poco que mostrar agranda la cifra y el detalle. **Nada se corta con
+puntos suspensivos**: una cifra larga (varias monedas) achica la letra y pasa a otro renglón. Los dos van **juntos** (32 px entre uno y otro, que pasan a 40 px desde 800 px de alto y a 48 px desde
+900 px) y
+**centrados** en el alto de la columna, con margen de sobra arriba y abajo en lugar de estirados de
+punta a punta; la columna acompaña el scroll igual que el menú (`sticky`), y si la ventana es muy
+baja y no entran, se desplaza por dentro. Si una categoría no tiene widgets no se muestra su carrusel
+(sin períodos hay solo widgets de texto: un aviso y el disponible). Los dos comparten **un
+solo tiempo** (12 segundos): un único reloj de la columna (`useRelojCompartido`) les avisa cuándo
+toca pasar al siguiente, así que cambian siempre juntos. **Tocar la flecha de cualquiera de los dos
+reinicia ese tiempo para ambos**: el próximo cambio automático llega recién 12 segundos después del
+toque. Lo único propio de cada carrusel es detenerse: con el mouse encima o el foco del teclado
+adentro ignora el aviso y se queda en su widget, mientras el otro sigue.
+
+**Si un texto no entra, se desliza solo.** El contenido de una tarjeta grande vive en una zona con
+scroll (`AreaDesplazable`). Si cabe, no hace nada. Si se pasa del alto (un nombre largo, una
+descripción de 140 caracteres), espera unos 2 segundos, baja despacio (unos 28 px por segundo) hasta
+el final, espera y vuelve a subir, en bucle, para poder leerlo todo sin cortar nada (el detalle no se
+recorta por renglones en estas tarjetas). Respeta lo que pide la accesibilidad para el contenido que
+se mueve solo: se **detiene con el mouse encima o con el foco adentro**, y con **reducir movimiento**
+no se mueve (queda desplazable a mano con la rueda, el dedo o las flechas). Cuando desborda, la zona
+se puede **enfocar con el teclado** (`tabindex`); si todo entra, no suma una parada más al Tab.
+
+Cada carrusel **no muestra ningún contador ni paginado**: solo tiene dos flechas (anterior y
+siguiente, que dan la vuelta), **por fuera de la tarjeta**, una a cada lado y centradas en vertical,
+para que no tapen nada de lo que muestra, y **solo aparecen cuando el mouse está sobre el carrusel**
+(o el foco llega con el teclado). Su lugar está siempre reservado, así que al aparecer no mueven nada.
+Por eso la columna lateral mide 288 px (antes 260) y, desde 1280 px de ancho de ventana, **336 px**, para dar más margen a los textos. Avanza solo, y se detiene mientras el mouse está encima (tarjeta o flechas) o el foco llegó
+con el teclado (tocar una flecha con el mouse no lo deja quieto después, y tampoco avanza con la
+pestaña oculta). Con la preferencia de **reducir movimiento** no avanza solo. No hay
+botón de pausa ni barra de tiempo (ver `docs/decisiones.md`). Los widgets se actualizan solos al cargar
+o cambiar cualquier cosa del módulo (comparten la clave de caché `["finanzas"]`).
+
+Dónde: API `apps/api/src/servicios/finanzas/widgets.ts` y la ruta en `rutas/finanzas.ts`; web
+`apps/web/src/componentes/widgets/` (tipos, tarjeta, carrusel, mini gráficos y la columna que los
+reparte, sin saber de ningún módulo) y `apps/web/src/componentes/finanzas/widgets/`. Tests:
+integración en `widgets.integracion.test.ts` (cálculo, límites del 80 %, ocultas, monedas, datos de
+los gráficos, aislamiento entre personas) y e2e en `widgets.spec.ts` (inicio, variedad de formas,
+los dos carruseles por categoría, que ningún widget se corta, flechas con hover, pausa con mouse y teclado, reducir movimiento, accesibilidad
+en los dos temas) y `columnas-plegables.spec.ts` (esconder y mostrar cada columna, que se recuerde
+sin destello, teclado, dónde hay pestañas y accesibilidad).
+
+### Deudas y préstamos
+
+Pestaña **Deudas** de `/finanzas`: la plata que le **deben** a la persona (`me_deben`) y la que ella
+**debe** (`debo`), **con un contacto o con alguien que no lo es** (solo un nombre escrito a mano). Es un **registro aparte de los movimientos: por sí sola no mueve
+los saldos de las cuentas ni entra en los totales, balances, presupuestos y estadísticas del
+período** (si no, lo prestado contaría como un gasto y lo devuelto como un ingreso). Lo dice el
+propio formulario. Solo cuando la persona lo pide al registrar un pago o cobro, ese pago genera su
+movimiento (ver más abajo).
+
+- **Con quién**: al registrar una deuda se elige `Un contacto` o `Otra persona o lugar` (un nombre de
+  hasta 80 caracteres, que no crea ninguna ficha). Es uno de los dos, nunca los dos ni ninguno
+  (el esquema, el servicio y una restricción de la base lo exigen). En la lista queda **dicho con
+  texto**: con un contacto, su nombre es un **enlace a su ficha** y lleva la insignia *Contacto*;
+  con un nombre, lleva *No es un contacto* y no tiene enlace; con un contacto en la papelera, dice
+  *Contacto en la papelera* y tampoco enlaza (su ficha ya no se puede abrir). El enlace abre
+  `/contactos?contacto=<id>`, que muestra esa ficha ya abierta (al cerrarla la dirección vuelve a
+  `/contactos`; un id inválido o inexistente se ignora). Las deudas con un nombre suman a *Te
+  deben* y *Debés*, pero no cuentan como "contactos con deuda", no aparecen en la ficha de nadie y
+  no se filtran por contacto. Con quién es no se cambia al editar.
+- Una deuda tiene: con quién, sentido, concepto (hasta 140 caracteres), monto, **moneda**, el día en
+  que se originó y, **opcional, una fecha límite** (hasta qué día debería saldarse: "vence el
+  31/12/2026" en la lista y en la ficha del contacto). El límite puede ser el mismo día de la deuda o
+  posterior, pero no anterior (lo exigen el esquema, el servicio y una restricción de la base); sí
+  puede ser un día que ya pasó (una deuda atrasada). Se cambia o se quita al editar (vacía la quita; si
+  el pedido no trae el campo, queda como estaba). Todavía solo se guarda y se muestra: más adelante
+  servirá para avisos y recordatorios. Es en **una sola moneda y no se convierte**: los totales se dan por moneda
+  ("$ 5.000,00 · US$ 100,00") y nunca se mezclan.
+- **Un pago o cobro puede generar su ingreso o gasto.** El formulario de pago tiene la casilla
+  *Registrar también el ingreso en una de mis cuentas* (cobro, cuando le deben a la persona) o *…el gasto
+  desde una de mis cuentas* (pago, cuando ella debe). Al tildarla se elige la **cuenta** (cualquiera
+  a la vista, **de cualquier moneda**; ya viene elegida una de la moneda de la deuda, si hay) y la **categoría** (ya viene
+  "Ingresos" u "Otros", o la primera si se renombraron). Se crea un **ingreso** (cobro) o un **gasto**
+  (pago) por el importe del pago, con la descripción "Cobro: <concepto>" o "Pago: <concepto>" (con
+  "(US$ 25,00)" al final si hubo conversión), el
+  contacto de la deuda (si es un contacto y no está en la papelera) y la fecha del pago: **hoy, a la hora
+  de ahora**; **otro día, a mediodía de ese día** en la zona horaria de la persona. Ese día tiene que
+  caer en un período (si no, el pago no se registra y se avisa; se puede registrar sin el movimiento).
+  Pago y movimiento se guardan **en una sola transacción**: o se crean los dos o ninguno. **Si la cuenta es de otra moneda que
+  la deuda, el importe se convierte como en una transferencia entre cuentas**: aparece la sección
+  *Cotización* con la del día y a cuánto equivale, y se puede escribir otra o indicar el importe que
+  llegó a la cuenta (el mismo componente que usan los movimientos entre monedas). Lo que se descuenta
+  de la deuda es siempre lo pagado, en su moneda; en la cuenta entra el importe convertido. Sin
+  cotización del día, se pide escribirla y el pago no se registra hasta tenerla. Si además la cuenta
+  está en otra moneda que la base, el movimiento se convierte a la base como cualquier otro. En la lista, el
+  pago dice *Generó un ingreso en <cuenta>* y, al quitarlo, **se elimina también ese movimiento** (la
+  confirmación lo avisa); si el movimiento se eliminó por su lado, el pago queda como uno común. Las
+  deudas eliminadas no deshacen los pagos ni sus movimientos. La casilla **viene tildada**; se puede destildar
+  en cada pago. Si no se puede generar el movimiento (no hay un período abierto, no hay una cuenta a la
+  vista, o no se pudieron cargar las opciones), el formulario lo dice y el pago
+  **se registra igual, solo**: tildarla de entrada nunca impide registrar un pago. Mientras se cargan las
+  opciones, el botón espera.
+- **Un pago nunca puede pasar de lo que falta**: el formulario avisa apenas se escribe un importe mayor
+  ("No puede pasar de lo que falta: $ 100,00."), muestra el máximo bajo el campo y no envía el pedido; el
+  servidor lo vuelve a comprobar (con la fila de la deuda bloqueada).
+- Se va saldando con **pagos parciales** (en el sentido "me deben" se llaman cobros). Lo que falta
+  se calcula al leer (monto menos pagos vigentes). Un pago no puede pasar de lo que falta, no puede
+  ser anterior a la deuda ni caer en el futuro; "Cobrar todo lo que falta" completa el monto. Dos
+  pagos simultáneos no pueden dejar el saldo en negativo: el servicio valida con la fila de la deuda
+  bloqueada (`for update`).
+- **Editar** cambia concepto, monto y día; el contacto, el sentido y la moneda no se cambian (si
+  estaban mal, se elimina y se registra de nuevo). El monto no puede quedar por debajo de lo ya
+  pagado, ni el día de la deuda ser posterior al de su primer pago. Un pago se puede **quitar**
+  (con confirmación) si se cargó mal: la deuda recupera el saldo y, si estaba saldada, vuelve a
+  estar pendiente.
+- La lista muestra las **pendientes** por defecto (también *Saldadas* y *Todas*, y filtro por
+  sentido), con una barra de avance accesible (`role="progressbar"`) y los pagos desplegables. El
+  resumen de arriba suma lo que le deben y lo que debe.
+- Fechas: "AAAA-MM-DD" (`date`); "hoy" es el de la zona horaria de la persona.
+- **Borrado lógico** de deudas y pagos (`eliminadoEn`) y borrado definitivo a los 30 días (ver
+  Contactos, Tareas programadas). Un contacto con una **deuda pendiente no se puede eliminar** (409
+  con el motivo); uno con deudas, pendientes o saldadas, **nunca se borra en definitivo** mientras
+  esas deudas existan, para que no queden apuntando a alguien que ya no está.
+- Toda consulta filtra por la persona de la sesión; las deudas y pagos de otra persona responden 404.
+
+API (exigen sesión): `GET /api/finanzas/deudas` (filtros `estado`, `sentido`, `contactoId`, `limit`,
+`offset`), `GET /api/finanzas/deudas/resumen`, `POST`, `GET/PUT/DELETE /api/finanzas/deudas/:id`,
+`POST /api/finanzas/deudas/:id/pagos` y `DELETE …/pagos/:pagoId`. Código: esquema en
+`packages/db/src/esquema/finanzas.ts` (migraciones `0016`, `0017` —contacto opcional y `nombre_libre`—, `0019` —`fecha_limite`— y `0020` —`movimiento_id` del pago—), servicio
+`apps/api/src/servicios/finanzas/deudas.ts`, rutas `apps/api/src/rutas/deudas.ts`, esquemas en
+`packages/shared/src/finanzas/deudas.ts` y web en `apps/web/src/componentes/finanzas/deudas-de-finanzas.tsx` y
+`formulario-de-deuda.tsx`.
+
+**Widgets**: *Te deben* y *Debés* (por moneda, con cuántas deudas y con cuántos contactos), que se
+ven aunque todavía no haya un período abierto.
+
+### El contacto en cada movimiento
+
+Un ingreso o gasto puede llevar **un contacto** ("Con quién (opcional)": a quién se le pagó, de quién
+se cobró). Es opcional; **una transferencia entre cuentas propias no lleva contacto** (la API
+responde 400 en el campo `contactoId` y la base lo garantiza con un `check`). El contacto tiene que ser
+de la persona y estar activo; si después pasa a la papelera, el movimiento lo sigue mostrando y se
+puede editar sin tocarlo, pero no se ofrece para movimientos nuevos (y duplicar un movimiento no lo
+copia). Si el contacto se borra en definitivo, el movimiento se queda sin contacto (`on delete set
+null`) y sigue existiendo. El listado de movimientos lo muestra y la API filtra por `contactoId`.
 
 ### Dónde está
 
 - Esquema: `packages/db/src/esquema/finanzas.ts` (`periodos`, `categorias`,
-  `cuentas_financieras`, `ajustes_de_saldo`, `movimientos`, `presupuestos`).
+  `cuentas_financieras`, `ajustes_de_saldo`, `movimientos`, `presupuestos`, `cotizaciones`).
 - Compartido: `packages/shared/src/finanzas/` (esquemas Zod, constantes —set de
   categorías con sus colores, categoría de transferencias—, `colores.ts` con el color más
-  distinto y `periodos.ts` con el nombre sugerido), `packages/shared/src/formato/` (montos y
-  fechas).
-- API: `apps/api/src/servicios/finanzas/`, `apps/api/src/rutas/finanzas.ts`.
+  distinto, `periodos.ts` con el nombre sugerido, `monedas.ts` con la lista de monedas y `cambio.ts`
+  con la conversión), `packages/shared/src/formato/` (montos, fechas, porcentajes y cotizaciones).
+- API: `apps/api/src/servicios/finanzas/` (monedas y cotizaciones: `cotizaciones.ts`, `moneda-base.ts`
+  y la conversión en `movimientos.ts`, `resolverCambio`), `apps/api/src/rutas/finanzas.ts`. Los tests de
+  la API usan una fuente de cotizaciones falsa (`apps/api/src/pruebas/cotizaciones-de-prueba.ts`): nunca
+  salen a internet.
 - Web: `apps/web/src/app/finanzas/`, `apps/web/src/componentes/finanzas/`,
   `apps/web/src/lib/api-finanzas.ts`, `apps/web/src/lib/preferencias-finanzas.ts`.
 
 ### Campos de importe
 
 Todos los campos donde se escribe plata (importe de un movimiento, saldo inicial de una cuenta,
-saldo al actualizarla y límite de un presupuesto) **separan los miles mientras se escribe**:
+saldo al actualizarla, límite de un presupuesto y los de la cotización) **separan los miles mientras se escribe**:
 "1234567,5" se ve "1.234.567,5". Detalles:
 
 - Es un campo de texto con teclado numérico en el móvil, no un `<input type="number">`, que no
@@ -756,6 +1106,8 @@ saldo al actualizarla y límite de un presupuesto) **separan los miles mientras 
   decimal. Hasta **dos decimales** y hasta doce dígitos enteros; no deja escribir letras. Los
   saldos admiten un **signo menos** al principio; el importe de un movimiento y el límite de un
   presupuesto, no.
+- Una **cotización** se escribe en el mismo campo pero admite hasta **seis decimales**
+  (`decimales` en `importe-escrito.ts`).
 - Al **pegar** un importe de otro lado se interpreta solo ("1,234.56", "$ 250.5", "1.234,56"):
   si hay dos separadores el último es el decimal; si hay uno solo, es decimal cuando le siguen
   uno o dos dígitos ("250.5") y de miles cuando le siguen tres ("1.234").
@@ -763,6 +1115,15 @@ saldo al actualizarla y límite de un presupuesto) **separan los miles mientras 
   vuelve a ordenar los miles. Al salir del campo, una coma sin decimales ("12,") se limpia.
 - Hacia el formulario sube un número (NaN si está vacío), igual que antes: los esquemas Zod y la
   API no cambian.
+- **La moneda va dentro del campo:** todo campo de importe muestra, a la derecha y sin poder
+  editarse, el código de la moneda en la que se escribe ("UYU", "USD"…). El componente exige la
+  prop `moneda` (es obligatoria a propósito: no se puede olvidar). Cada campo usa la moneda de lo
+  que representa: el importe de un movimiento, la de la cuenta elegida (cambia al cambiar de
+  cuenta; en una transferencia entre monedas, la que se elija con el selector de origen o destino); el saldo inicial, la que se está eligiendo para la cuenta; actualizar saldo, la de esa
+  cuenta; el límite de un presupuesto, la moneda base; el "Importe en X" de la cotización, X; y
+  la cotización, la moneda que se cobra por una unidad ("1 USD = … UYU" lleva "UYU"). El
+  `Campo` la dibuja como `sufijo`, reserva lugar para que el texto no quede debajo y la anuncia a
+  los lectores de pantalla junto con la ayuda (`aria-describedby`).
 
 ### Límites conocidos
 
@@ -773,9 +1134,9 @@ saldo al actualizarla y límite de un presupuesto) **separan los miles mientras 
   totales de un período son sumas y pueden superarlo. Los montos se guardan en centésimos
   como `bigint`.
 
-- **Una transferencia es entre cuentas del mismo usuario y en la misma moneda**: no hay
-  conversión (la moneda es una sola por usuario, ver más arriba). Tampoco hay comisiones ni
-  transferencias entre períodos: es un movimiento más, de una sola fecha.
+- **Una transferencia es entre cuentas del mismo usuario**, de la misma o de distinta moneda (ver
+  "Monedas y cotizaciones"). No hay comisiones (la diferencia entre lo entregado y lo recibido queda
+  en la cotización) ni transferencias entre períodos: es un movimiento más, de una sola fecha.
 - **Reemplazar una categoría no se puede deshacer** (los movimientos pasan a la categoría
   elegida y no se guarda de dónde venían). Hay una confirmación explícita, pero no un deshacer.
 - Los colores de las categorías ya creadas no se recalculan solos al agregar otras: el más
@@ -784,8 +1145,12 @@ saldo al actualizarla y límite de un presupuesto) **separan los miles mientras 
 - **Gastos recurrentes** (alquiler, suscripciones) y sus "próximos gastos" quedan para
   una etapa aparte: no están implementados todavía (CLAUDE.md, hoja de ruta, paso 7 —
   "cada módulo se implementa solo cuando se pida explícitamente").
-- Una sola moneda por usuario (ver más arriba): no sirve para llevar cuentas en más de
-  una moneda a la vez.
+- **Monedas**: solo las cinco de la lista (UYU, USD, ARS, EUR, BRL, todas de dos decimales); la
+  moneda de una cuenta no se puede cambiar y no hay una cotización "habitual" por cuenta (se elige
+  por movimiento). Los totales son siempre en la moneda base: no hay una vista de los totales en otra
+  moneda ni se revalúan los históricos. La API de cotizaciones no tiene límite por usuario más allá de
+  la caché: una persona podría pedir muchos días distintos y generar consultas a la fuente (cada día
+  se pide una sola vez).
 - **Los períodos no se pueden eliminar** ni se les pueden editar las fechas de apertura
   o cierre después de crearlos (solo el nombre). Un período abierto con una fecha mal
   puesta se corrige cerrándolo y abriendo otro.
@@ -803,13 +1168,772 @@ saldo al actualizarla y límite de un presupuesto) **separan los miles mientras 
 
 ---
 
+## Contactos
+
+Guarda a las **personas** y a las **empresas o servicios** con los que la persona se
+relaciona (un electricista, un banco, un familiar), con sus teléfonos, correos y otros datos,
+y le permite **recordar fechas** de cada uno. Cada cuenta tiene los suyos: toda consulta
+filtra por la persona de la sesión, sin excepción para el admin, y los contactos de otra
+persona responden 404 como si no existieran.
+
+### Datos de un contacto
+
+| | Persona | Empresa o servicio |
+|---|---|---|
+| Obligatorio | nombre | nombre |
+| Propios | apellido, fecha de nacimiento | rubro, sitio web, horario de atención, RUT o documento, persona de contacto |
+| De los dos | teléfonos (hasta 5, celular o fijo), correos (hasta 5), dirección, notas (hasta 1.000 caracteres), etiquetas (hasta 10), favorito | igual |
+
+- **El tipo no se puede cambiar** después de crear el contacto (una persona no se convierte en
+  empresa): se crea otro. La base lo garantiza con `check`: una empresa no puede tener fecha
+  de nacimiento ni una persona, rubro.
+- Los campos opcionales en blanco se guardan como "sin dato". Teléfonos y correos conservan el
+  orden en que se cargaron; un correo repetido se guarda una sola vez.
+- Teléfono: dígitos, espacios y `+ ( ) - .`, entre 3 y 15 cifras (cabe un `911` o un
+  `+598 99 123 456`). Se guarda como se escribió.
+- Sitio web: con o sin `https://`; **solo http o https**. Un `javascript:` o `data:` se
+  rechaza al guardar, y en la ficha solo se vuelve enlace lo que `aEnlaceWeb` reconoce como web
+  (con `target="_blank"` y `rel="noopener noreferrer"`).
+- La fecha de nacimiento tiene que existir en el calendario, ser de 1900 en adelante y no ser
+  posterior a hoy (el "hoy" de la zona horaria de la persona).
+- **Borrado lógico** (`eliminadoEn`): un contacto eliminado desaparece de las listas, de la
+  ficha, de los recordatorios y de los widgets. Un job lo borra en definitivo a los **30 días**,
+  con sus teléfonos, correos, vínculos con etiquetas y recordatorios (cascada).
+
+### Buscar, filtrar y ordenar
+
+- **Orden**: favoritos primero y después por nombre y apellido, sin distinguir mayúsculas
+  (`lower()`). El orden de las letras con tilde depende del *collation* de la base de datos.
+- **Búsqueda** (se espera 300 ms a que se deje de escribir; mientras llega la respuesta se sigue
+  viendo la lista anterior): nombre, apellido, nombre completo ("juan rodr"), rubro, persona de
+  contacto y correos, sin distinguir mayúsculas. Un **teléfono se busca por sus cifras**, sin
+  importar cómo se escribió (`99123456` encuentra `+598 99 123-456`; hacen falta al menos 3).
+  `%` y `_` se buscan como texto común, no como comodines.
+- **Filtros**: Todos, Favoritos, Personas, Empresas, y por etiqueta. Se combinan en la API.
+- **Paginación**: 20 por página en la web (`limit` hasta 100 y `offset` en la API), con el
+  total de los que cumplen el filtro.
+- La búsqueda **no ignora tildes** ("jose" no encuentra "José"): hacerlo exige la extensión
+  `unaccent` de PostgreSQL. Ver `docs/decisiones.md`.
+
+### Etiquetas
+
+Grupos que arma la persona ("Familia", "Proveedores"), con un color. **Cada persona arranca con
+cuatro ya creadas: Familia, Amigos, Trabajo y Servicios**, que son suyas como cualquier otra: puede
+renombrarlas, cambiarles el color o eliminarlas, y no vuelven a aparecer. Se crean la primera vez que
+se miran sus etiquetas (también las cuentas que ya existían, si no tenían ninguna propia); una marca
+en el usuario (`etiquetasInicialesCreadas`) evita que se recreen. Cuentan para el tope de 50. Un contacto puede tener
+hasta 10 y una persona crear hasta 50. El nombre es único por persona sin distinguir
+mayúsculas (dos personas sí pueden tener la misma). Cada etiqueta nueva propone el color más
+distinto de las que ya existen (`colorMasDistinto`). **Eliminar una etiqueta se la quita a sus
+contactos sin tocarlos**; el diálogo de confirmación dice a cuántos. Se pueden crear desde la
+pestaña Etiquetas o, al vuelo, desde el formulario de un contacto (Enter crea la etiqueta, no
+envía el formulario). La API verifica que las etiquetas elegidas sean de la persona: no se
+puede vincular una ajena.
+
+### Recordatorios
+
+Cada contacto tiene una lista de recordatorios: un **título**, **cada cuánto se repite** y
+**cuándo cae**. Lo que se le pide a la persona **cambia según la repetición**, porque cada una
+se define con algo distinto:
+
+| Se repite | Se pide | La hora |
+|---|---|---|
+| Una sola vez | el día (no puede ser anterior a hoy) | opcional |
+| Todos los días | solo la hora | **obligatoria** (propone las 09:00) |
+| Todas las semanas | el día de la semana (lunes a domingo) | opcional |
+| Todos los meses | el día del mes (1 a 31) | opcional |
+| Todos los años | el día y el mes | opcional |
+
+Sin hora, el recordatorio vale para todo el día. El mismo día, primero van los de todo el día y
+después los que tienen hora, de la más temprana a la más tarde.
+
+- Es un **aviso dentro de la aplicación**: aparece en la ficha del contacto, en la pestaña
+  Recordatorios y en los widgets. **No manda correos ni notificaciones** (eso queda para el
+  módulo de notificaciones, que los va a reutilizar).
+- Se guarda lo que la persona eligió (el día de la semana, el día del mes...), no la próxima
+  fecha: **cuándo cae la próxima vez se calcula al leer** (`proximaOcurrencia`,
+  `packages/shared`). Un día 31 en un mes de 30 días cae el último día del mes; un 29 de
+  febrero cae el 28 en los años comunes. En la ficha y en la lista se lee en palabras
+  (`describirProgramacion`): "Todos los lunes a las 10:00", "El día 15 de cada mes", "Cada 12 de
+  mayo", "Todos los días a las 08:00".
+- Un recordatorio de **una sola vez** no puede quedar en el pasado (la API responde 400 junto a
+  la fecha). Al terminar su día se da de baja (borrado lógico) y deja su entrada en el **histórico**.
+  Es el único que puede estar pasado; los que se repiten siempre tienen una próxima vez y **siguen
+  vivos**. Uno pasado no aparece en la ficha ni en los widgets ni cuenta para el máximo de 30 por
+  contacto.
+- **El histórico** (tabla `historial_de_recordatorios`): cada vez que un recordatorio cae y su día
+  pasa, queda una entrada aparte —también en los que se repiten: el cumpleaños de mamá deja una cada
+  año y un recordatorio diario, una por día—. La entrada guarda una copia del título, la repetición, la
+  hora y el día en que cayó, así sigue igual aunque el recordatorio se edite o se elimine. Se genera al
+  leer el histórico (y en la limpieza periódica) a partir de `historialHasta`, el último día ya pasado al
+  histórico de cada recordatorio: un recordatorio recién creado no inventa historia, y si pasó mucho
+  tiempo sin generar solo se recuperan los últimos 90 días. La persona puede **eliminar entradas
+  sueltas** o **vaciar todo el historial** (borrado en duro: son datos derivados); eso nunca toca los
+  recordatorios y lo borrado no vuelve a generarse.
+- **"Hoy" es el de la zona horaria de la persona** (`usuarios.zonaHoraria`), no el de UTC: uno
+  "de hoy" sigue vivo todo el día de ella, y "los martes" son los martes de ella. La hora es de
+  reloj de la persona, sin zona. Las fechas son `date` ("AAAA-MM-DD"): el 12 de mayo es el mismo
+  día en cualquier zona.
+- Al crear uno, el sistema **recomienda los más comunes** según el tipo (personas: Cumpleaños,
+  Aniversario, Llamarle, Devolverle algo; empresas: Renovar el contrato, Pagar el servicio,
+  Control o mantenimiento, Pedir presupuesto). Un toque completa título y repetición, y el
+  cumpleaños toma el día y el mes de la fecha de nacimiento si está cargada. No se ofrece uno que
+  el contacto ya tiene.
+- **Al dar de alta a una persona con fecha de nacimiento** aparece debajo de la fecha la casilla
+  **"Crear un recordatorio de su cumpleaños"**, marcada de entrada: crea además el recordatorio
+  anual "Cumpleaños" (día y mes de la fecha) en la misma operación. Se ofrece solo en el alta y solo
+  con la fecha cargada; en empresas no existe y al editar no se ofrece (se usa la ficha).
+- La base garantiza que cada repetición lleve exactamente sus campos (un `check`): un
+  recordatorio semanal no puede tener día del mes ni fecha.
+- Hasta 30 por contacto. Eliminar uno pide confirmación ("¿Eliminar? No / Sí") y es lógico.
+- **Importantes.** El formulario de recordatorio (en la ficha y en "Agregar recordatorio") tiene la casilla
+  **"Marcar como importante"**. Un recordatorio importante lleva el distintivo "★ Importante" en la pestaña Recordatorios y en la
+  ficha del contacto; **no cambia el orden** (siguen por fecha). Cada entrada del historial guarda si era importante cuando cayó y
+  muestra el distintivo. La API recibe `importante` (opcional: al crear, sin el campo no lo es; al editar, sin el campo
+  se conserva).
+- La pestaña **Recordatorios** junta los de todos los contactos y se divide en **Próximos** (el que
+  cae antes primero, agrupados en Hoy, Esta semana, Este mes y Más adelante) y **Pasados** (el
+  histórico, la entrada más reciente primero, agrupadas en Ayer, La última semana, El último mes y
+  Antes; cada fila dice "hace N días" y cómo se repite el recordatorio de origen, y se puede eliminar
+  ahí mismo con confirmación). Junto a los filtros, **Vaciar historial** abre un aviso que explica que
+  se borra todo el historial (no solo lo filtrado), que no se puede deshacer y que **los recordatorios
+  no se borran**: los de Próximos siguen avisando y lo que pase de ahora en adelante vuelve a quedar en
+  el historial. Cada fila de **Próximos** se puede **editar** (el mismo formulario de la ficha, en un diálogo) y **eliminar** (con
+  "¿Eliminar? No / Sí") sin entrar a la ficha; en **Pasados** se elimina la entrada. Esas acciones **aparecen al pasar el
+  mouse por la fila** (o al navegar con el teclado), desplegándose hacia la izquierda con la misma animación que las de la
+  lista de movimientos de Finanzas; en pantallas táctiles se ven siempre, y mientras se confirma una eliminación quedan
+  abiertas. Tiene **filtros**, resueltos por la API: búsqueda por texto (en el título o en el nombre
+  del contacto), por contacto y por cómo se repite; un contador y "Limpiar filtros". Ahí el botón de
+  arriba es **Agregar recordatorio**: pide primero de qué contacto es y, elegido, muestra el mismo formulario que la
+  ficha (con las sugerencias según el tipo de contacto). Sin contactos, explica que primero hace
+  falta uno.
+
+### Plata con un contacto
+
+En la ficha, la sección **Plata** junta lo de Finanzas con ese contacto (`GET /api/contactos/:id/finanzas`):
+cuántos movimientos hay, cuánto se **gastó** y cuánto se **cobró** en total (en la moneda base, con el importe
+ya convertido que guarda cada movimiento) y los cinco más recientes; y las **deudas pendientes**, con
+lo que falta. Desde ahí se **registra una deuda** y se **registra un cobro o pago** sin salir de la ficha
+(el contacto ya viene fijado). Editar, eliminar y ver los pagos se hace en Finanzas, pestaña Deudas. Ver
+"Deudas y préstamos" y "El contacto en cada movimiento" en la sección de Finanzas.
+
+Para los selectores de otros módulos, `GET /api/contactos/opciones` devuelve lo mínimo de cada contacto
+activo (id, tipo, nombre y apellido), por nombre y con un tope de 500.
+
+### Ver la dirección en el mapa
+
+Si el contacto tiene dirección, la ficha muestra **Ver en el mapa**: un enlace común a la búsqueda de
+OpenStreetMap con la dirección ya escrita (`enlaceDeMapa`, en `packages/shared`), que abre otra pestaña
+(`target="_blank"`, `rel="noopener noreferrer"`, sin enviar la página de origen). No se manda nada desde
+nuestro servidor, no hay librería de mapas ni coordenadas guardadas, y el texto va codificado: una dirección
+con `&` o `#` no puede alterar el enlace. No se muestra el mapa dentro de la aplicación.
+
+### Widgets
+
+Salen de `GET /api/contactos/widgets` (la API devuelve datos y la web los escribe, como en
+Finanzas) y se ven en dos carruseles de la columna lateral de `/contactos` (texto arriba,
+gráficos abajo; ver "Widgets de Finanzas", Categorías) y en la cuadrícula de `/inicio`. Los avisos
+van primero:
+
+- **Avisos**: *Todavía sin contactos* (sin ninguno), *Recordatorio(s) de hoy* (con los
+  títulos y los contactos) y *Sin forma de comunicarse* (contactos sin teléfono ni correo).
+- **Cifras**: *Tus contactos* (anillo con el porcentaje de personas), *Próximo cumpleaños*
+  (el más cercano entre las fechas de nacimiento), *Próximos recordatorios* (barras con las
+  próximas cuatro semanas), *Tus etiquetas* y *Empresas por rubro* (rankings; los rubros se
+  agrupan sin distinguir mayúsculas), *Favoritos* y *Con quién más gastaste* (ranking de los últimos 90
+  días, según los movimientos cargados con un contacto, en la moneda base).
+- **Del historial de recordatorios**: *Lo que pasó esta semana* (texto: cuántos recordatorios cayeron
+  en los últimos 7 días y los tres más recientes con "ayer" o "hace N días"), *Historial de la semana*
+  (barras: cuántos cayeron cada uno de los últimos 7 días, la última es ayer) y *Recordatorios por
+  repetición* (ranking de los vigentes según cada cuánto se repiten; aparece con más de una
+  repetición).
+
+### Pantalla y formularios
+
+`/contactos` tiene tres pestañas (Contactos, Recordatorios, Etiquetas) y el botón **Agregar
+contacto** siempre a mano (en Recordatorios pasa a ser **Agregar recordatorio**). El alta es un diálogo con un selector Persona / Empresa o servicio
+arriba (cambiar de tipo deja el formulario limpio); al guardar se abre la **ficha** del
+contacto nuevo, donde se le agregan recordatorios. En la ficha los teléfonos son enlaces
+`tel:`, los correos `mailto:` y el sitio web un enlace seguro; desde ahí se marca como
+favorito, se edita o se elimina (con confirmación). Marcar un favorito en el listado se ve
+**al instante** (actualización optimista, se revierte con un mensaje si falla).
+
+El **avatar** de cada contacto (las iniciales de una persona o un edificio para una empresa) se pinta
+con el color de sus etiquetas: con una, el color de esa etiqueta; con varias, la **mezcla** de todos
+sus colores (el promedio de cada canal, así todas pesan lo mismo); sin ninguna, el acento suave de
+siempre. Las iniciales van en blanco o en negro, el que mejor se lea sobre ese fondo (siempre al
+menos 4,5:1 de contraste; `mezclarColores` y `colorDeTextoSobre`, en
+`packages/shared/src/contactos/colores.ts`). Se ve en el listado, en la ficha y en la pestaña **Recordatorios**
+(donde cada recordatorio trae las etiquetas de su contacto, así el avatar tiene el mismo color que en
+el listado); en las deudas, que no traen las etiquetas, queda el color de siempre.
+
+El formulario valida con `esquemaContacto` de `@gestoria/shared`, el mismo que usa el
+servidor, y descarta las filas de teléfono y correo en blanco antes de validar, poniendo cada
+error en la fila que corresponde. Estados cubiertos: cargando (esqueletos), vacío (con el
+botón para empezar), con filtro sin resultados, error y sin conexión.
+
+### Tareas programadas
+
+Primer uso de **pg-boss** (cola de trabajos sobre la misma base de PostgreSQL, en el esquema
+`pgboss`; no hace falta Redis). Al arrancar, la API (`apps/api/src/tareas/programador.ts`)
+crea la cola `limpieza-de-contactos`, la agenda **cada hora en punto** y la corre una vez al
+arrancar, por si estuvo apagada. En la misma corrida se limpian las tareas (`limpiarTareas`, ver
+Tareas) y el calendario (`limpiarCalendario`, ver Calendario). La tarea (`limpiarContactos`) es idempotente y hace dos cosas: pasa al histórico lo que ya ocurrió de
+los recordatorios (`generarHistorialDeTodos`; un recordatorio de una sola vez que pasó se da de baja
+ahí mismo) y borra en definitivo lo eliminado hace más de 30 días (contactos, recordatorios, deudas
+y pagos). Las entradas del histórico no se borran solas. En los tests
+(`NODE_ENV=test`) no se arranca; la tarea se prueba como función común y hay una prueba de
+punta a punta del programador.
+
+### API
+
+Todas exigen sesión y filtran por la persona de la sesión.
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /api/contactos` | Lista con `busqueda`, `tipo`, `favoritos`, `etiquetaId`, `limit`, `offset`. Devuelve `{ contactos, total }` |
+| `POST /api/contactos` | Crea (persona o empresa, según `tipo`). 201 |
+| `GET /api/contactos/:id` | La ficha completa, con sus recordatorios (la próxima fecha y los días que faltan) |
+| `PUT /api/contactos/:id` | Reemplaza los datos (también teléfonos, correos y etiquetas). 409 si cambia el tipo |
+| `PATCH /api/contactos/:id/favorito` | Marca o desmarca |
+| `DELETE /api/contactos/:id` | Borrado lógico |
+| `GET/POST /api/contactos/etiquetas`, `PATCH/DELETE …/:id` | Etiquetas (con cuántos contactos usa cada una) |
+| `GET /api/contactos/recordatorios` | Los vigentes, cada uno con su contacto y las etiquetas de este (una consulta para todos). Filtros: `busqueda` (título o nombre del contacto), `repeticion`, `contactoId`; `dias` limita la ventana y `limit` recorta. 400 si un parámetro no es válido |
+| `GET /api/contactos/recordatorios/historial` | El histórico: una entrada por cada vez que un recordatorio cayó, la más reciente primero (antes de leer pone al día las que falten). Mismos filtros `busqueda`, `repeticion` (la del recordatorio de origen) y `contactoId`, más `limit`; devuelve `entradas` y `total` |
+| `DELETE /api/contactos/recordatorios/historial/:id` | Elimina una entrada del histórico. 404 si no existe o es de otra persona |
+| `DELETE /api/contactos/recordatorios/historial` | Vacía todo el histórico de la persona (no toca los recordatorios); devuelve `eliminadas` |
+| `POST /api/contactos/:id/recordatorios`, `PUT/DELETE …/:recordatorioId` | Recordatorios de un contacto |
+| `GET /api/contactos/widgets` | Los datos de los widgets |
+| `GET /api/contactos/opciones` | Los contactos mínimos para elegir uno en otros módulos |
+| `GET /api/contactos/:id/finanzas` | La plata con el contacto: movimientos y deudas |
+
+Los errores de validación llevan el campo (`telefonos.0.numero`, `fechaNacimiento`, `fecha`,
+`etiquetaIds`) para mostrarlos junto a lo que hay que corregir.
+
+### Dónde está
+
+- Esquema: `packages/db/src/esquema/contactos.ts` (migraciones `0014_contactos` y `0015_recordatorios_por_periodicidad`); lo de Finanzas, en `esquema/finanzas.ts` (`0016_deudas_y_contacto_en_movimientos`).
+- Compartido: `packages/shared/src/contactos/` (constantes, esquemas Zod, fechas y
+  recordatorios, nombres).
+- API: `apps/api/src/servicios/contactos/` (`contactos`, `etiquetas`, `recordatorios`,
+  `widgets`, `limpieza`), `apps/api/src/rutas/contactos.ts` y `apps/api/src/tareas/`.
+- Web: `apps/web/src/app/contactos/`, `apps/web/src/componentes/contactos/` y
+  `apps/web/src/lib/api-contactos.ts`.
+- Tests: `*.integracion.test.ts` junto a cada servicio y ruta, `packages/shared/src/contactos/*.test.ts`
+  y `apps/web/e2e/contactos.spec.ts`.
+
+### Límites conocidos
+
+- Los recordatorios **solo avisan dentro de la aplicación**: no hay correo ni notificación
+  push hasta que exista el módulo de notificaciones.
+- La búsqueda no ignora tildes ni errores de tipeo.
+- No hay importación ni exportación de contactos (la exportación de datos de la cuenta está
+  entre los pendientes de la hoja de ruta), ni fotos. El mapa no se muestra dentro de la aplicación.
+- Las deudas son un registro aparte: no tocan los saldos de las cuentas salvo que, al registrar un
+  pago, se pida generar su ingreso o gasto (en una cuenta de cualquier moneda, con conversión).
+  Registrar una deuda nueva nunca genera
+  movimientos (un préstamo entregado se refleja ajustando el saldo, como antes).
+- La hora de un recordatorio es de reloj, sin zona horaria, y solo sirve para mostrarla y ordenar: nada avisa a esa hora (no hay notificaciones todavía).
+
+---
+
+## Tareas
+
+La lista de to-do: una persona anota lo que tiene que hacer —recordatorios, actividades, tareas— y lo
+va tachando. Hay dos clases de tareas:
+
+- **De uso único.** Se agregan a mano con su día (hoy por defecto) y, si se quiere, una hora y notas.
+  Al tildarlas desaparecen de la lista y no vuelven nunca más.
+- **Repetitivas.** Se definen una vez y se agregan solas a la lista el día que les toca, con el mismo
+  esquema que los recordatorios de contactos: **todos los días**, **todas las semanas** (uno o **varios
+  días de la semana**: lunes, miércoles y viernes; sábado y domingo...), **todos los meses** (el día del mes; si el mes no lo tiene, cae el último
+  día) o **todos los años** (día y mes; un 29 de febrero cae el 28 en los años comunes). La hora es
+  opcional. Lo que se tilda no es la regla sino la tarea de cada día.
+
+Cualquier tarea (de uso único o repetitiva) puede tener una **categoría** ("Casa", "Trabajo",
+"Salud"...), pero es **opcional**: puede quedar sin ninguna.
+
+Cada cuenta tiene las suyas: toda consulta filtra por la persona de la sesión, sin excepción para el
+admin, y las tareas de otra persona responden 404 como si no existieran.
+
+### La pantalla `/tareas`
+
+Cuatro pestañas y el botón "Agregar tarea" siempre a mano.
+
+- **Hoy.** Arriba, un avance del día ("3 de 6 hechas", con una barra y, a la derecha, el porcentaje completado con la leyenda "del día completado" debajo: "50%"; no aparece si no hay tareas). **Cuenta solo las tareas de hoy**: las atrasadas no entran (ni lo que se hizo hoy de un día anterior), así completar una vieja no infla el porcentaje ni dejar una pendiente lo baja. Una tarea de hoy que se da por fallida **sigue en el total como no hecha** ("1 hechas y 1 fallida", 50 %) y un campo para agregar una tarea
+  en un paso: se escribe y se aprieta Enter (el formulario completo se abre con el botón "Agregar tarea" de arriba).
+  Abajo, por secciones: **Atrasadas** (tareas de días anteriores que siguen sin resolverse, **sueltas o de
+  una repetitiva**; se arrastran hasta que se completan o se marcan como fallidas; **arranca cerrada**, con
+  la cantidad a la vista —"Atrasadas (3)"—, y se abre al tocar el título; **pasada una semana como
+  atrasada, una tarea se marca como fallida sola**, ver más abajo), **Para hoy**, **Hechas hoy**
+  (subdividida en bloques separados —**"Eran de hoy"**, **"Estaban atrasadas"** y, si las hay,
+  **"Adelantadas"**—, cada uno con su subtítulo, su ícono, la cantidad y su propia tarjeta), que cuelgan de "Hechas hoy" con una línea a la izquierda. Toda tarea de un día anterior —atrasada,
+  hecha hoy o fallida— dice **de qué día era**, con el día concreto: "Era para el martes, 20 de octubre" y **Fallidas hoy** (justo después de lo que falta; plegadas por defecto,
+  para poder deshacer un cambio por error) y **Más adelante** (tareas de uso único con un día futuro). La casilla de completar es un **círculo con un tilde**, con la misma estética que la cruz de fallida pero en verde (al apuntarla se pinta de verde; marcada, queda llena).
+  **En la pestaña Hoy**, con mouse, la casilla y la cruz de lo pendiente **no se ven ni ocupan lugar**: al apuntar a la fila
+  (o al navegar con el teclado) se **despliegan hacia la derecha empujando el título**, con la misma animación que los
+  botones de editar y eliminar de los recordatorios de Contactos (pero del lado izquierdo); en pantallas táctiles se
+  ven siempre. **Lo ya completado o fallido muestra siempre su estado final**: la casilla marcada en verde o la **cruz activada**
+  (círculo lleno de rojo con la equis); tocar cualquiera de las dos la vuelve a dejar pendiente. Por eso en **Fallidas hoy**
+  no hay casilla de completar ni botón "Deshacer": la cruz activada hace de las dos cosas. En el **Historial** los
+  controles se ven siempre y una fallida se dibuja igual que en Hoy (cruz activada, del mismo tamaño que la casilla de una completada). De una
+  atrasada **o de una de hoy** se sale de tres maneras: tildarla (la hiciste), la **cruz que está justo a la derecha de la casilla**, dentro de su círculo, que al apuntarla se pinta de
+  rojo (marcarla como fallida: ya no se va a hacer) o dejarla ahí, pendiente. Al tocar la cruz sale un **aviso breve que explica qué significa dar una tarea por fallida** —que ya no la vas a
+  hacer, que sale de la lista y cuenta como no hecha, y que se puede deshacer— con el ícono en rojo y la casilla **"No volver a mostrar"** (se recuerda en este navegador, `localStorage`; cancelar no
+  lo guarda). Sale igual desde Hoy y desde el historial; deshacer una fallida no lo pide. Una de hoy dada por fallida pasa a **Fallidas hoy** y se puede deshacer desde ahí; las de un día futuro no tienen la cruz (todavía no les toca). En todas las filas la casilla
+  queda **centrada verticalmente** respecto de la fila entera (el título y lo que va debajo). Las secciones
+  plegables (Atrasadas, Hechas hoy, Fallidas hoy) se abren y se cierran **como una sola pieza**: la altura
+  se anima y el contenido aparece junto con el contenedor, sin que unas partes salten mientras otras se
+  deslizan (componente `Plegable`). Dentro de cada sección,
+  primero lo de todo el día y después por hora (lo importante no cambia el orden). Al tildar una tarea, el tilde se dibuja, el título se
+  tacha y un instante después sale de la lista con su animación; la lista se actualiza al instante
+  (si el servidor falla, vuelve a como estaba y avisa).
+- **Repetitivas.** Las reglas, con cuándo caen ("Todos los lunes a las 08:00", "El día 5 de cada
+  mes"), cuándo les toca la próxima vez y los botones para editarlas o eliminarlas (con confirmación).
+  Están **agrupadas por periodicidad** (Diarias, Cada varios días, Semanales, Mensuales y Anuales, cada grupo con su
+  cantidad y en ese orden; dentro de cada uno, primero la que toca antes) y se pueden **filtrar**: un
+  selector deja un solo grupo (o "Todas") y un buscador encuentra por título o notas sin importar
+  tildes ni mayúsculas. Ambos se combinan; si nada coincide, un aviso lo dice. Todo se filtra en el
+  navegador, con las repetitivas que ya se cargaron (hay un máximo de 100).
+- **Historial.** Los días anteriores con lo que se hizo, lo que se marcó como **fallido** y lo que sigue
+  **pendiente** ("Atrasada"), el más reciente primero. **Por defecto, los 7 días anteriores a hoy**
+  (hoy no cuenta). Arriba hay una **tarjeta de filtros**, que se combinan y se piden al servidor:
+  **Estado** (segmentos: todos, pendientes, completadas, fallidas), **Período** (atajos "7 días", "30 días",
+  "90 días" y "Todo el año", más **Desde** y **Hasta** para fechas exactas; el atajo vigente se marca), y
+  **Categoría** (una, o "sin categoría") y **Periodicidad** (una sola vez, diarias, cada varios días,
+  semanales, mensuales, anuales). El título lleva un contador de filtros puestos y el botón "Limpiar
+  filtros"; una línea abajo dice qué rango se está viendo ("Del 13/10/2026 al 19/10/2026 (por defecto, los
+  últimos 7 días)"); un rango al revés se avisa junto al campo; si nada coincide, lo explica. **Cada día
+  lleva una barra de progreso** partida en tres tramos proporcionales —completadas (verde), pendientes
+  (gris) y fallidas (rojo)—; el color no va solo: el nombre accesible dice los números ("Progreso del día: 2
+  completadas, 1 pendientes, 1 fallidas") y el encabezado del día también. Si se filtra por un estado la barra
+  no se muestra (todo lo que se ve es de ese estado). Al poner un filtro, el título de la tarjeta no cambia de tamaño y
+  "Limpiar filtros" aparece a su lado. Se conserva
+  un año y una consulta trae hasta 1000 tareas (si hay más, avisa que se acote el rango). Cada día dice
+  "2 de 4 hechas, 1 fallida" (de lo que pasa los filtros). Una fallida se muestra con una **cruz roja en
+  lugar de la casilla**, tachada y con la marca "Fallida", y se puede volver a dejar pendiente (botón
+  "Deshacer"); una pendiente lleva su casilla y, a la derecha, la cruz para darla por fallida. Una tarea que
+  se hizo pero no se tildó en su momento se puede tildar desde acá.
+- **Categorías.** Se crean, renombran, recolorean y eliminan (ver más abajo). Cada una muestra
+  cuántas tareas pendientes y repetitivas la usan. En el resto de las pestañas, la categoría de una
+  tarea aparece como un puntito de color con su nombre (siempre en texto: el color solo no alcanza).
+
+La pantalla tiene **widgets** en la columna lateral (dos carruseles, uno de texto y otro de gráficos,
+como en Finanzas y Contactos): las tareas **atrasadas** (aviso), un aviso de que **todo está hecho** por
+hoy, **cuánto falta hacer hoy** y lo que sigue, el **avance de hoy** (un anillo; igual que en la pestaña Hoy,
+cuenta solo las tareas de hoy, no las atrasadas), **lo próximo** con día
+futuro, la **racha** de días seguidos en que se hizo todo, **tu semana** (barras de lo hecho en los
+últimos 7 días) y **tus rutinas** (las repetitivas que más se cumplieron en las últimas dos semanas).
+Sin ninguna tarea, un aviso invita a escribir la primera. Se actualizan solos al tildar, agregar o
+eliminar.
+
+**Importantes.** Al agregar o editar una tarea (suelta, repetitiva o la de hoy de una repetitiva) hay una casilla
+**"Marcar como importante"**. Una importante lleva el **distintivo** "★ Importante" (pastilla ámbar con estrella y
+texto, nunca solo color) y una **franja de color** a la izquierda de la fila. **No cambia el orden**: las listas
+siguen por día y hora, y la marca solo ayuda a reconocerla de un vistazo (reordenar "mareaba"). Una repetitiva
+importante arma tareas importantes; cambiarle la marca rige desde hoy. El historial y la pestaña Repetitivas también
+muestran el distintivo. Completarla o darla por fallida no le quita la marca. La API recibe `importante` (opcional: al crear,
+sin el campo no lo es; al editar, sin el campo se conserva).
+
+Lo nuevo de las tareas también tiene sus widgets (cada uno aparece solo si hay algo para mostrar):
+
+- **Una tarea por darse por fallida** (aviso, peligro): atrasadas que llevan 5 días o más sin hacerse;
+  dice cuántos días faltan para que la más vieja se dé por fallida sola.
+- **Tareas fallidas** (texto, peligro): las que se dieron por fallidas (a mano o solas) en las últimas dos
+  semanas, con las tres más recientes.
+- **Lo que hiciste hoy** (ranking): lo hecho hoy según de qué día era —*Eran de hoy*, *Estaban
+  atrasadas* y *Adelantadas*—, las mismas tres secciones de "Hechas hoy".
+- **Tus repetitivas** (ranking): cuántas repetitivas vigentes hay por periodicidad (incluye *Cada varios
+  días*) y cuántas se dan por fallidas solas si pasa el día.
+- **Cada varios días** (texto): las repetitivas de ese tipo que le tocan antes y cuándo.
+
+Con las **categorías** hay widgets que miran las tareas por categoría (no aparecen mientras ninguna tarea
+tenga categoría):
+
+- **Pendientes por categoría** (ranking): lo que falta hacer —atrasado, de hoy o para más adelante—,
+  hasta cinco categorías, con una barra del color de cada una y "Sin categoría" para el resto.
+- **Lo que más se atrasa** (texto, advertencia): la categoría con más tareas atrasadas, con el desglose
+  de las demás. No sale si las atrasadas no tienen categoría.
+- **Dónde hiciste más** (ranking): tareas hechas por categoría en los últimos 30 días.
+- **Cumplimiento por categoría** (ranking): hechas contra las que tocaban en las últimas dos semanas
+  (sin contar hoy, que no terminó), solo para categorías con al menos 3 tareas.
+- **Tareas sin categoría** (texto, info): si la persona tiene categorías y le quedan 3 o más tareas
+  pendientes sin una, lo sugiere.
+
+El formulario es uno solo (`FormularioDeTarea`): "¿Qué hay que hacer?", "Se repite" (no se repite,
+todos los días, cada varios días, semanas, meses o años) y lo que pide cada opción (el día, los días de la semana, el día
+del mes, el día y el mes), la hora y las notas. La validación es la del servidor (los mismos esquemas
+Zod). Editar una tarea que salió de una repetitiva cambia solo la de ese día; para cambiar todas se
+edita la repetitiva.
+
+### Tareas "cada varios días"
+
+Una periodicidad más para las tareas repetitivas (los recordatorios de Contactos no la tienen): **"Cada
+tantos días"**, para lo que se hace día por medio, cada 3 días, cada 10…
+
+- Al elegirla, el formulario pide **"Cada cuántos días"** (un entero de **2 a 365**; 2 es día por medio y
+  viene por defecto; para todos los días está "Todos los días"), **"Empieza el día"** (hoy por defecto) y,
+  opcional, la **hora**. Como las demás, puede darse por fallida sola.
+- El ciclo se cuenta **desde el día de inicio**: cae en el inicio y después cada N días (cada 3 días desde
+  el 20: el 20, 23, 26…). Antes del inicio no aparece. El inicio **no puede ser un día que ya pasó** (la API
+  responde 400 con el mensaje junto al campo "Empieza el día"); al editar, el inicio que la regla ya tenía se
+  conserva aunque sea viejo, que es el que ancla el ciclo.
+- Se guarda en `tareas_repetitivas` como `cada_dias` y `fecha_inicio` (migración
+  `0028_tareas_cada_tantos_dias`, con `check`s que exigen estos campos solo para este tipo). Las tareas se
+  arman al leer como las demás, solo los días que le tocan; si la persona no entra por días, los que tocaban
+  quedan atrasadas.
+- Se dice en palabras: "Día por medio", "Cada 5 días a las 09:30". En la lista de Repetitivas forma su propio
+  grupo, **"Cada varios días"**, entre las diarias y las semanales, y el filtro por periodicidad lo incluye.
+- En el **calendario** aparece en los días que le tocan (también los futuros) y el filtro avanzado de
+  repetición de **Tareas** suma **"Cada varios días"** (el de Contactos no).
+
+### Tareas semanales de varios días
+
+En "Todas las semanas" el formulario muestra siete botones (Lun a Dom) que se marcan y desmarcan; viene
+marcado el día de hoy y hace falta al menos uno ("Elegí al menos un día de la semana."). Es una sola
+tarea repetitiva que cae en cada uno de sus días, no varias copias. En la pestaña Repetitivas se lee
+"Todos los lunes, miércoles y viernes", "Todos los sábados y domingos" o, con los siete, "Todos los
+días"; la próxima vez es la del día marcado que viene antes. Se maneja con teclado (Tab para recorrer
+los días, espacio para marcar) y cada botón tiene su casilla real debajo, con el nombre completo para
+los lectores de pantalla. Cambiar los días rige desde hoy, como el resto de la regla. La lógica de
+cuándo cae está en `packages/shared/src/tareas/cuando-cae.ts`; los recordatorios de contactos siguen
+con un solo día de la semana.
+
+### Categorías
+
+- **Opcionales.** El formulario de tarea tiene un selector "Categoría (opcional)" con "Sin categoría" y
+  las categorías de la persona; se elige al agregar y se cambia o se quita al editar. Si la persona no
+  tiene ninguna categoría, el selector no se muestra. Una repetitiva guarda la categoría y se la pasa a
+  cada tarea que arma; al cambiarla rige desde hoy, como el resto de la regla.
+- **Por defecto.** Cada persona arranca con **Personal, Casa, Trabajo, Estudio, Salud, Compras y
+  Trámites**, con colores bien distintos entre sí. Son suyas como cualquier otra: puede renombrarlas,
+  cambiarles el color o eliminarlas. Se crean la primera vez que se miran sus categorías (también para
+  las cuentas que ya existían) y una marca en el usuario (`categoriasDeTareasInicialesCreadas`) evita
+  que vuelvan después de eliminarlas; quien ya tenía categorías propias no recibe las de por defecto.
+- **Crear y editar.** Nombre de hasta 30 caracteres, único entre las de la persona sin distinguir
+  mayúsculas, y un color (si no se elige, se propone el más distinto de los que ya hay). Hasta 30
+  categorías por persona.
+- **Eliminar.** Solo si ninguna **tarea pendiente** ni **tarea repetitiva** la usa; si no, el diálogo
+  explica cuántas la retienen ("2 tareas pendientes y 1 repetitiva") y el servidor responde 409. Las
+  tareas que ya se hicieron (y las eliminadas) no la retienen: pasan a "sin categoría", para que una
+  rutina diaria no deje atada una categoría durante todo un año de historial. Se borra en duro (es
+  configuración, no datos con historia).
+
+### Cómo funciona
+
+- **Dos tablas** (`packages/db/src/esquema/tareas.ts`, migración `0021_tareas`): `tareas_repetitivas`
+  (la regla: cuándo cae, la hora, desde qué día rige y hasta qué día ya se armaron sus tareas) y
+  `tareas` (lo que aparece en la lista y se tilda: su día, título, hora, notas y si se completó). Las
+  de uso único son filas de `tareas` sin repetitiva; las que arma una repetitiva llevan su id. Una
+  restricción única (`repetitiva_id`, `dia`) garantiza que una regla arma como mucho una tarea por día.
+- **Las tareas de una repetitiva se arman al leer**, hasta hoy y nunca de días futuros
+  (`generarTareasRepetitivas`): al abrir la lista (o el historial) se arman las de los días que faltan.
+  No hay nada que mantener al día ni un job que tenga que correr para que la lista esté completa. Si la
+  persona estuvo días sin entrar, al volver se arman los días que faltaron (hasta 31 hacia atrás), que
+  quedan como atrasadas hasta resolverlas. Armar dos veces el mismo día no duplica nada, ni con pedidos a la
+  vez.
+- **Cada tarea es un registro propio**: se copia el título, así el historial es fiel aunque después se
+  cambie o se elimine la regla. Cambiar la repetitiva rige desde hoy (descarta lo pendiente de hoy en
+  adelante y lo vuelve a armar con la regla nueva); lo hecho y los días pasados no se tocan. Eliminarla
+  saca lo pendiente de hoy y deja el historial.
+- **"Hoy" es el de la zona horaria de la persona** (la de su cuenta), también para decidir qué se
+  hizo "hoy".
+- **Una tarea tiene tres estados: pendiente, completada o fallida.** Fallida (columna `fallada_en`,
+  nunca a la vez con `completada_en`) es una atrasada que la persona decidió que ya no va a hacer. **Solo
+  una tarea de un día anterior a hoy puede fallar** (la API responde 409 con la de hoy o las futuras, que
+  todavía están a tiempo). Se puede deshacer en cualquier momento (vuelve a ser atrasada), y tildar una
+  fallida la pasa a completada. Una fallida cuenta como no hecha para la racha, los rankings y el avance
+  del día (no lo sube), pero ya no figura como atrasada ni como pendiente.
+- **Fallar sola.** Al crear o editar una tarea repetitiva hay un checkbox, **desmarcado por defecto**, "Darla
+  por fallida automáticamente si pasa el día". Con él, las tareas que arma esa repetitiva se dan por fallidas
+  solas cuando pasa su día sin completarse (en vez de quedar atrasadas). Detalles: cada tarea armada **copia**
+  la opción de su regla (`falla_sola` en `tareas` y en `tareas_repetitivas`), así cambiar la regla rige desde
+  hoy como todo lo demás; se resuelve **al leer** (junto con armar las tareas que faltan), sin job; la tarea
+  figura como fallida **al final de su propio día**, así que no aparece en "Fallidas hoy" ni cuenta contra el
+  avance de hoy y en el historial queda en el día que le tocaba; si la persona la deshace (o destilda una
+  completada), la opción se apaga **para esa tarea** y no vuelve a fallar sola. La lista de Repetitivas dice
+  "Se da por fallida si pasa el día". Una tarea de uso único no tiene esta opción.
+- **Una semana como atrasada y se da por fallida sola.** Toda tarea pendiente (suelta o de una repetitiva)
+  que lleva **más de una semana atrasada** se marca como fallida sin que la persona haga nada (la semana se
+  cuenta desde el día siguiente al suyo: una del día 13 sigue atrasada el 20 y falla el 21). Se resuelve al
+  leer, junto con lo de "fallar sola" (columna `reactivada_en`, migración `0029_tareas_reactivada`); queda
+  fallida **al final del día en que se cumplió el plazo**, así no aparece en "Fallidas hoy" ni cuenta en el
+  avance de hoy y en el historial queda en el día que le tocaba. Si la persona la devuelve a pendiente
+  ("Deshacer", o destilda una completada vieja), **se reinicia la semana** desde ese momento: no vuelve a
+  fallar enseguida. El aviso de la sección Atrasadas lo dice.
+- **Las atrasadas se arrastran sean sueltas o de una repetitiva**: la vitamina de ayer que no se tomó
+  aparece como atrasada junto a la de hoy, hasta que se complete o se marque como fallida. (Antes, las de
+  repetitiva no se arrastraban y quedaban solo en el historial; ver `docs/decisiones.md`.) Si la persona
+  no entra por días, se acumulan hasta 31 de una rutina diaria.
+- Una tarea de uso único no puede ponerse en un día que ya pasó (sí en hoy); una atrasada conserva su
+  día al editarla.
+- Las categorías están en `categorias_de_tareas` (migración `0022_categorias_de_tareas`); `tareas` y
+  `tareas_repetitivas` tienen `categoria_id` (en nulo si no tienen), con `on delete set null`.
+- Los días de una semanal se guardan en `tareas_repetitivas.dias_semana` (`smallint[]`, de 1 a 7, sin
+  repetir; migraciones `0023` y `0024`, que copian el día que ya tenían las existentes y después quitan
+  `dia_semana`). Las demás repeticiones lo dejan en nulo.
+- Borrado lógico (`eliminado_en`) en tareas y repetitivas. Topes contra errores de carga: hasta 500
+  tareas de uso único pendientes y 100 repetitivas por persona; título de hasta 120 caracteres y notas
+  de hasta 500.
+- **Limpieza**: el mismo job de pg-boss de contactos (`limpiarTareas`, cada hora) borra en definitivo
+  lo eliminado hace más de 30 días y el historial de más de un año —lo completado, lo fallido y lo de
+  repetitivas— (nunca una tarea de uso único que sigue pendiente).
+
+### API
+
+Todas exigen sesión y filtran por la persona de la sesión.
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /api/tareas` | La lista de hoy: `{ hoy, atrasadas, deHoy, hechasHoy, falladasHoy, masAdelante }` (arma antes las repetitivas que falten) |
+| `POST /api/tareas` | Crea una tarea de uso único. 201. 400 si el día ya pasó; 409 con demasiadas pendientes |
+| `PUT /api/tareas/:id` | Edita título, notas, categoría, hora y (si es de uso único) el día |
+| `PATCH /api/tareas/:id/completada` | Tilda o destilda (`{ completada }`); sirve también para días anteriores. Tildar una fallida la pasa a completada |
+| `PATCH /api/tareas/:id/fallida` | Marca como fallida una atrasada o una de hoy, o la vuelve a dejar pendiente (`{ fallida }`). Con una de un día futuro responde 409 |
+| `DELETE /api/tareas/:id` | Borrado lógico |
+| `GET /api/tareas/widgets` | Los datos de los widgets: lo de hoy, atrasadas, lo próximo, los últimos 7 días, la racha, las rutinas, `fallidas`, `porFallar`, `hechasHoyPorOrigen`, `periodicidades`, `fallanSolas`, `cadaVariosDias` y, en `categorias`, las tareas por categoría (pendientes, atrasadas, hechas del mes y cumplimiento) |
+| `GET /api/tareas/historial` | Días anteriores con sus tareas (hechas, fallidas y pendientes) y `hechas` / `falladas` por día, `{ desde, hasta, dias, hayMas }`. Filtros opcionales por query (los que vienen en blanco no cuentan): `desde`, `hasta` (por defecto, los 7 días anteriores a hoy; se recortan a ayer y a un año atrás), `estado` (`pendiente`, `completada`, `fallida`), `categoriaId` (un número o `sin`) y `repeticion` (`unica`, `diaria`, `intervalo`, `semanal`, `mensual`, `anual`). Un filtro inválido responde 400 |
+| `GET/POST /api/tareas/repetitivas`, `PUT/DELETE …/:id` | Las tareas repetitivas (`repeticion`: `diaria`, `intervalo`, `semanal`, `mensual` o `anual`; `intervalo` lleva `cadaDias` y `fechaInicio`), con su próxima vez y `fallaSola` (opcional al crear: sin indicarla es `false`; al editar, si no viene se conserva) |
+| `GET/POST /api/tareas/categorias`, `PATCH/DELETE …/:id` | Las categorías (con cuántas tareas pendientes y repetitivas usa cada una). 409 si el nombre ya existe, si se llegó al máximo o si se elimina una que tiene tareas |
+
+Una repetitiva semanal lleva `diasSemana` (arreglo de 1 a 7, al menos uno y sin repetir; el campo
+viejo `diaSemana` ya no existe) y la respuesta lo devuelve ordenado.
+
+`categoriaId` (número o `null`) viaja en el cuerpo de crear y editar una tarea o una repetitiva; si no
+viene al editar, se conserva la que tenía. Una categoría que no existe o es de otra persona responde 400
+con el error en el campo `categoriaId`.
+
+Los errores de validación llevan el campo (`titulo`, `fecha`, `hora`, `diaDelMes`…) para mostrarlos
+junto a lo que hay que corregir.
+
+### Dónde está
+
+- Esquema: `packages/db/src/esquema/tareas.ts`.
+- Compartido: `packages/shared/src/tareas/` (constantes y esquemas Zod); `caeEnElDia` en
+  `contactos/fechas.ts`.
+- API: `apps/api/src/servicios/tareas/` (`tareas`, `repetitivas`, `categorias`, `widgets`,
+  `limpieza`),
+  `apps/api/src/rutas/tareas.ts`; la siembra, en `apps/api/src/scripts/sembrar-tareas.ts`.
+- Web: `apps/web/src/app/tareas/`, `apps/web/src/componentes/tareas/` (los widgets, en `widgets/`) y
+  `apps/web/src/lib/api-tareas.ts`.
+- Tests: `*.integracion.test.ts` de servicios y rutas, `packages/shared/src/tareas/esquemas.test.ts` y
+  `apps/web/e2e/tareas.spec.ts`.
+
+### Límites conocidos
+
+- Las tareas **no avisan** (ni correo ni notificación): la hora solo sirve para mostrarla y ordenar.
+  Eso queda para el módulo de notificaciones.
+- No hay prioridades, subtareas ni fechas límite aparte del día de la tarea. Las categorías todavía no
+  sirven para filtrar la lista.
+- Una tarea repetitiva no se puede convertir en una de uso único (ni al revés): se crea otra.
+- Los widgets de tareas están solo en la columna lateral de su pantalla; todavía no en la de inicio.
+- La lista de hoy no mira a futuro para las repetitivas ("Más adelante" solo muestra las de uso
+  único): lo que viene de una regla se ve en la pestaña Repetitivas con su próxima fecha.
+
+---
+
+## Calendario
+
+Un calendario para recorrer con comodidad que **junta en cada día lo que hay que tener presente**, venga
+del módulo que venga, y en el que además se pueden **anotar eventos a mano**. Muestra:
+
+- **Finanzas:** el día en que vence cada **deuda pendiente** que tiene fecha límite.
+- **Contactos:** los **recordatorios** de los contactos, en cada día que caen (también los que se repiten).
+- **Tareas:** las **tareas**, en el día que les toca. Las ya completadas se ocultan por defecto (ver
+  "Eventos completados" más abajo).
+- **Calendario:** los eventos que la persona agrega en el propio calendario.
+
+Cada evento dice de dónde viene, con un texto y un ícono (nunca solo color), y se ordena por hora. Ver
+"Los eventos", más abajo.
+
+### La pantalla `/calendario`
+
+No tiene widgets, así que, como la pantalla de inicio, usa el lugar del medio y el de la derecha: el
+calendario ocupa todo el ancho disponible y **se estira con el alto de la ventana, hasta un máximo de 40 rem** (las filas del
+mes y los meses del año crecen para llenarlo; el panel del día mide 30 rem), de modo que en una pantalla normal no hace falta la barra
+de desplazamiento. En una ventana baja se esconde el subtítulo para dejarle más lugar, y por debajo de un
+alto mínimo la pantalla se desplaza. A partir de 1280 px de ancho el panel del día queda a la derecha;
+en pantallas más angostas pasa debajo.
+
+- **Mes.** Una grilla de seis semanas, de lunes a domingo, con una división muy sutil entre casillas (sin
+  columna de número de semana), los días de los meses vecinos en un gris más apagado y sobre un fondo grisáceo (así no se confunden con los del mes), el día de hoy con un aro y el día elegido en una pastilla que se
+  desliza de un día al otro. Siempre mide lo mismo (seis filas), así no salta de alto al navegar. Los días
+  que tienen eventos llevan abajo **un punto del color de cada origen que tenga algo ese día** (naranja
+  Calendario, azul Finanzas, violeta Contactos, rosa Tareas), **sin importar cuántos eventos sean**: un día
+  con diez tareas tiene un solo punto rosa, así nunca se llena de puntos (como mucho hay cuatro). Si el día
+  tiene varios eventos, el **total** aparece en la esquina, y una leyenda sobre la grilla explica las marcas.
+  El nombre accesible de la casilla lo dice con palabras ("jueves, 22 de octubre de 2026, hoy, 5 eventos:
+  Calendario, Finanzas, Contactos, Tareas").
+- **Filtro por origen.** Sobre la grilla hay cuatro botones —Calendario, Finanzas, Contactos y Tareas—
+  que se prenden y se apagan: sirven a la vez de leyenda de los colores y para dejar de ver lo que no
+  interesa (por ejemplo, las tareas). Apagado, un botón se ve tachado y con un círculo vacío. El filtro
+  vale para los puntos y el total del mes y para la lista del día, se aplica al instante (sin volver a pedir nada) y
+  **se recuerda en este navegador**. Si un día tiene eventos ocultos, el panel lo dice ("2 eventos ocultos
+  por el filtro"), así "no hay nada" no se confunde con "lo ocultaste". Si se agrega un evento propio con
+  "Calendario" apagado, vuelve a prenderse solo (si no, parecería que no se guardó).
+- **Eventos completados.** Lo ya completado **no se muestra por defecto**: el calendario sirve para ver
+  lo que falta, y un mes lleno de cosas hechas lo taparía. Están cerrados (1) una **tarea ya tildada**
+  (de hoy o de un día pasado, suelta o armada por una repetitiva), (2) una **tarea marcada como fallida**
+  (una atrasada que se dio por perdida) y (3) un **recordatorio de Contactos
+  cuyo día ya pasó** (un recordatorio no se tilda: se considera completado cuando pasó su fecha; el de hoy
+  todavía no, y uno diario está completado en cada día anterior a hoy). En **"Más filtros"** está el botón
+  **"Mostrar completados y fallidos"**. Con él prendido se distinguen de las pendientes: en la lista del día
+  el título va **tachado y más apagado** y lleva la marca **"Completada"** o **"Fallida"** (con ícono, no
+  solo estilo); en el mes, el punto del origen queda **vacío** (solo el contorno) cuando todo lo de ese día
+  ya está cerrado, y lleno si falta algo; y el nombre accesible de la casilla dice cuántos están completados
+  y cuántos fallidos. Se recuerda en este navegador, y "Mostrar todo" no lo cambia.
+  Con "Tareas" y "Contactos" apagados el botón queda deshabilitado. Finanzas y los manuales no tienen
+  estado completado.
+- **Filtros avanzados por repetición.** El botón **"Más filtros"** abre un panel donde, para **Tareas** y
+  **Contactos**, se elige qué tipos de repetición mostrar: *Una sola vez* (las tareas sueltas y los
+  recordatorios que no se repiten), *Diarias*, *Semanales*, *Mensuales* y *Anuales*. Por ejemplo, se pueden
+  ocultar las tareas diarias —que ocuparían todos los días— y ver las semanales, mensuales y anuales. Tareas
+  y Contactos se filtran por separado. El botón avisa con un número cuántos tipos hay ocultos (aun con el
+  panel cerrado, así el filtro no pasa inadvertido) y aparece **"Mostrar todo"**, que quita todas las
+  restricciones (también vuelve a prender los orígenes apagados). Si un origen está apagado entero, sus
+  repeticiones se ven deshabilitadas y lo explican. El filtro vale para los puntos del mes, el total y la
+  lista del día (que avisa cuántos eventos quedaron ocultos), y se recuerda en este navegador. En pantallas
+  anchas el panel flota sobre la grilla (no la deforma); en las angostas se despliega en el lugar. Escape lo
+  cierra y devuelve el foco al botón.
+- **Año.** Los doce meses como mini calendarios (entran en cascada); tocar uno lo abre. Se llega con el
+  selector "Mes / Año".
+- **Panel del día elegido.** El número grande, el día de la semana y el mes, cuándo cae respecto de hoy
+  ("Hoy", "Mañana", "En 12 días", "Hace 3 días"), la semana ISO y el día del año, los botones de día
+  anterior y siguiente, un campo "Ir a una fecha" y, abajo, los **eventos del día** con el botón
+  "Agregar evento". A partir de 1280 px mide lo mismo que el calendario y, si hay muchos eventos, la lista
+  se desplaza por adentro (no estira la pantalla); en una ventana baja el número del día se achica para
+  dejarle más lugar. Por debajo de ese ancho va debajo del calendario y crece con lo que tenga.
+- **Cómo se navega**:
+  - Con el mouse o el dedo: tocar un día, los botones de mes (o de año) anterior y siguiente y, en una
+    pantalla táctil, deslizar hacia los costados para cambiar de mes. El botón "Hoy" aparece solo
+    cuando se está lejos de hoy.
+  - Con el teclado: se entra a la grilla en una sola casilla (la del día elegido) y adentro, las
+    flechas mueven un día o una semana, Inicio y Fin van al lunes y al domingo, Re Pág y Av Pág cambian
+    de mes (con Mayús, de año). Moverse con el teclado cambia el día elegido y el foco lo acompaña,
+    también al pasar de un mes a otro.
+  - Yendo directo a una fecha desde el campo del panel.
+  - Al cambiar de mes se conserva el número de día elegido; si el mes no lo tiene (el 31 en abril),
+    pasa al último día.
+- **Animaciones**: la grilla se desplaza hacia el lado al que se va, el título del mes sube o baja, la
+  pastilla se desliza con un resorte, pasar de mes a año es un zoom y el contenido del panel se
+  desliza al cambiar de día. Con la preferencia de reducir movimiento todo cambia sin desplazarse.
+- **Accesibilidad**: la grilla es una tabla con encabezados de columna y de fila; cada día tiene su
+  fecha completa como nombre ("miércoles, 21 de octubre de 2026, hoy"), el elegido se marca como
+  presionado y el día de hoy como fecha actual; el día elegido se anuncia al cambiar.
+
+### Los eventos
+
+Cada evento muestra su **hora** a la izquierda ("Todo el día" si no tiene), el título, una línea de
+contexto, y una insignia con su **origen** (Finanzas, Contactos, Tareas o Calendario) con su ícono y su
+color; el mismo color es el del **borde izquierdo** de la fila. El color ayuda a distinguirlos de un
+vistazo pero nunca va solo. El orden es el del
+día: primero lo de **todo el día** y después **de la hora más temprana a la más tardía**; con la misma hora,
+por origen (Finanzas, Contactos, Tareas, Calendario) y por título.
+
+| Origen | Qué muestra | Contexto | Se cambia en |
+|---|---|---|---|
+| Finanzas | "Vence: *concepto*" el día de la fecha límite de una deuda **no saldada**, sin hora | "Marcos te debe $ 1.500,00" o "Le debés $ 800,00 a *nombre*" (lo que falta pagar, no el monto original) | Finanzas |
+| Contactos | El título del recordatorio, con su hora, en cada día que cae (única, diaria, semanal, mensual, anual) | El nombre del contacto | Contactos |
+| Tareas | Las tareas, con su hora y en su día; las tildadas vienen marcadas `completado` y las eliminadas no aparecen | La categoría y "Se repite" | Tareas |
+| Calendario | Lo que la persona agrega acá: título, día, hora opcional y notas | Las notas | El propio calendario |
+
+- Los eventos de **otros módulos no se editan acá**: llevan un enlace ("Ver en Tareas: …") al módulo de
+  origen. Los **manuales** se editan y se eliminan desde la lista (con confirmación al eliminar).
+- **Agregar un evento**: botón "Agregar evento" del panel. El día que está elegido ya viene puesto; se pide
+  el título, el día y, si se quiere, la hora y notas. Sin hora, es de todo el día. Los errores se explican
+  junto a cada campo.
+- **Las tareas repetitivas** se muestran también en los días que vienen (aunque todavía no existan como
+  tarea, que se arma recién el día que llega), pero nunca antes del día en que se crearon. Una tarea
+  atrasada, sea suelta o de una repetitiva, se queda en el día en que había que hacerla (y además está en
+  "Atrasadas" de Tareas). Regla: lo pendiente que ve el calendario es lo mismo que ve la lista de Tareas;
+  lo que se marcó como fallido figura como fallido y queda oculto por defecto.
+- **Los recordatorios** se muestran en los días pasados también (el calendario se puede mirar hacia atrás),
+  incluso los de una sola vez que ya pasaron: al pasar al histórico el evento sale de su entrada (si la persona
+  la elimina o vacía el historial, ese evento deja de verse). Se ven como completados.
+- No hay cumpleaños automáticos: si se quiere verlos, se crean como recordatorio anual del contacto.
+
+### Cómo funciona
+
+- **Los eventos se arman al leer.** Lo de otros módulos no se copia a ninguna tabla del calendario: cada
+  módulo aporta los suyos a partir de sus propias tablas, así lo que se ve siempre coincide con el módulo de
+  origen. Solo los eventos manuales se guardan (tabla `eventos_de_calendario`).
+- La pantalla pide los eventos del **mes que se ve** (las seis semanas de la grilla, con los días de los
+  meses vecinos); al cambiar de mes sigue mostrando lo anterior hasta que llega lo
+  nuevo, así la grilla no parpadea. Agregar, editar o eliminar vuelve a pedirlos.
+- **Todo es de días de calendario y horas de reloj de la persona** ("AAAA-MM-DD" y "HH:MM"), sin zona
+  horaria: un evento "a las 15:00" es a las 15:00 de donde esté.
+- **"Hoy" es el del dispositivo** y se calcula recién después de montarse la pantalla (en el servidor
+  no se conoce la zona de quien mira): hasta entonces se reserva el lugar con un esqueleto del mismo
+  tamaño. Se vuelve a calcular cada minuto, así a medianoche el marcador pasa solo al día nuevo.
+- Las cuentas de calendario son funciones puras en `packages/shared/src/calendario/calendario.ts`
+  (semanas de un mes, número de semana ISO, sumar meses, mismo día en otro mes), con tests propios.
+- Rango: de 1900 a 2200. Los botones se deshabilitan al llegar a los extremos.
+
+### API
+
+Todas exigen sesión y filtran por la persona de la sesión (el `userId` sale siempre de la sesión; un evento
+de otra persona responde 404).
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /api/calendario/eventos?desde=&hasta=` | Todos los eventos entre dos días (inclusive), de todos los módulos y ordenados. Hasta **70 días** de una vez. Devuelve `{ eventos: [{ id, origen, titulo, detalle, dia, hora, repeticion, completado }] }`; `repeticion` es `unica`, `diaria`, `semanal`, `mensual` o `anual` para Tareas (una suelta es `unica`) y Contactos, y `null` para Finanzas y los manuales; `completado` es `true` en las tareas tildadas y en los recordatorios de un día anterior a hoy (la web los oculta salvo que se pida verlos); Finanzas y los manuales traen `false` |
+| `POST /api/calendario/eventos` | Agrega un evento manual (`titulo`, `notas`, `fecha`, `hora`). 201; 409 si ya tiene 2.000 |
+| `PUT /api/calendario/eventos/:id` | Cambia un evento manual |
+| `DELETE /api/calendario/eventos/:id` | Lo elimina (borrado lógico) |
+
+### Reglas y límites
+
+- Título de hasta 120 caracteres y notas de hasta 500; el día tiene que existir y estar entre 1900 y 2200;
+  la hora, de 00:00 a 23:59. Un evento manual puede estar en un día pasado.
+- **Hasta 2.000 eventos manuales** por persona (los eliminados no cuentan).
+- Un evento manual eliminado se borra en definitivo a los 30 días (`limpiarCalendario`, en la misma corrida
+  horaria que la de contactos y tareas). Los eventos que ya pasaron no se borran.
+
+### Dónde está
+
+- Compartido: `packages/shared/src/calendario/` (`calendario.ts` para las cuentas de fechas y `eventos.ts`
+  para los tipos, el esquema del evento manual, `ocurrenciasEnRango` y el orden `compararEventos`).
+- Base: `packages/db/src/esquema/calendario.ts` (migración `0025_eventos_de_calendario`).
+- API: `apps/api/src/rutas/calendario.ts`; `servicios/calendario/` (`eventos.ts` junta todo,
+  `eventos-manuales.ts`, `limpieza.ts`) y el aporte de cada módulo en `servicios/finanzas/calendario.ts`,
+  `servicios/contactos/calendario.ts` y `servicios/tareas/calendario.ts`.
+- Web: `apps/web/src/app/calendario/`, `apps/web/src/componentes/calendario/` (`calendario-completo`,
+  `vista-de-mes`, `vista-de-anio`, `panel-del-dia`, `eventos-del-dia`, `formulario-de-evento`,
+  `filtro-de-origenes`, `filtros-avanzados`, `usar-filtro-de-eventos`, `origenes`) y
+  `apps/web/src/lib/api-calendario.ts` y `apps/web/src/lib/preferencias-calendario.ts`.
+- Tests: `packages/shared/src/calendario/*.test.ts`, `apps/api/src/rutas/calendario.integracion.test.ts`,
+  `apps/api/src/servicios/calendario/limpieza.integracion.test.ts` y `apps/web/e2e/calendario.spec.ts` y
+  `calendario-eventos.spec.ts`.
+
+### Límites conocidos
+
+- Los eventos manuales son **de un solo día y no se repiten** (hay recordatorios y tareas repetitivas para
+  eso) ni tienen hora de fin.
+- La vista de año no marca los días con eventos (solo la de mes) y no hay vista de semana o de día.
+- Las tareas tildadas no se muestran (solo las pendientes), y desde el calendario no se tildan ni se
+  editan las cosas de otros módulos.
+- Las deudas sin fecha límite no aparecen.
+- La grilla marca un punto por origen (como mucho cuatro) y el total de eventos; la lista completa está en
+  el panel. No muestra "qué tan cargado" está un día más que con ese número. La vista de año no marca los días.
+- El filtro es por origen y, para Tareas y Contactos, por repetición; no por palabra, por categoría de
+  tarea ni por contacto. Finanzas y los eventos manuales no tienen repetición, así que no tienen filtro
+  avanzado.
+- La repetición de una tarea ya armada es la de su regla; si la regla se borra del todo (a los 30 días de
+  eliminarla) sus tareas viejas pasan a verse como "Una sola vez".
+- Las semanas empiezan el lunes y no se puede cambiar.
+
+---
+
 ## Sistema visual
 
 Todos los colores, tamaños, radios y duraciones salen de `packages/ui-tokens`. Ningún
 componente escribe un valor suelto.
 
 - **Colores:** base neutra (zinc) y un único acento azul petróleo, reservado para la
-  acción principal de cada pantalla, lo seleccionado, los enlaces y el foco.
+  acción principal de cada pantalla, lo seleccionado, los enlaces y el foco. Aparte, cuatro
+  **colores de origen** (naranja, azul, violeta y rosa, con su fondo suave y su texto) para
+  distinguir de qué módulo viene algo mezclado con lo de otros (los eventos del calendario);
+  siempre con ícono y nombre, y con el contraste verificado en los dos temas.
 - **Marca:** la aplicación se llama gestorIA. Hay dos versiones del logotipo, una con el
   nombre y otra con solo el símbolo, más un favicon propio.
 - **Modo claro y oscuro** desde el inicio, con un selector de dos posiciones en la barra
@@ -911,20 +2035,54 @@ quede en una franja centrada más angosta que el resto.
 
 Dónde: `apps/web/src/componentes/layout/`, `apps/web/src/app/layout.tsx`.
 
-### Marco de la aplicación: tres columnas
+### Marco de la aplicación: navegación, contenido y widgets
 
 Las pantallas con sesión iniciada (`/inicio`, `/admin`, `/finanzas` y las que se sumen) usan
-`EstructuraDeApp`, que divide el cuerpo en tres columnas: **navegación** a la
+`EstructuraDeApp`, que divide el cuerpo en hasta tres columnas: **navegación** a la
 izquierda, **contenido** en el medio (la más ancha, porque es lo que se está mirando)
-y **widgets** a la derecha, que por ahora solo reserva el lugar —se completa con datos
-reales junto con los módulos que se los den. Es una decisión explícita de estructura,
-tomada antes de empezar el primer módulo, para no rehacer cada pantalla después.
+y **widgets** a la derecha. Los widgets los pasa cada página (`widgets=`) y dependen de
+dónde está parada la persona:
+
+- **`/finanzas`** muestra los widgets de Finanzas en dos carruseles, uno de texto y otro de
+  gráficos (ver "Widgets de Finanzas").
+- **`/contactos`** hace lo mismo con los widgets de Contactos (ver "Contactos", Widgets).
+- **`/inicio`** no tiene columna de widgets: sus widgets son el contenido principal y ocupan
+  el lugar de las dos columnas (ver `/inicio`).
+- Una pantalla sin widgets (`/admin`) queda con dos columnas, sin una tercera vacía.
+
+Es una decisión explícita de estructura, tomada antes de empezar el primer módulo, para no
+rehacer cada pantalla después.
 
 Cada página la usa a propósito, componiéndola igual que cualquier otro componente
 (nada de layouts de ruta implícitos: se ve en cada `page.tsx` qué marco tiene). Las
 pantallas fuera de la aplicación (`/ingresar`, `/cambiar-password`,
 `/correo-confirmado`) no la usan: son flujos de una sola tarea, sin nada a lo que
 navegar todavía.
+
+Las dos columnas laterales **se pueden esconder**, para quien prefiere no verlas (por ejemplo, los
+widgets). **Esconder una columna no mueve ni cambia de tamaño nada del resto de la pantalla**: la grilla
+conserva sus tres anchos, así que el contenido y la otra columna quedan exactamente donde estaban, y el
+lugar de la escondida queda vacío. La columna se desliza hacia su borde mientras se desvanece
+(`transform` y `opacity`) hasta quedar invisible: tampoco recibe el foco del teclado ni la lee un
+lector de pantalla. Con la preferencia de reducir movimiento no hay desplazamiento ni pulso.
+
+Cada una tiene una **pestaña pegada al borde de la ventana**, a media altura (la del menú a la
+izquierda, la de los widgets a la derecha), que está siempre, con la columna abierta o cerrada:
+- Abierta es una pastilla blanca con la flecha en el color de acento; **cerrada se llena de acento**,
+  para que se encuentre fácil cuando la columna ya no está.
+- La flecha **gira media vuelta con un resorte** al cambiar de estado, y al esconder la columna la
+  pestaña emite **un único pulso** (un aro que se agranda y se apaga). Al recargar con la columna ya
+  escondida no hay pulso ni giro: nace en su posición.
+- Al pasar el mouse **se asoma** unos píxeles hacia el contenido y muestra al costado un cartel con lo que
+  hace ("Ocultar el menú", "Mostrar los widgets"); con el teclado, el cartel aparece al enfocarla. Al
+  presionarla se achica un poco.
+- Lleva `aria-expanded`, `aria-controls` y el mismo texto como nombre accesible.
+
+La elección es **por dispositivo** (`localStorage`, como el tema) y se recuerda al recargar y al cambiar
+de pantalla; un script que corre antes del primer pintado pone el estado en `<html>`, así que quien dejó
+una columna escondida nunca la ve abierta un instante. Solo hay pestaña donde la columna existe: la del
+menú desde `md`, la de los widgets desde `lg` y únicamente en pantallas que tienen widgets (no en
+`/inicio` ni `/admin`). Dónde: `pestana-de-columna.tsx`, `lib/columnas-plegables.ts`.
 
 Las columnas laterales son `sticky`, con el tope pegado a la barra superior
 (`--alto-navbar`, la misma variable que define su altura): acompañan el scroll hasta
@@ -933,6 +2091,16 @@ angostas no entran las tres columnas: los widgets se ocultan primero (`lg` en
 adelante) y, si todavía no entra, también la navegación (`md` en adelante), dejando
 solo el contenido central — en ese caso, entrar a cada módulo se hace desde la barra
 superior.
+
+**El contenido central queda centrado en la pantalla.** Como el menú (220 px) y los widgets (336 px)
+miden distinto, centrarlo "entre las dos columnas" lo corría hacia un lado. Desde `xl` (1280 px) la
+grilla tiene tres pistas: las de los costados son `1fr` con el mismo mínimo, así que miden lo mismo
+(`minmax(336px, 1fr)` con widgets y `minmax(220px, 1fr)` sin ellos, como en administración) y el medio
+llega a 56 rem; el menú se pega al borde izquierdo y los widgets al derecho dentro de su pista. Sin
+lugar para igualar los costados (por debajo de `xl`) se usa el reparto de siempre. Esconder el menú o los
+widgets no mueve el contenido. La excepción son **inicio y calendario**, páginas "fusionadas"
+(`<EstructuraDeApp fusionada>`): su contenido ocupa también el lugar de los widgets y llega hasta el
+margen derecho. Tests: `apps/web/e2e/layout.spec.ts`.
 
 La grilla de las tres columnas no tiene ancho máximo ni se centra a sí misma: las
 columnas laterales quedan pegadas a los bordes reales de la ventana (con el mismo
@@ -952,7 +2120,7 @@ centrado dentro de su columna, no pegado a un borde: mismo criterio que ya usaba
 pantallas antes de tener el marco de tres columnas.
 
 Dónde: `apps/web/src/componentes/layout/estructura-de-app.tsx`,
-`menu-de-navegacion.tsx`, `panel-de-widgets.tsx`, `apps/web/src/lib/usar-cerrar-sesion.ts`.
+`menu-de-navegacion.tsx`, `apps/web/src/lib/usar-cerrar-sesion.ts`.
 
 ### `/ingresar`
 
@@ -972,8 +2140,12 @@ Detalles de uso:
 
 ### `/inicio`
 
-Placeholder, protegida, dentro del marco de tres columnas. Saluda por nombre, dice con
-qué cuenta se entró y permite salir. Los módulos se suman cuando se pidan.
+Protegida. Saluda por nombre, dice con qué cuenta se entró y muestra debajo los **widgets de
+cada módulo** (Finanzas y Contactos, una sección cada uno) en una cuadrícula, todos a la vez y
+con los avisos primero: en esta pantalla los widgets son el contenido principal y ocupan el
+lugar de las columnas de contenido y de widgets, que acá se fusionan. Ver "Widgets de
+Finanzas" y "Contactos" (Widgets) para qué muestra cada uno. Los módulos nuevos suman sus
+widgets cuando se pidan.
 
 ### `/cambiar-password`
 
@@ -988,6 +2160,18 @@ Protegida y solo para admins. Ver Autenticación, Panel de admin.
 ### `/finanzas`
 
 Protegida. Ver Gestión de ingresos y gastos.
+
+### `/contactos`
+
+Protegida. Ver Contactos.
+
+### `/tareas`
+
+Protegida. Ver Tareas.
+
+### `/calendario`
+
+Protegida. Ver Calendario.
 
 ### Protección de rutas
 

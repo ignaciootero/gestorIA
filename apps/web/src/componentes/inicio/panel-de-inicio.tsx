@@ -1,4 +1,4 @@
-// Contenido de la pantalla de inicio.
+// Contenido de la pantalla de inicio: un saludo y los widgets de cada módulo.
 //
 // Verifica la sesión contra la API antes de mostrar nada. El proxy ya redirige
 // a quien no tiene cookie, pero eso es solo para evitar un destello de pantalla
@@ -9,9 +9,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { CuadriculaDeWidgetsDeContactos } from "@/componentes/contactos/widgets/widgets-de-contactos";
+import { CuadriculaDeWidgetsDeFinanzas } from "@/componentes/finanzas/widgets/widgets-de-finanzas";
 import { Aviso } from "@/componentes/ui/aviso";
 import { Boton } from "@/componentes/ui/boton";
-import { Tarjeta } from "@/componentes/ui/tarjeta";
 import { URL_API } from "@/lib/entorno";
 import { interpretarError } from "@/lib/mensajes-de-error";
 
@@ -68,7 +69,7 @@ export function PanelDeInicio() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
       <header className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Hola, {yo.nombre}</h1>
         <p className="mt-1 text-sm text-texto-secundario">
@@ -77,13 +78,8 @@ export function PanelDeInicio() {
         </p>
       </header>
 
-      <Tarjeta className="p-6">
-        <h2 className="text-lg font-medium">Todavía no hay módulos</h2>
-        <p className="mt-2 text-sm text-texto-secundario">
-          Los módulos de gastos, contactos, calendario, facturas y tareas se van a ir sumando de a
-          uno. Por ahora lo que funciona es la cuenta: entrar, salir y el control de acceso.
-        </p>
-      </Tarjeta>
+      <CuadriculaDeWidgetsDeFinanzas />
+      <CuadriculaDeWidgetsDeContactos />
     </div>
   );
 }

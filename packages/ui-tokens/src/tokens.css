@@ -33,6 +33,20 @@
   --color-peligro: #b91c1c;
   --color-peligro-fondo: #fee2e2;
 
+  /* Origen de lo que se muestra mezclado (eventos del calendario) */
+  --color-origen-manual: #c2410c;
+  --color-origen-manual-fondo: #ffedd5;
+  --color-origen-manual-texto: #7c2d12;
+  --color-origen-finanzas: #2563eb;
+  --color-origen-finanzas-fondo: #dbeafe;
+  --color-origen-finanzas-texto: #1e3a8a;
+  --color-origen-contactos: #7c3aed;
+  --color-origen-contactos-fondo: #ede9fe;
+  --color-origen-contactos-texto: #4c1d95;
+  --color-origen-tareas: #db2777;
+  --color-origen-tareas-fondo: #fce7f3;
+  --color-origen-tareas-texto: #831843;
+
   /* Formas */
   --radio-control: 0.5rem;
   --radio-tarjeta: 0.75rem;
@@ -90,6 +104,19 @@
   --color-advertencia-fondo: #292007;
   --color-peligro: #f87171;
   --color-peligro-fondo: #300c0c;
+
+  --color-origen-manual: #fb923c;
+  --color-origen-manual-fondo: #431407;
+  --color-origen-manual-texto: #fed7aa;
+  --color-origen-finanzas: #60a5fa;
+  --color-origen-finanzas-fondo: #172554;
+  --color-origen-finanzas-texto: #bfdbfe;
+  --color-origen-contactos: #a78bfa;
+  --color-origen-contactos-fondo: #2e1065;
+  --color-origen-contactos-texto: #ddd6fe;
+  --color-origen-tareas: #f472b6;
+  --color-origen-tareas-fondo: #500724;
+  --color-origen-tareas-texto: #fbcfe8;
   /* Sobre fondo oscuro una sombra suave no se ve: se compensa con opacidad. */
   --sombra-sutil: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
   --sombra-elevada: 0 4px 6px -2px rgb(0 0 0 / 0.45), 0 10px 20px -4px rgb(0 0 0 / 0.55);
@@ -124,6 +151,19 @@
     --color-advertencia-fondo: #292007;
     --color-peligro: #f87171;
     --color-peligro-fondo: #300c0c;
+
+    --color-origen-manual: #fb923c;
+    --color-origen-manual-fondo: #431407;
+    --color-origen-manual-texto: #fed7aa;
+    --color-origen-finanzas: #60a5fa;
+    --color-origen-finanzas-fondo: #172554;
+    --color-origen-finanzas-texto: #bfdbfe;
+    --color-origen-contactos: #a78bfa;
+    --color-origen-contactos-fondo: #2e1065;
+    --color-origen-contactos-texto: #ddd6fe;
+    --color-origen-tareas: #f472b6;
+    --color-origen-tareas-fondo: #500724;
+    --color-origen-tareas-texto: #fbcfe8;
 
     --sombra-sutil: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
     --sombra-elevada: 0 4px 6px -2px rgb(0 0 0 / 0.45), 0 10px 20px -4px rgb(0 0 0 / 0.55);

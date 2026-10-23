@@ -58,7 +58,8 @@ export default defineConfig({
       url: URL_WEB,
       reuseExistingServer: !process.env["CI"],
       timeout: 120_000,
-      env: { NEXT_PUBLIC_URL_API: URL_API },
+      // Otra carpeta de compilación: con `pnpm dev` abierto (puerto 3000) no chocan.
+      env: { NEXT_PUBLIC_URL_API: URL_API, NEXT_DIST_DIR: ".next-e2e" },
     },
   ],
 });

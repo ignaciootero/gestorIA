@@ -17,9 +17,14 @@ import { registrarPeticiones } from "./middlewares/logs.ts";
 import { cargarSesion } from "./middlewares/sesion.ts";
 import { rutasDeAdmin } from "./rutas/admin.ts";
 import { rutasDeAuth } from "./rutas/auth.ts";
+import { rutasDeCalendario } from "./rutas/calendario.ts";
+import { rutasDeContactos } from "./rutas/contactos.ts";
+import { rutasDeDeudas } from "./rutas/deudas.ts";
 import { rutasDeFinanzas } from "./rutas/finanzas.ts";
 import { rutasDeSalud } from "./rutas/salud.ts";
+import { rutasDeTareas } from "./rutas/tareas.ts";
 import { rutasDeSesion } from "./rutas/yo.ts";
+import type { FuenteDeCotizaciones } from "./servicios/finanzas/cotizaciones.ts";
 import type { EntornoHono } from "./tipos.ts";
 
 export type OpcionesApp = {
@@ -27,9 +32,17 @@ export type OpcionesApp = {
   auth: Auth;
   logger: Logger;
   entorno: EntornoApi;
+  /** De dónde salen las cotizaciones. Sin esto, la fuente pública real (los tests pasan una falsa). */
+  fuenteDeCotizaciones?: FuenteDeCotizaciones;
 };
 
-export function crearApp({ cliente, auth, logger, entorno }: OpcionesApp): Hono<EntornoHono> {
+export function crearApp({
+  cliente,
+  auth,
+  logger,
+  entorno,
+  fuenteDeCotizaciones,
+}: OpcionesApp): Hono<EntornoHono> {
   const app = new Hono<EntornoHono>();
 
   // El orden importa: primero el id de peticion, para que todo lo que se loguee
@@ -76,7 +89,11 @@ export function crearApp({ cliente, auth, logger, entorno }: OpcionesApp): Hono<
   app.route("/", rutasDeSalud(cliente));
   app.route("/", rutasDeSesion());
   app.route("/", rutasDeAdmin(cliente, auth));
-  app.route("/", rutasDeFinanzas(cliente));
+  app.route("/", rutasDeDeudas(cliente, { fuenteDeCotizaciones }));
+  app.route("/", rutasDeFinanzas(cliente, { fuenteDeCotizaciones }));
+  app.route("/", rutasDeContactos(cliente));
+  app.route("/", rutasDeTareas(cliente));
+  app.route("/", rutasDeCalendario(cliente));
 
   app.notFound(manejadorNoEncontrado);
   app.onError(manejadorDeErrores);

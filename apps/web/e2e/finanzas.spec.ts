@@ -18,12 +18,27 @@ test.beforeEach(async () => {
   await limpiarBaseDePruebas();
 });
 
+// El carrusel de widgets de la columna lateral cambia de widget solo cada doce
+// segundos, y sus textos (descripciones, categorías, cuentas) coinciden con los de
+// la pantalla: en un test largo un `getByText` podría encontrar dos elementos según
+// el momento. Con reducir movimiento se queda en el primer widget, y el avance
+// automático tiene sus propios tests en widgets.spec.ts.
+test.use({ reducedMotion: "reduce" });
+
 async function entrar(pagina: Page, cuenta: CuentaDePrueba): Promise<void> {
   await pagina.goto("/ingresar");
   await pagina.getByLabel("Usuario o correo").fill(cuenta.usuario);
   await pagina.getByLabel("Contraseña").fill(cuenta.password);
   await pagina.getByRole("button", { name: "Entrar" }).click();
   await expect(pagina).toHaveURL(/\/inicio$/);
+}
+
+/**
+ * Un bloque de la pestaña de estadísticas, ubicado por su nombre: se presentan en orden
+ * aleatorio, así que no se puede apuntar a "el primero" ni "el último".
+ */
+function bloque(pagina: Page, nombre: string): Locator {
+  return pagina.getByRole("region", { name: nombre, exact: true });
 }
 
 /** "AAAA-MM-DDT10:00" de hace `dias` días, en hora local: el formato de un <input type="datetime-local">. */
@@ -42,6 +57,18 @@ function nombreDelPeriodoActual(): string {
 }
 
 /** Desde el estado vacío del módulo: abre el primer período con los valores propuestos. */
+/**
+ * Abre el formulario de "Agregar movimiento". El botón no está en las pestañas de Cuentas ni de Deudas
+ * (ahí no se cargan movimientos): si no se ve, se pasa antes a Movimientos.
+ */
+async function abrirAgregarMovimiento(pagina: Page): Promise<void> {
+  const boton = pagina.getByRole("button", { name: "Agregar movimiento" });
+  if (!(await boton.isVisible())) {
+    await pagina.getByRole("tab", { name: "Movimientos" }).click();
+  }
+  await boton.click();
+}
+
 async function abrirPrimerPeriodo(pagina: Page): Promise<void> {
   await pagina.getByRole("button", { name: "Abrir mi primer período" }).click();
   const dialogo = pagina.getByRole("dialog", { name: "Abrir período" });
@@ -85,19 +112,68 @@ async function guardarAceptandoSaldoNegativo(
   if (await confirmar.isVisible()) await confirmar.click();
 }
 
+/**
+ * Deja dos períodos con gastos en Alimentación: el primero abrió hace 10 días y cerró hace
+ * 5 (con 100 gastados hace 8 días), y el segundo, abierto desde entonces, con 300 gastados
+ * ahora. Queda elegido el segundo.
+ */
+async function prepararDosPeriodosConGastos(pagina: Page): Promise<void> {
+  await pagina.getByRole("button", { name: "Abrir mi primer período" }).click();
+  const abrir = pagina.getByRole("dialog", { name: "Abrir período" });
+  await abrir.getByLabel("Empieza el").fill(haceDias(10));
+  await abrir.getByRole("button", { name: "Abrir período" }).click();
+  await expect(pagina.getByRole("heading", { name: "Abrir período" })).toBeHidden();
+  await agregarMovimiento(pagina, {
+    importe: "100",
+    descripcion: "Súper viejo",
+    categoria: "Alimentación",
+    fecha: haceDias(8),
+  });
+
+  await pagina.getByRole("button", { name: "Cerrar período" }).click();
+  const cerrar = pagina.getByRole("dialog", { name: "Cerrar período" });
+  await cerrar.getByRole("radio", { name: "Elegir fecha y hora" }).click();
+  await cerrar.getByLabel("Cierra el").fill(haceDias(5));
+  await cerrar.getByRole("button", { name: "Cerrar período" }).click();
+  const siguiente = pagina.getByRole("dialog", { name: "Abrir el siguiente período" });
+  await siguiente.getByRole("button", { name: "Abrir período" }).click();
+  await expect(pagina.getByRole("heading", { name: "Abrir el siguiente período" })).toBeHidden();
+
+  await agregarMovimiento(pagina, {
+    importe: "300",
+    descripcion: "Súper nuevo",
+    categoria: "Alimentación",
+  });
+}
+
 async function agregarMovimiento(
   pagina: Page,
-  datos: { tipo?: "Ingreso" | "Gasto"; importe: string; descripcion: string; categoria?: string },
+  datos: {
+    tipo?: "Ingreso" | "Gasto";
+    importe: string;
+    descripcion: string;
+    categoria?: string;
+    /** Con el formato de un <input type="datetime-local">; por defecto, ahora. */
+    fecha?: string;
+  },
 ): Promise<void> {
-  await pagina.getByRole("button", { name: "Agregar movimiento" }).click();
+  // El formulario se abre desde Movimientos; al terminar se vuelve a la pestaña donde se estaba.
+  const pestanaDeOrigen = await pagina.getByRole("tab", { selected: true }).first().innerText();
+  await abrirAgregarMovimiento(pagina);
   await pagina.getByRole("heading", { name: "Agregar movimiento" }).waitFor();
   if (datos.tipo === "Ingreso") {
     await pagina.getByRole("radio", { name: "Ingreso" }).click();
   }
   await pagina.getByLabel("Importe").fill(datos.importe);
   await pagina.getByLabel("Descripción").fill(datos.descripcion);
+  if (datos.fecha) {
+    await pagina.getByLabel("Fecha y hora").fill(datos.fecha);
+  }
   if (datos.categoria) {
-    await pagina.getByLabel("Categoría").selectOption({ label: datos.categoria });
+    await pagina
+      .getByRole("dialog", { name: "Agregar movimiento" })
+      .getByLabel("Categoría", { exact: true })
+      .selectOption({ label: datos.categoria });
   }
   await guardarAceptandoSaldoNegativo(
     pagina,
@@ -105,6 +181,7 @@ async function agregarMovimiento(
     "Agregar movimiento",
   );
   await expect(pagina.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+  await pagina.getByRole("tab", { name: pestanaDeOrigen, exact: true }).click();
 }
 
 test.describe("acceso al módulo", () => {
@@ -157,14 +234,16 @@ test.describe("resumen y alta rápida de movimientos", () => {
     await agregarMovimiento(page, { tipo: "Ingreso", importe: "5000", descripcion: "Sueldo" });
     await agregarMovimiento(page, { importe: "1500.50", descripcion: "Supermercado" });
 
-    const tarjetaIngresos = page.getByText("Ingresos").locator("..");
+    // Solo el contenido: los widgets de la columna lateral repiten algunas de estas cifras.
+    const principal = page.getByRole("main");
+    const tarjetaIngresos = principal.getByText("Ingresos", { exact: true }).locator("..");
     await expect(tarjetaIngresos.getByText("$ 5.000,00")).toBeVisible();
 
-    const tarjetaGastos = page.getByText("Gastos").locator("..");
+    const tarjetaGastos = principal.getByText("Gastos", { exact: true }).locator("..");
     await expect(tarjetaGastos.getByText("$ 1.500,50")).toBeVisible();
 
     // 5000 - 1500,50 = 3499,50.
-    const tarjetaBalance = page.getByText("Balance del período").locator("..");
+    const tarjetaBalance = principal.getByText("Balance del período").locator("..");
     await expect(tarjetaBalance.getByText("$ 3.499,50")).toBeVisible();
   });
 
@@ -174,9 +253,9 @@ test.describe("resumen y alta rápida de movimientos", () => {
     await page.goto("/finanzas");
     await abrirPrimerPeriodo(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
-    await page.getByLabel("Categoría").selectOption({ label: "Transporte" });
-    await elegirCuenta(page.getByLabel("Cuenta"), "Banco");
+    await abrirAgregarMovimiento(page);
+    await page.getByLabel("Categoría", { exact: true }).selectOption({ label: "Transporte" });
+    await elegirCuenta(page.getByLabel("Cuenta", { exact: true }), "Banco");
     await page.getByLabel("Importe").fill("100");
     await page.getByLabel("Descripción").fill("Taxi");
     await guardarAceptandoSaldoNegativo(
@@ -186,10 +265,14 @@ test.describe("resumen y alta rápida de movimientos", () => {
     );
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
-    await expect(page.getByLabel("Categoría")).toHaveValue(/.+/);
-    await expect(page.getByLabel("Categoría").locator("option:checked")).toHaveText("Transporte");
-    await expect(page.getByLabel("Cuenta").locator("option:checked")).toHaveText(/^Banco \(/);
+    await abrirAgregarMovimiento(page);
+    await expect(page.getByLabel("Categoría", { exact: true })).toHaveValue(/.+/);
+    await expect(
+      page.getByLabel("Categoría", { exact: true }).locator("option:checked"),
+    ).toHaveText("Transporte");
+    await expect(page.getByLabel("Cuenta", { exact: true }).locator("option:checked")).toHaveText(
+      /^Banco \(/,
+    );
   });
 });
 
@@ -303,8 +386,10 @@ test.describe("cuentas y categorías", () => {
     await page.getByRole("button", { name: "Crear cuenta" }).click();
     await expect(page.getByRole("heading", { name: "Nueva cuenta" })).toBeHidden();
 
-    await expect(page.getByText("Ahorros")).toBeVisible();
-    await expect(page.getByText("$ 1.000,00")).toBeVisible();
+    // Solo el contenido: el disponible de los widgets también dice $ 1.000,00.
+    const principal = page.getByRole("main");
+    await expect(principal.getByText("Ahorros")).toBeVisible();
+    await expect(principal.getByText("$ 1.000,00")).toBeVisible();
   });
 
   test('el saldo con el que se crea una cuenta figura en su historial como "Carga inicial"', async ({
@@ -384,7 +469,7 @@ test.describe("cuentas y categorías", () => {
     await expect(filaCategoria.locator("span[style*='rgb(18, 52, 86)']")).toBeVisible();
 
     // Y en la fila del movimiento que la usa, en Movimientos.
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogoAgregar = page.getByRole("dialog", { name: "Agregar movimiento" });
     await dialogoAgregar.getByLabel("Importe").fill("100");
     await dialogoAgregar.getByLabel("Descripción").fill("Comida del gato");
@@ -417,9 +502,11 @@ test.describe("cuentas y categorías", () => {
     await page.getByRole("button", { name: "Eliminar" }).last().click();
     await expect(page.getByRole("heading", { name: "Eliminar categoría" })).toBeHidden();
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     await expect(
-      page.getByLabel("Categoría").locator("option", { hasText: "Entretenimiento" }),
+      page
+        .getByLabel("Categoría", { exact: true })
+        .locator("option", { hasText: "Entretenimiento" }),
     ).toHaveCount(0);
   });
 });
@@ -551,7 +638,7 @@ test.describe("cuentas: saldo, historial, ocultar y eliminar", () => {
       await expect(page.getByRole("heading", { name: "Eliminar cuenta" })).toBeHidden();
     }
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(dialogo.getByText(/No tenés ninguna cuenta/)).toBeVisible();
     await expect(dialogo.getByLabel("Importe")).toHaveCount(0);
@@ -570,6 +657,8 @@ test.describe("cuentas: saldo, historial, ocultar y eliminar", () => {
     await dialogo.getByLabel("Descripción").fill("Café");
     await dialogo.getByRole("button", { name: "Guardar movimiento" }).click();
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+    // El movimiento se cargó desde Movimientos: se vuelve a Cuentas para ver los saldos.
+    await page.getByRole("tab", { name: "Cuentas" }).click();
     await expect(page.locator("li", { hasText: "Caja chica" }).getByText("$ 70,00")).toBeVisible();
   });
 
@@ -592,7 +681,7 @@ test.describe("cuentas: saldo, historial, ocultar y eliminar", () => {
       .click();
     await expect(page.getByRole("heading", { name: "No se puede eliminar" })).toBeHidden();
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(dialogo.getByText(/todas están ocultas/)).toBeVisible();
     await expect(dialogo.getByRole("button", { name: "Crear una cuenta" })).toBeVisible();
@@ -628,7 +717,7 @@ test.describe("cuentas: saldo, historial, ocultar y eliminar", () => {
   }) => {
     await irACuentas(page);
 
-    await expect(page.getByRole("button", { name: /^Ocultar / })).toHaveCount(0);
+    await expect(page.getByRole("main").getByRole("button", { name: /^Ocultar / })).toHaveCount(0);
   });
 
   test("una cuenta sin movimientos se puede eliminar", async ({ page }) => {
@@ -673,20 +762,21 @@ test.describe("cuentas: saldo, historial, ocultar y eliminar", () => {
     await darleMovimientosABanco(page);
     await ocultarBanco(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(
       dialogo.getByLabel("Cuenta", { exact: true }).locator("option", { hasText: "Banco" }),
     ).toHaveCount(0);
     await dialogo.getByRole("button", { name: "Cancelar" }).click();
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+    await page.getByRole("tab", { name: "Cuentas" }).click();
 
     await page.getByRole("button", { name: /Cuentas ocultas/ }).click();
     await page.getByRole("button", { name: "Mostrar Banco" }).click();
     // Sin cuentas ocultas, la sección desaparece del todo (ni siquiera cerrada).
     await expect(page.getByRole("button", { name: /Cuentas ocultas/ })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     await expect(
       page
         .getByRole("dialog", { name: "Agregar movimiento" })
@@ -893,7 +983,7 @@ test.describe("transferencias entre cuentas", () => {
     await page.getByRole("button", { name: "Transferir", exact: true }).click();
     const dialogo = page.getByRole("dialog", { name: "Transferir entre cuentas" });
 
-    await expect(dialogo.getByLabel("Categoría")).toHaveCount(0);
+    await expect(dialogo.getByLabel("Categoría", { exact: true })).toHaveCount(0);
     await expect(dialogo.getByRole("radio", { name: "Gasto" })).toHaveCount(0);
     const origen = await dialogo
       .getByLabel("Cuenta de origen")
@@ -912,7 +1002,7 @@ test.describe("transferencias entre cuentas", () => {
     await irACuentas(page);
     await actualizarSaldo(page, "Banco", "500");
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     // Antes: tipo y una sola cuenta.
     await expect(dialogo.getByRole("radio", { name: "Gasto" })).toBeVisible();
@@ -925,7 +1015,7 @@ test.describe("transferencias entre cuentas", () => {
     await expect(dialogo.getByText(/no es un ingreso ni un gasto/)).toBeVisible();
     await expect(dialogo.getByRole("radio", { name: "Gasto" })).toHaveCount(0);
     // La categoría se resuelve sola: no hay nada que elegir.
-    await expect(dialogo.getByLabel("Categoría")).toHaveCount(0);
+    await expect(dialogo.getByLabel("Categoría", { exact: true })).toHaveCount(0);
     await elegirCuenta(dialogo.getByLabel("Cuenta de origen"), "Banco");
     await elegirCuenta(dialogo.getByLabel("Cuenta de destino"), "Tarjeta");
     await dialogo.getByLabel("Importe").fill("200");
@@ -936,6 +1026,8 @@ test.describe("transferencias entre cuentas", () => {
     );
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
 
+    // El movimiento se cargó desde Movimientos: se vuelve a Cuentas para ver los saldos.
+    await page.getByRole("tab", { name: "Cuentas" }).click();
     await expect(fila(page, "Banco").getByText("$ 300,00")).toBeVisible();
     await expect(fila(page, "Tarjeta").getByText("$ 200,00")).toBeVisible();
   });
@@ -945,7 +1037,7 @@ test.describe("transferencias entre cuentas", () => {
   }) => {
     await irACuentas(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await dialogo.getByText(CASILLA).click();
     await expect(dialogo.getByLabel("Cuenta de destino")).toBeVisible();
@@ -954,7 +1046,7 @@ test.describe("transferencias entre cuentas", () => {
 
     await expect(dialogo.getByLabel("Cuenta de destino")).toHaveCount(0);
     await expect(dialogo.getByRole("radio", { name: "Gasto" })).toBeVisible();
-    await expect(dialogo.getByLabel("Categoría")).toBeVisible();
+    await expect(dialogo.getByLabel("Categoría", { exact: true })).toBeVisible();
     // La descripción propuesta para la transferencia se limpia al desmarcar.
     await expect(dialogo.getByLabel("Descripción")).toHaveValue("");
   });
@@ -964,16 +1056,20 @@ test.describe("transferencias entre cuentas", () => {
   }) => {
     await irACuentas(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(
-      dialogo.getByLabel("Categoría").locator("option", { hasText: "Transferencia entre Cuentas" }),
+      dialogo
+        .getByLabel("Categoría", { exact: true })
+        .locator("option", { hasText: "Transferencia entre Cuentas" }),
     ).toHaveCount(0);
     await dialogo.getByRole("button", { name: "Cancelar" }).click();
 
     await page.getByRole("tab", { name: "Movimientos" }).click();
     await expect(
-      page.getByLabel("Categoría").locator("option", { hasText: "Transferencia entre Cuentas" }),
+      page
+        .getByLabel("Categoría", { exact: true })
+        .locator("option", { hasText: "Transferencia entre Cuentas" }),
     ).toHaveCount(0);
   });
 
@@ -998,7 +1094,7 @@ test.describe("transferencias entre cuentas", () => {
     await expect(dialogo.getByRole("checkbox", { name: CASILLA })).toBeChecked();
 
     await dialogo.getByText(CASILLA).click();
-    await expect(dialogo.getByLabel("Categoría")).toBeVisible();
+    await expect(dialogo.getByLabel("Categoría", { exact: true })).toBeVisible();
     await dialogo.getByLabel("Descripción").fill("Compra");
     await guardarAceptandoSaldoNegativo(
       page,
@@ -1006,7 +1102,7 @@ test.describe("transferencias entre cuentas", () => {
       "Editar movimiento",
     );
     await expect(page.getByText("Banco → Efectivo")).toHaveCount(0);
-    await expect(page.getByText("Compra")).toBeVisible();
+    await expect(page.getByText("Compra", { exact: true })).toBeVisible();
   });
 
   test("la transferencia no es ingreso ni gasto: no cambia los totales del resumen", async ({
@@ -1089,7 +1185,7 @@ test.describe("transferencias entre cuentas", () => {
     await irACuentas(page);
     await actualizarSaldo(page, "Banco", "500");
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(
       dialogo.getByLabel("Cuenta", { exact: true }).locator("option", { hasText: "Banco" }),
@@ -1105,7 +1201,7 @@ test.describe("transferencias entre cuentas", () => {
     await irACuentas(page);
     await actualizarSaldo(page, "Banco", "100");
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await elegirCuenta(dialogo.getByLabel("Cuenta", { exact: true }), "Banco");
 
@@ -1116,13 +1212,13 @@ test.describe("transferencias entre cuentas", () => {
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
 
     // Quedan $ 40: gastar 70 lo dejaría en -$ 30,00.
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     await elegirCuenta(dialogo.getByLabel("Cuenta", { exact: true }), "Banco");
     await dialogo.getByLabel("Importe").fill("70");
     await dialogo.getByLabel("Descripción").fill("Farmacia");
     await dialogo.getByRole("button", { name: "Guardar movimiento" }).click();
     await expect(dialogo.getByText("Esta cuenta quedaría con saldo negativo")).toBeVisible();
-    await expect(dialogo.getByText(/Banco quedaría en -\$ 30,00/)).toBeVisible();
+    await expect(dialogo.getByText(/Banco quedaría en -\$\s30,00/)).toBeVisible();
 
     await dialogo.getByRole("button", { name: "No, volver" }).click();
     await expect(dialogo.getByText("Esta cuenta quedaría con saldo negativo")).toHaveCount(0);
@@ -1137,7 +1233,7 @@ test.describe("transferencias entre cuentas", () => {
   test("aceptar el aviso guarda el gasto y la cuenta queda en negativo", async ({ page }) => {
     await irACuentas(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await elegirCuenta(dialogo.getByLabel("Cuenta", { exact: true }), "Efectivo");
     await dialogo.getByLabel("Importe").fill("80");
@@ -1146,6 +1242,8 @@ test.describe("transferencias entre cuentas", () => {
     await dialogo.getByRole("button", { name: "Sí, guardar igual" }).click();
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
 
+    // El movimiento se cargó desde Movimientos: se vuelve a Cuentas para ver los saldos.
+    await page.getByRole("tab", { name: "Cuentas" }).click();
     await expect(fila(page, "Efectivo").getByText("-$ 80,00")).toBeVisible();
   });
 
@@ -1153,7 +1251,7 @@ test.describe("transferencias entre cuentas", () => {
     await irACuentas(page);
     await agregarMovimiento(page, { importe: "50", descripcion: "Gasto previo" });
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await dialogo.getByRole("radio", { name: "Ingreso" }).click();
     await dialogo.getByLabel("Importe").fill("10");
@@ -1176,7 +1274,7 @@ test.describe("transferencias entre cuentas", () => {
 
     await dialogo.getByLabel("Importe").fill("150");
     await dialogo.getByRole("button", { name: "Transferir" }).click();
-    await expect(dialogo.getByText(/Banco quedaría en -\$ 50,00/)).toBeVisible();
+    await expect(dialogo.getByText(/Banco quedaría en -\$\s50,00/)).toBeVisible();
     // La cuenta de destino recibe plata: no es motivo de aviso.
     await expect(dialogo.getByText(/Efectivo quedaría/)).toHaveCount(0);
 
@@ -1224,7 +1322,7 @@ test.describe("transferencias entre cuentas", () => {
     }
 
     await expect(page.getByRole("button", { name: "Transferir", exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(dialogo.getByRole("checkbox", { name: CASILLA })).toHaveCount(0);
   });
@@ -1265,7 +1363,7 @@ test.describe("presupuestos", () => {
     await page.getByRole("tab", { name: "Presupuestos" }).click();
     await page.getByRole("button", { name: "Nuevo" }).click();
     await page.getByRole("heading", { name: "Nuevo presupuesto" }).waitFor();
-    await page.getByLabel("Categoría").selectOption({ label: "Otros" });
+    await page.getByLabel("Categoría", { exact: true }).selectOption({ label: "Otros" });
     await page.getByLabel("Límite por período").fill("100");
     await page.getByRole("button", { name: "Fijar presupuesto" }).click();
     await expect(page.getByRole("heading", { name: "Nuevo presupuesto" })).toBeHidden();
@@ -1282,7 +1380,7 @@ test.describe("presupuestos", () => {
     await agregarMovimiento(page, { importe: "150", descripcion: "Super", categoria: "Otros" });
     await page.getByRole("tab", { name: "Presupuestos" }).click();
     await page.getByRole("button", { name: "Nuevo" }).click();
-    await page.getByLabel("Categoría").selectOption({ label: "Otros" });
+    await page.getByLabel("Categoría", { exact: true }).selectOption({ label: "Otros" });
     await page.getByLabel("Límite por período").fill("100");
     await page.getByRole("button", { name: "Fijar presupuesto" }).click();
     await expect(page.getByRole("heading", { name: "Nuevo presupuesto" })).toBeHidden();
@@ -1305,7 +1403,7 @@ test.describe("presupuestos", () => {
     await agregarMovimiento(page, { importe: "150", descripcion: "Super", categoria: "Otros" });
     await page.getByRole("tab", { name: "Presupuestos" }).click();
     await page.getByRole("button", { name: "Nuevo" }).click();
-    await page.getByLabel("Categoría").selectOption({ label: "Otros" });
+    await page.getByLabel("Categoría", { exact: true }).selectOption({ label: "Otros" });
     await page.getByLabel("Límite por período").fill("100");
     await page.getByRole("button", { name: "Fijar presupuesto" }).click();
     await expect(page.getByRole("heading", { name: "Nuevo presupuesto" })).toBeHidden();
@@ -1351,11 +1449,234 @@ test.describe("estadísticas", () => {
     // contenido; por eso se apunta al <tspan> visible del eje, no al texto suelto.
     await expect(page.locator("tspan", { hasText: "Alimentación" })).toBeVisible();
 
-    // La leyenda distingue ingresos de gastos (no son dos barras iguales).
-    // (Hay otra leyenda, la del gráfico de una categoría: la de evolución es la primera.)
-    const leyenda = page.locator(".recharts-legend-wrapper").first();
-    await expect(leyenda.getByText("Ingresos")).toBeVisible();
-    await expect(leyenda.getByText("Gastos")).toBeVisible();
+    // La leyenda dice qué es cada tramo de la barra y la raya de lo que entró.
+    const leyenda = bloque(page, "Ingresos y gastos de los últimos períodos").getByRole("list", {
+      name: "Cómo leer el gráfico",
+    });
+    await expect(leyenda.getByText("Gastado", { exact: true })).toBeVisible();
+    await expect(leyenda.getByText("Sobró plata")).toBeVisible();
+    await expect(leyenda.getByText("Gastado de más")).toBeVisible();
+    await expect(leyenda.getByText("Hasta acá llegó lo que entró")).toBeVisible();
+  });
+
+  test("el balance del período se dice con texto: sobró plata", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await agregarMovimiento(page, { importe: "500", descripcion: "Super" });
+    await agregarMovimiento(page, { tipo: "Ingreso", importe: "3000", descripcion: "Sueldo" });
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    // Una sola barra por período (lo gastado y lo que sobró, apilados), sin línea de balance.
+    const evolucion = bloque(page, "Ingresos y gastos de los últimos períodos");
+    await expect(evolucion.locator(".recharts-wrapper")).toHaveCount(1);
+    await expect(evolucion.locator(".recharts-line")).toHaveCount(0);
+    // Sobró plata: no hay tramo "gastado de más" (el del relleno rayado).
+    await expect(evolucion.locator('[fill="url(#rayas-de-deficit)"]')).toHaveCount(0);
+
+    const balances = page.getByRole("list", { name: "Balance de cada período" });
+    await expect(balances.getByRole("listitem")).toHaveCount(1);
+    await expect(balances.getByText("Sobró plata")).toBeVisible();
+    await expect(balances.getByText("$ 2.500,00")).toBeVisible();
+  });
+
+  test("el balance del período se dice con texto: se gastó de más", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await agregarMovimiento(page, { tipo: "Ingreso", importe: "200", descripcion: "Regalo" });
+    await agregarMovimiento(page, { importe: "500", descripcion: "Super" });
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    // Se gastó más de lo que entró: aparece el tramo rayado de lo gastado de más (el color
+    // no es lo único que lo distingue).
+    await expect(
+      bloque(page, "Ingresos y gastos de los últimos períodos").locator(
+        '[fill="url(#rayas-de-deficit)"]',
+      ),
+    ).toHaveCount(1);
+
+    const balances = page.getByRole("list", { name: "Balance de cada período" });
+    await expect(balances.getByText("Gastaste de más")).toBeVisible();
+    await expect(balances.getByText("Sobró plata")).toBeHidden();
+    // El signo menos ya lo dice: el color rojo es solo un refuerzo.
+    await expect(balances.getByText(/^-\s?\$\s?300,00$/)).toBeVisible();
+  });
+
+  test("un período sin movimientos no se muestra como si hubiera quedado en cero", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    const balances = page.getByRole("list", { name: "Balance de cada período" });
+    await expect(balances.getByText("Sin movimientos")).toBeVisible();
+  });
+
+  test("los bloques aparecen todos y los datos rápidos quedan siempre arriba", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await agregarMovimiento(page, { importe: "500", descripcion: "Super" });
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    const nombres = [
+      "Ingresos y gastos de los últimos períodos",
+      "Ritmo de gasto",
+      "Qué subió y qué bajó",
+      "Evolución de gastos por categoría",
+      "Gastos por categoría",
+    ];
+    for (const nombre of nombres) {
+      await expect(bloque(page, nombre)).toBeVisible();
+    }
+    // Los datos rápidos no participan del sorteo: están arriba de todos.
+    const alturaDeDatos = (await page.getByText("Gasto promedio por día").boundingBox())?.y ?? 0;
+    for (const nombre of nombres) {
+      const alturaDelBloque = (await bloque(page, nombre).boundingBox())?.y ?? 0;
+      expect(alturaDeDatos).toBeLessThan(alturaDelBloque);
+    }
+  });
+
+  test("el orden de los bloques cambia entre visitas y no se mueve mientras se está en la pestaña", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await agregarMovimiento(page, { importe: "500", descripcion: "Super" });
+
+    // Solo el contenido: el carrusel de la columna lateral también es una sección con nombre.
+    const ordenActual = () =>
+      page
+        .locator("main section[aria-label]")
+        .evaluateAll((secciones) => secciones.map((seccion) => seccion.getAttribute("aria-label")));
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+    await expect(bloque(page, "Ritmo de gasto")).toBeVisible();
+    const primero = await ordenActual();
+    expect(primero).toHaveLength(5);
+
+    // Mientras se queda en la pestaña, el orden no cambia (ni al actualizarse los datos).
+    await page.waitForTimeout(500);
+    expect(await ordenActual()).toEqual(primero);
+
+    // Cada vez que se vuelve a entrar se sortea de nuevo. Con 120 órdenes posibles, que 8
+    // visitas den siempre el mismo es prácticamente imposible.
+    const vistos = new Set([primero.join("|")]);
+    for (let visita = 0; visita < 8; visita++) {
+      await page.getByRole("tab", { name: "Movimientos" }).click();
+      await page.getByRole("tab", { name: "Estadísticas" }).click();
+      await expect(bloque(page, "Ritmo de gasto")).toBeVisible();
+      vistos.add((await ordenActual()).join("|"));
+    }
+    expect(vistos.size).toBeGreaterThan(1);
+  });
+
+  test("la categoría del gráfico de evolución es siempre una que tuvo gastos", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    // Solo estas dos tienen gastos; las otras categorías están vacías.
+    await agregarMovimiento(page, { importe: "100", descripcion: "Bus", categoria: "Transporte" });
+    await agregarMovimiento(page, {
+      importe: "200",
+      descripcion: "Super",
+      categoria: "Alimentación",
+    });
+
+    const vistas = new Set<string>();
+    for (let visita = 0; visita < 10; visita++) {
+      await page.getByRole("tab", { name: "Estadísticas" }).click();
+      const selector = bloque(page, "Evolución de gastos por categoría").getByLabel("Categoría", {
+        exact: true,
+      });
+      const elegida = (await selector.locator("option:checked").textContent()) ?? "";
+      expect(["Alimentación", "Transporte"]).toContain(elegida);
+      vistas.add(elegida);
+      await page.getByRole("tab", { name: "Movimientos" }).click();
+    }
+    // Con dos candidatas y 10 sorteos, ver solo una tiene probabilidad de 1 en 512.
+    expect(vistas.size).toBe(2);
+  });
+
+  test("con un solo período, el ritmo y la comparación explican que falta uno para comparar", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await agregarMovimiento(page, {
+      importe: "500",
+      descripcion: "Cena grande",
+      categoria: "Alimentación",
+    });
+    await agregarMovimiento(page, { tipo: "Ingreso", importe: "3000", descripcion: "Sueldo" });
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    // Datos rápidos: el promedio, el gasto más grande con su detalle y la cantidad.
+    await expect(page.getByText("Gasto promedio por día")).toBeVisible();
+    await expect(page.getByText("Cena grande · Alimentación ·")).toBeVisible();
+    await expect(page.getByText("Ingresos y gastos del período")).toBeVisible();
+
+    // Ritmo: sin período anterior, el gráfico tiene una sola línea y se explica por qué.
+    await expect(page.getByText("Es tu primer período: cuando tengas otro")).toBeVisible();
+    await expect(bloque(page, "Ritmo de gasto").locator(".recharts-line")).toHaveCount(1);
+
+    // Variación: nada con qué comparar.
+    await expect(page.getByRole("heading", { name: "Qué subió y qué bajó" })).toBeVisible();
+    await expect(page.getByText("Es tu primer período. Cuando tengas otro")).toBeVisible();
+  });
+
+  test("sin gastos, los datos rápidos y el ritmo no inventan nada", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    await expect(page.getByText("Todavía no hay gastos")).toBeVisible();
+    // Sin gastos no hay línea que dibujar: se dice con palabras (el mismo mensaje del gráfico
+    // de gastos por categoría, más el del ritmo).
+    await expect(page.getByText("Todavía no registraste gastos en este período.")).toHaveCount(2);
+  });
+
+  test("con dos períodos compara el ritmo y dice qué categorías subieron", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await prepararDosPeriodosConGastos(page);
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+
+    // Ritmo: va gastando más que el período anterior a esta misma altura (300 contra 100).
+    await expect(page.getByText(/\$\s?200,00 más que en /)).toBeVisible();
+    // El gráfico dibuja las dos líneas, la del período anterior con su nombre en la leyenda.
+    await expect(bloque(page, "Ritmo de gasto").locator(".recharts-line")).toHaveCount(2);
+
+    // Variación: Alimentación pasó de 100 a 300 (subió 200, un 200 %).
+    const variacion = page.getByRole("list", {
+      name: /^Variación de gastos por categoría respecto de /,
+    });
+    await expect(variacion.getByRole("listitem")).toHaveCount(1);
+    await expect(variacion.getByText("Alimentación")).toBeVisible();
+    await expect(variacion.getByText(/Subió \$\s?200,00 \(200 ?%\)/)).toBeVisible();
+    await expect(variacion.getByText(/\$\s?100,00 → \$\s?300,00/)).toBeVisible();
   });
 
   test("la evolución de una categoría propone la más gastada y se puede cambiar", async ({
@@ -1373,35 +1694,33 @@ test.describe("estadísticas", () => {
     });
 
     await page.getByRole("tab", { name: "Estadísticas" }).click();
-    const tarjeta = page.locator("div", {
-      has: page.getByRole("heading", { name: "Evolución de categorías" }),
-    });
-    const selector = tarjeta.getByLabel("Categoría").last();
+    const evolucion = bloque(page, "Evolución de gastos por categoría");
+    const selector = evolucion.getByLabel("Categoría", { exact: true });
 
-    // Por defecto, la categoría en la que más se gastó en el período.
-    await expect(selector.locator("option:checked")).toHaveText("Alimentación");
+    // Al abrir se sortea una categoría entre las que tuvieron gastos (Alimentación o
+    // Transporte): nunca una vacía, que mostraría un estado vacío en vez del gráfico.
+    const sorteada = (await selector.locator("option:checked").textContent()) ?? "";
+    expect(["Alimentación", "Transporte"]).toContain(sorteada);
     // Dos gráficas en una: las barras (valor bruto) y la línea (% de los ingresos).
-    const leyendaDeCategoria = page.locator(".recharts-legend-wrapper", {
-      hasText: "Gastado en Alimentación",
+    const leyendaDeCategoria = evolucion.locator(".recharts-legend-wrapper", {
+      hasText: `Gastado en ${sorteada}`,
     });
     await expect(leyendaDeCategoria.getByText("% de los ingresos del período")).toBeVisible();
-    await expect(
-      page.locator(".recharts-legend-wrapper", { hasText: "Gastado en Alimentación" }),
-    ).toBeVisible();
 
-    await selector.selectOption({ label: "Transporte" });
+    const otra = sorteada === "Alimentación" ? "Transporte" : "Alimentación";
+    await selector.selectOption({ label: otra });
     await expect(
-      page.locator(".recharts-legend-wrapper", { hasText: "Gastado en Transporte" }),
+      evolucion.locator(".recharts-legend-wrapper", { hasText: `Gastado en ${otra}` }),
     ).toBeVisible();
 
     // Una categoría sin gastos en ningún período: estado vacío, no un gráfico plano.
-    await selector.selectOption({ label: "Mascotas" });
-    await expect(
-      page.getByText("No hay gastos en Mascotas en los últimos períodos."),
-    ).toBeVisible();
+    await selector.selectOption({ label: "Salud" });
+    await expect(page.getByText("No hay gastos en Salud en los últimos períodos.")).toBeVisible();
   });
 
-  test("la evolución de una categoría se puede ver de gastos o de ingresos", async ({ page }) => {
+  test("la evolución de una categoría muestra solo gastos, aunque la categoría tenga ingresos", async ({
+    page,
+  }) => {
     const cuenta = await crearCuentaAprobada();
     await entrar(page, cuenta);
     await page.goto("/finanzas");
@@ -1416,26 +1735,24 @@ test.describe("estadísticas", () => {
     });
 
     await page.getByRole("tab", { name: "Estadísticas" }).click();
-    const tarjeta = page.locator("div", {
-      has: page.getByRole("heading", { name: "Evolución de categorías" }),
-    });
+    const evolucion = bloque(page, "Evolución de gastos por categoría");
 
-    // Por defecto, gastos.
-    await expect(tarjeta.getByRole("radio", { name: "Gastos" })).toBeChecked();
-    await expect(
-      page.locator(".recharts-legend-wrapper", { hasText: "Gastado en Otros" }),
-    ).toBeVisible();
+    // Solo hay gastos: no hay selector para pasar a ingresos.
+    await expect(evolucion.getByText("Qué mirar")).toBeHidden();
+    await expect(evolucion.getByRole("radio")).toHaveCount(0);
 
-    // Con "Ingresos" cambian las barras y el porcentaje: ahora es la parte del total de ingresos.
-    await tarjeta.getByRole("radio", { name: "Ingresos" }).click({ force: true });
-    const leyenda = page.locator(".recharts-legend-wrapper", { hasText: "Ingresado en Otros" });
+    // La barra es lo gastado (300), no lo ingresado, y la línea es ese gasto sobre los ingresos.
+    const leyenda = evolucion.locator(".recharts-legend-wrapper", { hasText: "Gastado en Otros" });
     await expect(leyenda).toBeVisible();
-    await expect(leyenda.getByText("% del total de ingresos del período")).toBeVisible();
+    await expect(leyenda.getByText("% de los ingresos del período")).toBeVisible();
+    await expect(evolucion.getByText("Ingresado en")).toBeHidden();
 
-    // Una categoría sin ingresos: estado vacío, aunque tenga gastos en otro momento.
-    await tarjeta.getByLabel("Categoría").last().selectOption({ label: "Alimentación" });
+    // Una categoría sin gastos: estado vacío, aunque tenga ingresos en otro momento.
+    await evolucion
+      .getByLabel("Categoría", { exact: true })
+      .selectOption({ label: "Alimentación" });
     await expect(
-      page.getByText("No hay ingresos en Alimentación en los últimos períodos."),
+      evolucion.getByText("No hay gastos en Alimentación en los últimos períodos."),
     ).toBeVisible();
   });
 
@@ -1443,25 +1760,33 @@ test.describe("estadísticas", () => {
     const cuenta = await crearCuentaAprobada();
     await entrar(page, cuenta);
     await page.goto("/finanzas");
-    await abrirPrimerPeriodo(page);
+    // Primer período con fechas pasadas (abrió hace 10 días y cierra hace 5), para que el
+    // segundo, que abre al cerrar, quede después de todo lo del primero.
+    await page.getByRole("button", { name: "Abrir mi primer período" }).click();
+    const abrir = page.getByRole("dialog", { name: "Abrir período" });
+    await abrir.getByLabel("Empieza el").fill(haceDias(10));
+    await abrir.getByRole("button", { name: "Abrir período" }).click();
+    await expect(page.getByRole("heading", { name: "Abrir período" })).toBeHidden();
     await agregarMovimiento(page, {
       importe: "400",
       descripcion: "Super",
       categoria: "Alimentación",
+      fecha: haceDias(8),
     });
     await agregarMovimiento(page, {
       tipo: "Ingreso",
       importe: "2000",
       descripcion: "Sueldo",
       categoria: "Ingresos",
+      fecha: haceDias(8),
     });
 
     // Cierra el período y abre el siguiente, con otro gasto en la misma categoría.
     await page.getByRole("button", { name: "Cerrar período" }).click();
-    await page
-      .getByRole("dialog", { name: "Cerrar período" })
-      .getByRole("button", { name: "Cerrar período" })
-      .click();
+    const cerrar = page.getByRole("dialog", { name: "Cerrar período" });
+    await cerrar.getByRole("radio", { name: "Elegir fecha y hora" }).click();
+    await cerrar.getByLabel("Cierra el").fill(haceDias(5));
+    await cerrar.getByRole("button", { name: "Cerrar período" }).click();
     await page
       .getByRole("dialog", { name: "Abrir el siguiente período" })
       .getByRole("button", { name: "Abrir período" })
@@ -1482,7 +1807,11 @@ test.describe("estadísticas", () => {
     await page.getByRole("tab", { name: "Estadísticas" }).click();
 
     // Un punto del porcentaje por período (20 % y 25 % de los ingresos de cada uno).
-    await expect(page.locator(".recharts-line .recharts-dot")).toHaveCount(2);
+    await expect(
+      bloque(page, "Evolución de gastos por categoría").locator(
+        ".recharts-line-dots .recharts-dot",
+      ),
+    ).toHaveCount(2);
   });
 
   test("si la categoría tiene presupuesto, el gráfico muestra su límite", async ({ page }) => {
@@ -1498,15 +1827,18 @@ test.describe("estadísticas", () => {
     await page.getByRole("tab", { name: "Presupuestos" }).click();
     await page.getByRole("button", { name: "Nuevo" }).click();
     await page.getByRole("heading", { name: "Nuevo presupuesto" }).waitFor();
-    await page.getByLabel("Categoría").selectOption({ label: "Alimentación" });
+    await page.getByLabel("Categoría", { exact: true }).selectOption({ label: "Alimentación" });
     await page.getByLabel("Límite por período").fill("800");
     await page.getByRole("button", { name: "Fijar presupuesto" }).click();
     await expect(page.getByRole("heading", { name: "Nuevo presupuesto" })).toBeHidden();
 
     await page.getByRole("tab", { name: "Estadísticas" }).click();
 
-    await expect(page.locator(".recharts-reference-line")).toBeVisible();
-    await expect(page.locator(".recharts-reference-line").getByText("Presupuesto")).toBeVisible();
+    // La línea del límite es horizontal y de alto cero: Playwright no la da por "visible",
+    // así que se comprueba que exista y que lleve su etiqueta.
+    const evolucion = bloque(page, "Evolución de gastos por categoría");
+    await expect(evolucion.locator(".recharts-reference-line")).toHaveCount(1);
+    await expect(evolucion.getByText("Presupuesto").first()).toBeVisible();
   });
 
   test("sin gastos en el período, muestra un estado vacío en vez de un gráfico sin datos", async ({
@@ -1518,7 +1850,510 @@ test.describe("estadísticas", () => {
     await abrirPrimerPeriodo(page);
 
     await page.getByRole("tab", { name: "Estadísticas" }).click();
-    await expect(page.getByText("Todavía no registraste gastos en este período.")).toBeVisible();
+    await expect(
+      bloque(page, "Gastos por categoría").getByText(
+        "Todavía no registraste gastos en este período.",
+      ),
+    ).toBeVisible();
+  });
+});
+
+/**
+ * Responde el pedido de cotización sugerida sin salir a internet (la API real la trae de una
+ * fuente pública, y un test no puede depender de eso). Los movimientos que se guardan en
+ * estos tests llevan la cotización escrita o deducida, así que tampoco la consultan.
+ */
+async function simularCotizacion(
+  pagina: Page,
+  respuesta: { estado: 200; tasa: number } | { estado: 503 },
+): Promise<void> {
+  await pagina.route("**/api/finanzas/cotizacion?*", async (ruta) => {
+    const cabeceras = {
+      "access-control-allow-origin": "http://localhost:3100",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-headers": "content-type",
+    };
+    if (ruta.request().method() === "OPTIONS") {
+      await ruta.fulfill({ status: 204, headers: cabeceras });
+      return;
+    }
+    await ruta.fulfill({
+      status: respuesta.estado,
+      contentType: "application/json",
+      headers: cabeceras,
+      body: JSON.stringify(
+        respuesta.estado === 200
+          ? { tasa: respuesta.tasa, fechaDeLaFuente: "2026-10-03", desactualizada: false }
+          : {
+              error: {
+                codigo: "COTIZACION_NO_DISPONIBLE",
+                mensaje: "No pudimos traer la cotización. Escribila vos para seguir.",
+                idPeticion: "prueba",
+              },
+            },
+      ),
+    });
+  });
+}
+
+/** Desde la pestaña Cuentas: crea una cuenta en la moneda elegida, con saldo inicial. */
+async function crearCuentaEnMoneda(
+  pagina: Page,
+  nombre: string,
+  moneda: string,
+  saldo: string,
+): Promise<void> {
+  await pagina.getByRole("tab", { name: "Cuentas" }).click();
+  await pagina.getByRole("button", { name: "Nueva" }).first().click();
+  await pagina.getByRole("heading", { name: "Nueva cuenta" }).waitFor();
+  await pagina.getByLabel("Nombre").fill(nombre);
+  await pagina.getByLabel("Moneda").selectOption(moneda);
+  await pagina.getByLabel("Saldo inicial").fill(saldo);
+  await pagina.getByRole("button", { name: "Crear cuenta" }).click();
+  await expect(pagina.getByRole("heading", { name: "Nueva cuenta" })).toBeHidden();
+}
+
+/** Abre "Agregar movimiento" con una gasto de `importe` en la cuenta indicada, sin guardarlo. */
+async function empezarMovimientoEn(
+  pagina: Page,
+  cuenta: string,
+  importe: string,
+): Promise<Locator> {
+  await abrirAgregarMovimiento(pagina);
+  const dialogo = pagina.getByRole("dialog", { name: "Agregar movimiento" });
+  await dialogo.getByLabel("Importe").fill(importe);
+  await dialogo.getByLabel("Descripción").fill("Compra en dólares");
+  await dialogo.getByLabel("Categoría", { exact: true }).selectOption({ label: "Compras" });
+  await elegirCuenta(dialogo.getByLabel("Cuenta", { exact: true }), cuenta);
+  return dialogo;
+}
+
+test.describe("monedas y cotizaciones", () => {
+  test("una cuenta se crea en la moneda elegida y su saldo se ve en esa moneda", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const fila = page.locator("li", { hasText: "Caja en dólares" });
+    await expect(fila.getByText("US$ 100,00")).toBeVisible();
+    await expect(fila.getByText("USD", { exact: false })).toBeVisible();
+  });
+
+  test("el formulario de cuenta ofrece las monedas y propone la moneda base", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await page.getByRole("tab", { name: "Cuentas" }).click();
+    await page.getByRole("button", { name: "Nueva" }).first().click();
+
+    const moneda = page.getByLabel("Moneda");
+    await expect(moneda).toHaveValue("UYU");
+    await expect(moneda.locator("option")).toHaveCount(5);
+  });
+
+  test("un gasto en una cuenta en dólares propone la cotización y dice a cuánto equivale", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+
+    await expect(dialogo.getByText("Importe en USD, la moneda de esta cuenta.")).toBeVisible();
+    const cotizacion = dialogo.getByRole("region", { name: "Cotización" });
+    await expect(cotizacion.getByText("1 USD = 40,00 UYU")).toBeVisible();
+    await expect(cotizacion.getByText("Equivale a $ 400,00.")).toBeVisible();
+  });
+
+  test("con una cotización escrita, el movimiento queda con ella y los totales en pesos", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("tasa");
+    await dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)").fill("38,5");
+    await expect(dialogo.getByText("Equivale a $ 385,00.")).toBeVisible();
+    await dialogo.getByRole("button", { name: "Guardar movimiento" }).click();
+    await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+
+    // El resumen suma los pesos: 10 dólares a 38,5.
+    await page.getByRole("tab", { name: "Resumen" }).click();
+    await expect(page.getByText("$ 385,00").first()).toBeVisible();
+
+    // El listado muestra el importe en dólares y lo que equivale, con la cotización usada.
+    await page.getByRole("tab", { name: "Movimientos" }).click();
+    await expect(page.getByText("US$ 10,00")).toBeVisible();
+    await expect(
+      page.getByText("Equivale a $ 385,00 · 1 USD = 38,50 UYU (la fijaste vos)"),
+    ).toBeVisible();
+  });
+
+  test("después de cambiar la cotización, el mismo botón permite volver a la del día", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("tasa");
+    await dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)").fill("38,5");
+    await expect(dialogo.getByText("Equivale a $ 385,00.")).toBeVisible();
+
+    await dialogo.getByRole("button", { name: "Usar la del día" }).click();
+
+    await expect(dialogo.getByLabel("Cotización a usar")).toBeHidden();
+    await expect(dialogo.getByText("Equivale a $ 400,00.")).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Cambiar la cotización" })).toBeVisible();
+  });
+
+  test("indicando el importe en pesos, la cotización se calcula sola", async ({ page }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("importe");
+    await dialogo.getByLabel("Importe en UYU").fill("395");
+
+    const cotizacion = dialogo.getByRole("region", { name: "Cotización" });
+    await expect(cotizacion.getByText("1 USD = 39,50 UYU")).toBeVisible();
+    await expect(cotizacion.getByText("Equivale a $ 395,00.")).toBeVisible();
+  });
+
+  test("sin cotización disponible, pide escribirla y no deja guardar sin ella", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 503 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await expect(
+      dialogo.getByText("No pudimos traer la cotización de ese día.").first(),
+    ).toBeVisible();
+
+    // Sin la cotización escrita no se guarda: el formulario sigue abierto.
+    await dialogo.getByRole("button", { name: "Guardar movimiento" }).click();
+    await expect(dialogo).toBeVisible();
+
+    await dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)").fill("40");
+    await guardarAceptandoSaldoNegativo(
+      page,
+      dialogo.getByRole("button", { name: "Guardar movimiento" }),
+      "Agregar movimiento",
+    );
+    await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+  });
+
+  test("una transferencia entre monedas dice cuánto llega y cada saldo queda en su moneda", async ({
+    page,
+  }) => {
+    // 1 USD = 40 pesos: de pesos a dólares, la tasa es 0,025.
+    await simularCotizacion(page, { estado: 200, tasa: 0.025 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "0");
+
+    await page.getByRole("button", { name: "Transferir" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Transferir entre cuentas" });
+    await dialogo.getByLabel("Importe").fill("4000");
+    await elegirCuenta(dialogo.getByLabel("Cuenta de origen"), "Efectivo");
+    await elegirCuenta(dialogo.getByLabel("Cuenta de destino"), "Caja en dólares");
+
+    const cotizacion = dialogo.getByRole("region", { name: "Cotización" });
+    await expect(cotizacion.getByText("1 USD = 40,00 UYU")).toBeVisible();
+    await expect(cotizacion.getByText("Llegan US$ 100,00 a la cuenta de destino.")).toBeVisible();
+
+    // Cambia lo que llega: entregó $ 4.000 y recibió US$ 98.
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("importe");
+    await dialogo.getByLabel("Importe en USD").fill("98");
+    await expect(cotizacion.getByText("Llegan US$ 98,00 a la cuenta de destino.")).toBeVisible();
+    await guardarAceptandoSaldoNegativo(
+      page,
+      dialogo.getByRole("button", { name: "Transferir" }),
+      "Transferir entre cuentas",
+    );
+    await expect(page.getByRole("heading", { name: "Transferir entre cuentas" })).toBeHidden();
+
+    await expect(
+      page.locator("li", { hasText: "Caja en dólares" }).getByText("US$ 98,00"),
+    ).toBeVisible();
+    await expect(
+      page.locator("li", { hasText: "Efectivo" }).getByText("-$ 4.000,00"),
+    ).toBeVisible();
+  });
+
+  test("una transferencia entre monedas se puede escribir en la moneda de destino", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 0.025 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "0");
+
+    await page.getByRole("button", { name: "Transferir" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Transferir entre cuentas" });
+    await elegirCuenta(dialogo.getByLabel("Cuenta de origen"), "Efectivo");
+    await elegirCuenta(dialogo.getByLabel("Cuenta de destino"), "Caja en dólares");
+
+    // Por defecto se escribe en la moneda de la cuenta de origen.
+    const importe = dialogo.getByLabel("Importe", { exact: true });
+    await expect(importe.locator("xpath=..").getByText("UYU", { exact: true })).toBeVisible();
+
+    // "Quiero que lleguen 100 dólares": se calcula cuánto sale de los pesos.
+    await dialogo.getByRole("radio", { name: "USD (destino)" }).click();
+    await expect(importe.locator("xpath=..").getByText("USD", { exact: true })).toBeVisible();
+    await importe.fill("100");
+    const cotizacion = dialogo.getByRole("region", { name: "Cotización" });
+    await expect(cotizacion.getByText("Llegan US$ 100,00 a la cuenta de destino.")).toBeVisible();
+    await expect(cotizacion.getByText("Salen $ 4.000,00 de la cuenta de origen.")).toBeVisible();
+
+    await guardarAceptandoSaldoNegativo(
+      page,
+      dialogo.getByRole("button", { name: "Transferir" }),
+      "Transferir entre cuentas",
+    );
+    await expect(page.getByRole("heading", { name: "Transferir entre cuentas" })).toBeHidden();
+
+    await expect(
+      page.locator("li", { hasText: "Caja en dólares" }).getByText("US$ 100,00"),
+    ).toBeVisible();
+    await expect(
+      page.locator("li", { hasText: "Efectivo" }).getByText("-$ 4.000,00"),
+    ).toBeVisible();
+  });
+
+  test("al escribir en la moneda de destino también se pueden indicar los dos importes", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 0.025 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "0");
+
+    await page.getByRole("button", { name: "Transferir" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Transferir entre cuentas" });
+    await elegirCuenta(dialogo.getByLabel("Cuenta de origen"), "Efectivo");
+    await elegirCuenta(dialogo.getByLabel("Cuenta de destino"), "Caja en dólares");
+    await dialogo.getByRole("radio", { name: "USD (destino)" }).click();
+    await dialogo.getByLabel("Importe", { exact: true }).fill("100");
+
+    // El banco cobró $ 4.100 por esos US$ 100: la cotización se calcula con los dos importes.
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("importe");
+    await dialogo.getByLabel("Importe en UYU").fill("4100");
+    const cotizacion = dialogo.getByRole("region", { name: "Cotización" });
+    await expect(cotizacion.getByText("1 USD = 41,00 UYU")).toBeVisible();
+    await expect(cotizacion.getByText("Salen $ 4.100,00 de la cuenta de origen.")).toBeVisible();
+  });
+
+  test("el selector de moneda del importe solo aparece si la transferencia cruza monedas", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "0");
+
+    await page.getByRole("button", { name: "Transferir" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Transferir entre cuentas" });
+    await elegirCuenta(dialogo.getByLabel("Cuenta de origen"), "Efectivo");
+    await elegirCuenta(dialogo.getByLabel("Cuenta de destino"), "Banco");
+    await expect(
+      dialogo.getByRole("radiogroup", { name: /Moneda en la que escribís/ }),
+    ).toBeHidden();
+
+    await elegirCuenta(dialogo.getByLabel("Cuenta de destino"), "Caja en dólares");
+    await expect(
+      dialogo.getByRole("radiogroup", { name: /Moneda en la que escribís/ }),
+    ).toBeVisible();
+  });
+
+  test("al editar un movimiento se conserva la cotización con la que se cargó", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 55 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("tasa");
+    await dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)").fill("38,5");
+    await dialogo.getByRole("button", { name: "Guardar movimiento" }).click();
+    await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+
+    await page.getByRole("tab", { name: "Movimientos" }).click();
+    const fila = page.locator("div.group", { hasText: "Compra en dólares" });
+    await fila.hover();
+    await fila.getByRole("button", { name: "Editar" }).click();
+    const edicion = page.getByRole("dialog", { name: "Editar movimiento" });
+
+    // Lo que se propone es lo guardado (38,50), no la cotización de hoy (55).
+    const cotizacion = edicion.getByRole("region", { name: "Cotización" });
+    await expect(cotizacion.getByText("1 USD = 38,50 UYU")).toBeVisible();
+    await expect(cotizacion.getByText("la que se escribió al cargarlo")).toBeVisible();
+    await expect(cotizacion.getByText("Equivale a $ 385,00.")).toBeVisible();
+
+    await edicion.getByLabel("Descripción").fill("Compra editada");
+    await edicion.getByRole("button", { name: "Guardar cambios" }).click();
+    await expect(page.getByRole("heading", { name: "Editar movimiento" })).toBeHidden();
+    await expect(
+      page.getByText("Equivale a $ 385,00 · 1 USD = 38,50 UYU (la fijaste vos)"),
+    ).toBeVisible();
+  });
+
+  test("el historial de la cuenta en dólares muestra su equivalente en pesos", async ({ page }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("tasa");
+    await dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)").fill("39");
+    await dialogo.getByRole("button", { name: "Guardar movimiento" }).click();
+    await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeHidden();
+
+    await page.getByRole("tab", { name: "Cuentas" }).click();
+    await page.getByRole("button", { name: "Ver historial de Caja en dólares" }).click();
+    const historial = page.getByRole("dialog", { name: "Historial de Caja en dólares" });
+    await expect(historial.getByText("-US$ 10,00")).toBeVisible();
+    await expect(
+      historial.getByText("Equivale a $ 390,00 · 1 USD = 39,00 UYU (la fijaste vos)"),
+    ).toBeVisible();
+  });
+});
+
+test.describe("campos de importe: la moneda va dentro del campo", () => {
+  /** La etiqueta de moneda que está dentro del campo (junto al <input>, a su derecha). */
+  function monedaDelCampo(campo: Locator): Locator {
+    return campo.locator("xpath=..").locator("span[id$='-sufijo']");
+  }
+
+  test("el importe de un movimiento muestra la moneda de la cuenta elegida", async ({ page }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    await abrirAgregarMovimiento(page);
+    const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
+    const importe = dialogo.getByLabel("Importe");
+    await expect(monedaDelCampo(importe)).toHaveText("UYU");
+
+    await elegirCuenta(dialogo.getByLabel("Cuenta", { exact: true }), "Caja en dólares");
+    await expect(monedaDelCampo(importe)).toHaveText("USD");
+
+    // La etiqueta se anuncia junto con el campo, y no tapa lo que se escribe.
+    await expect(importe).toHaveAccessibleDescription(/USD/);
+    await importe.fill("1234567890");
+    await expect(importe).toHaveValue("1.234.567.890");
+  });
+
+  test("los campos de cotización muestran la moneda de lo que se escribe", async ({ page }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+
+    await dialogo.getByLabel("Cotización a usar").selectOption("tasa");
+    await expect(
+      monedaDelCampo(dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)")),
+    ).toHaveText("UYU");
+
+    await dialogo.getByLabel("Cotización a usar").selectOption("importe");
+    await expect(monedaDelCampo(dialogo.getByLabel("Importe en UYU"))).toHaveText("UYU");
+  });
+
+  test("el saldo inicial sigue a la moneda elegida para la cuenta", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await page.getByRole("tab", { name: "Cuentas" }).click();
+    await page.getByRole("button", { name: "Nueva" }).first().click();
+    const dialogo = page.getByRole("dialog", { name: "Nueva cuenta" });
+    const saldo = dialogo.getByLabel("Saldo inicial");
+
+    await expect(monedaDelCampo(saldo)).toHaveText("UYU");
+    await dialogo.getByLabel("Moneda").selectOption("EUR");
+    await expect(monedaDelCampo(saldo)).toHaveText("EUR");
+  });
+
+  test("actualizar el saldo de una cuenta en dólares lo pide en dólares", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    await page.getByRole("button", { name: "Actualizar saldo de Caja en dólares" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Actualizar saldo" });
+
+    await expect(monedaDelCampo(dialogo.getByLabel("Saldo actual"))).toHaveText("USD");
+  });
+
+  test("el límite de un presupuesto muestra la moneda base", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await page.getByRole("tab", { name: "Presupuestos" }).click();
+    await page.getByRole("button", { name: "Nuevo" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Nuevo presupuesto" });
+
+    await expect(monedaDelCampo(dialogo.getByLabel("Límite por período"))).toHaveText("UYU");
   });
 });
 
@@ -1565,7 +2400,7 @@ test.describe("períodos", () => {
   }) => {
     await entrarAFinanzas(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
 
     const aviso = page.getByRole("dialog", { name: "No tenés un período abierto" });
     await expect(aviso).toBeVisible();
@@ -1577,7 +2412,7 @@ test.describe("períodos", () => {
     await abrir.getByRole("button", { name: "Abrir período" }).click();
     await expect(page.getByRole("heading", { name: "Abrir período" })).toBeHidden();
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     await expect(page.getByRole("heading", { name: "Agregar movimiento" })).toBeVisible();
   });
 
@@ -1623,7 +2458,7 @@ test.describe("períodos", () => {
     await expect(page.getByText("Cerrado", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Abrir período" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     await expect(page.getByRole("heading", { name: "No tenés un período abierto" })).toBeVisible();
   });
 
@@ -1807,7 +2642,7 @@ test.describe("períodos", () => {
     await entrarAFinanzas(page);
     await abrirPrimerPeriodo(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
 
     await expect(
       page.getByText(`Se guarda en el período "${nombreDelPeriodoActual()}".`),
@@ -1820,7 +2655,7 @@ test.describe("períodos", () => {
     await entrarAFinanzas(page);
     await abrirPrimerPeriodo(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     const dialogo = page.getByRole("dialog", { name: "Agregar movimiento" });
     await dialogo.getByLabel("Importe").fill("100");
     await dialogo.getByLabel("Descripción").fill("Del pasado");
@@ -1868,7 +2703,7 @@ test.describe("diálogos", () => {
     await entrar(pagina, cuenta);
     await pagina.goto("/finanzas");
     await abrirPrimerPeriodo(pagina);
-    await pagina.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(pagina);
     const dialogo = pagina.getByRole("dialog", { name: "Agregar movimiento" });
     await expect(dialogo).toBeVisible();
     return dialogo;
@@ -1907,7 +2742,7 @@ test.describe("campos de importe: separador de miles", () => {
     await entrar(pagina, cuenta);
     await pagina.goto("/finanzas");
     await abrirPrimerPeriodo(pagina);
-    await pagina.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(pagina);
     const dialogo = pagina.getByRole("dialog", { name: "Agregar movimiento" });
     const importe = dialogo.getByLabel("Importe");
     await importe.click();
@@ -1981,7 +2816,14 @@ test.describe("campos de importe: separador de miles", () => {
       "Agregar movimiento",
     );
 
-    await expect(page.getByText("Gastos").locator("..").getByText("$ 1.234.567,50")).toBeVisible();
+    // Solo el contenido: los widgets de la columna lateral repiten la cifra.
+    await expect(
+      page
+        .getByRole("main")
+        .getByText("Gastos", { exact: true })
+        .locator("..")
+        .getByText("$ 1.234.567,50"),
+    ).toBeVisible();
   });
 
   test("al editar el campo ya viene con el importe formateado", async ({ page }) => {
@@ -2084,10 +2926,30 @@ test.describe("accesibilidad", () => {
     await page.goto("/finanzas");
     await abrirPrimerPeriodo(page);
 
-    await page.getByRole("button", { name: "Agregar movimiento" }).click();
+    await abrirAgregarMovimiento(page);
     await page.getByRole("heading", { name: "Agregar movimiento" }).waitFor();
     // El diálogo funde su entrada: sin esperarla, axe puede medir un
     // contraste que todavía no es el real (mismo criterio que admin.spec.ts).
+    await page.waitForTimeout(300);
+
+    const resultados = await new AxeBuilder({ page }).analyze();
+    expect(resultados.violations).toEqual([]);
+  });
+
+  test("el formulario con cotización (cuenta en dólares) no tiene violaciones", async ({
+    page,
+  }) => {
+    await simularCotizacion(page, { estado: 200, tasa: 40 });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await abrirPrimerPeriodo(page);
+    await crearCuentaEnMoneda(page, "Caja en dólares", "USD", "100");
+
+    const dialogo = await empezarMovimientoEn(page, "Caja en dólares", "10");
+    await dialogo.getByRole("button", { name: "Cambiar la cotización" }).click();
+    await dialogo.getByLabel("Cotización a usar").selectOption("tasa");
+    await dialogo.getByLabel("Cotización (cuántos UYU vale 1 USD)").waitFor();
     await page.waitForTimeout(300);
 
     const resultados = await new AxeBuilder({ page }).analyze();
@@ -2225,7 +3087,7 @@ test.describe("accesibilidad", () => {
 
     await page.getByRole("tab", { name: "Presupuestos" }).click();
     await page.getByRole("button", { name: "Nuevo" }).click();
-    await page.getByLabel("Categoría").selectOption({ label: "Otros" });
+    await page.getByLabel("Categoría", { exact: true }).selectOption({ label: "Otros" });
     await page.getByLabel("Límite por período").fill("100");
     await page.getByRole("button", { name: "Fijar presupuesto" }).click();
     await expect(page.getByRole("heading", { name: "Nuevo presupuesto" })).toBeHidden();
@@ -2248,7 +3110,24 @@ test.describe("accesibilidad", () => {
     });
 
     await page.getByRole("tab", { name: "Estadísticas" }).click();
-    await page.locator(".recharts-bar-rectangle").first().waitFor();
+    // Con solo gastos, el balance apilado trae también un tramo sin tamaño (oculto): se espera uno visible.
+    await page.locator(".recharts-bar-rectangle:visible").first().waitFor();
+    await page.waitForTimeout(300);
+
+    const resultados = await new AxeBuilder({ page }).analyze();
+    expect(resultados.violations).toEqual([]);
+  });
+
+  test("las estadísticas comparativas (con dos períodos) no tienen violaciones", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.goto("/finanzas");
+    await prepararDosPeriodosConGastos(page);
+
+    await page.getByRole("tab", { name: "Estadísticas" }).click();
+    await expect(bloque(page, "Ritmo de gasto").locator(".recharts-line")).toHaveCount(2);
     await page.waitForTimeout(300);
 
     const resultados = await new AxeBuilder({ page }).analyze();

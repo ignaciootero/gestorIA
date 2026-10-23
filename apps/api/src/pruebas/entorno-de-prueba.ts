@@ -7,6 +7,8 @@ import { crearAuth } from "../auth/crear-auth.ts";
 import { type EntornoApi, leerEntornoApi } from "../config/entorno.ts";
 import type { Correo, Mensajero } from "../correo/enviar.ts";
 import { crearLogger } from "../logger.ts";
+import type { FuenteDeCotizaciones } from "../servicios/finanzas/cotizaciones.ts";
+import { crearFuenteDePrueba } from "./cotizaciones-de-prueba.ts";
 
 export const ORIGEN_PERMITIDO = "http://localhost:3000";
 export const URL_API = "http://localhost:3001";
@@ -83,14 +85,22 @@ export function authDePrueba(cliente: ClienteDb, mensajero?: Mensajero) {
   });
 }
 
-/** App lista para pedirle rutas con `app.request(...)`, sin levantar un servidor. */
-export function appDePrueba(cliente: ClienteDb, mensajero?: Mensajero) {
+/**
+ * App lista para pedirle rutas con `app.request(...)`, sin levantar un servidor.
+ * Las cotizaciones salen de una fuente falsa (nunca de internet) salvo que se pase otra.
+ */
+export function appDePrueba(
+  cliente: ClienteDb,
+  mensajero?: Mensajero,
+  fuenteDeCotizaciones: FuenteDeCotizaciones = crearFuenteDePrueba().fuente,
+) {
   const entorno = entornoDePrueba();
   return crearApp({
     cliente,
     auth: authDePrueba(cliente, mensajero),
     logger: crearLogger(entorno),
     entorno,
+    fuenteDeCotizaciones,
   });
 }
 

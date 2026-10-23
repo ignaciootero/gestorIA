@@ -5,6 +5,11 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   reactStrictMode: true,
 
+  // Carpeta de compilación. Los tests e2e levantan su propio servidor de desarrollo con otra
+  // (NEXT_DIST_DIR en playwright.config.ts) porque Next no deja correr dos servidores de
+  // desarrollo sobre la misma carpeta: así se pueden correr con `pnpm dev` abierto.
+  distDir: process.env["NEXT_DIST_DIR"] ?? ".next",
+
   // Los paquetes internos exportan TypeScript sin compilar hacia el bundler, que
   // es el modo recomendado cuando quien consume sí transpila (Turbopack).
   transpilePackages: ["@gestoria/shared", "@gestoria/ui-tokens"],

@@ -1,6 +1,6 @@
 // Menú de navegación: columna izquierda del marco de la aplicación.
 //
-// Inicio, los módulos (por ahora, Finanzas) y, para quien es admin, el panel
+// Inicio, los módulos (Finanzas, Contactos, Tareas y Calendario) y, para quien es admin, el panel
 // de admin. Cada módulo nuevo suma acá su propio enlace.
 //
 // El ancho lo pone el contenido más largo (`w-fit` en el `<nav>` + que los
@@ -11,7 +11,15 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Home, LogOut, ShieldCheck, Wallet } from "lucide-react";
+import {
+  BookUser,
+  CalendarDays,
+  Home,
+  ListChecks,
+  LogOut,
+  ShieldCheck,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/lib/auth-cliente";
@@ -29,6 +37,9 @@ type EnlaceDeMenu = {
 const ENLACES: EnlaceDeMenu[] = [
   { href: "/inicio", etiqueta: "Inicio", Icono: Home },
   { href: "/finanzas", etiqueta: "Finanzas", Icono: Wallet, incluirSubrutas: true },
+  { href: "/contactos", etiqueta: "Contactos", Icono: BookUser, incluirSubrutas: true },
+  { href: "/tareas", etiqueta: "Tareas", Icono: ListChecks, incluirSubrutas: true },
+  { href: "/calendario", etiqueta: "Calendario", Icono: CalendarDays, incluirSubrutas: true },
 ];
 
 const CLASE_FILA = cn(

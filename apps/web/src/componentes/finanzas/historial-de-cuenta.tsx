@@ -12,7 +12,13 @@
 
 "use client";
 
-import { formatearFechaHora, formatearMonto, MONEDA_POR_DEFECTO } from "@gestoria/shared";
+import {
+  decirCotizacion,
+  formatearFechaHora,
+  formatearMonto,
+  formatearTasa,
+  MONEDA_POR_DEFECTO,
+} from "@gestoria/shared";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownRight,
@@ -38,8 +44,36 @@ import { Saldo } from "./saldo";
 
 const POR_PAGINA = 10;
 
-function FilaDeHistorial({ item, moneda }: { item: ItemDeHistorial; moneda: string }) {
+/**
+ * Qué dice de la conversión un movimiento entre monedas distintas (ver equivalenciaDeMovimiento
+ * en estilo-de-movimiento.tsx): la cotización usada y, en un ingreso o gasto, a cuánto equivale.
+ */
+function textoDeCambio(item: ItemDeHistorial, monedaBase: string): string | null {
+  if (item.origen !== "movimiento") return null;
+  const { cambio } = item;
+  const destino = item.tipo === "neutro" ? cambio.monedaDeDestino : monedaBase;
+  if (destino === null || destino === cambio.monedaDeOrigen) return null;
+
+  const dicha = decirCotizacion(cambio.monedaDeOrigen, destino, cambio.tipoDeCambio);
+  const tasa = `1 ${dicha.unidad} = ${formatearTasa(dicha.valor)} ${dicha.otra}`;
+  const quien = cambio.manual ? " (la fijaste vos)" : "";
+  return item.tipo === "neutro"
+    ? `Cotización: ${tasa}${quien}`
+    : `Equivale a ${formatearMonto(cambio.convertidoCentavos, destino)} · ${tasa}${quien}`;
+}
+
+function FilaDeHistorial({
+  item,
+  moneda,
+  monedaBase,
+}: {
+  /** La moneda de la cuenta: en ella está el monto de cada renglón. */
+  moneda: string;
+  monedaBase: string;
+  item: ItemDeHistorial;
+}) {
   const sube = item.montoCentavos >= 0;
+  const cambio = textoDeCambio(item, monedaBase);
 
   return (
     <li className="flex items-start justify-between gap-3 border-b border-borde py-3 last:border-0">
@@ -93,27 +127,33 @@ function FilaDeHistorial({ item, moneda }: { item: ItemDeHistorial; moneda: stri
         </p>
       </div>
 
-      <p
-        className={cn(
-          "shrink-0 text-sm font-medium tabular-nums",
-          // Una transferencia no es ingreso ni gasto: se queda en amarillo (ámbar), con su signo.
-          item.origen === "movimiento" && item.tipo === "neutro"
-            ? "text-advertencia"
-            : sube
-              ? "text-exito"
-              : "text-peligro",
-        )}
-      >
-        {sube ? "+" : "-"}
-        {formatearMonto(Math.abs(item.montoCentavos), moneda)}
-      </p>
+      <div className="flex shrink-0 flex-col items-end">
+        <p
+          className={cn(
+            "text-sm font-medium tabular-nums",
+            // Una transferencia no es ingreso ni gasto: se queda en amarillo (ámbar), con su signo.
+            item.origen === "movimiento" && item.tipo === "neutro"
+              ? "text-advertencia"
+              : sube
+                ? "text-exito"
+                : "text-peligro",
+          )}
+        >
+          {sube ? "+" : "-"}
+          {formatearMonto(Math.abs(item.montoCentavos), moneda)}
+        </p>
+        {cambio ? (
+          <p className="text-right text-xs tabular-nums text-texto-secundario">{cambio}</p>
+        ) : null}
+      </div>
     </li>
   );
 }
 
 export function HistorialDeCuenta({ cuenta }: { cuenta: CuentaFinanciera }) {
   const { data: sesion } = useSession();
-  const moneda = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
+  const monedaBase = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
+  const moneda = cuenta.moneda;
   const [pagina, setPagina] = useState(0);
 
   const { data, isPending, error } = useQuery({
@@ -152,7 +192,12 @@ export function HistorialDeCuenta({ cuenta }: { cuenta: CuentaFinanciera }) {
         <>
           <ul>
             {data.items.map((item) => (
-              <FilaDeHistorial key={`${item.origen}-${item.id}`} item={item} moneda={moneda} />
+              <FilaDeHistorial
+                key={`${item.origen}-${item.id}`}
+                item={item}
+                moneda={moneda}
+                monedaBase={monedaBase}
+              />
             ))}
           </ul>
 

@@ -70,6 +70,14 @@ export const errores = {
       { causa },
     ),
 
+  /** La fuente de cotizaciones no respondió y no hay ninguna guardada: la persona la escribe a mano. */
+  cotizacionNoDisponible: () =>
+    new ErrorApi(
+      CODIGOS_ERROR.COTIZACION_NO_DISPONIBLE,
+      503,
+      "No pudimos traer la cotización. Escribila vos para seguir.",
+    ),
+
   /**
    * Tras un reseteo de contraseña, la cuenta no puede hacer nada mas que
    * cambiarla. El cliente reconoce este codigo y lleva a la pantalla de cambio.

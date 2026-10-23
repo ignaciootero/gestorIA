@@ -9,12 +9,7 @@
 
 "use client";
 
-import {
-  centavosDesdeImporte,
-  esquemaAjusteDeSaldo,
-  formatearMonto,
-  MONEDA_POR_DEFECTO,
-} from "@gestoria/shared";
+import { centavosDesdeImporte, esquemaAjusteDeSaldo, formatearMonto } from "@gestoria/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -43,7 +38,6 @@ import {
   obtenerCuentas,
   ocultarCuenta,
 } from "@/lib/api-finanzas";
-import { useSession } from "@/lib/auth-cliente";
 import { cn } from "@/lib/clases";
 import { detalleDeValidacion, interpretarError } from "@/lib/mensajes-de-error";
 import { FormularioCuenta } from "./formulario-de-cuenta";
@@ -59,14 +53,13 @@ function mensajeDe(error: unknown): string {
 
 function FormularioAjusteDeSaldo({
   cuenta,
-  moneda,
   cerrar,
 }: {
   cuenta: CuentaFinanciera;
-  moneda: string;
   cerrar: () => void;
 }) {
   const queryClient = useQueryClient();
+  const moneda = cuenta.moneda;
 
   // Mismo esquema que valida la API, más el aviso de "no cambia nada" antes de
   // mandar el pedido.
@@ -128,6 +121,7 @@ function FormularioAjusteDeSaldo({
             onChange={field.onChange}
             onBlur={field.onBlur}
             permitirNegativo
+            moneda={moneda}
             etiqueta="Saldo actual"
             autoFocus
             ayuda={
@@ -180,11 +174,9 @@ type AccionesDeCuenta = {
 
 function FilaDeCuenta({
   cuenta,
-  moneda,
   acciones,
 }: {
   cuenta: CuentaFinanciera;
-  moneda: string;
   acciones: AccionesDeCuenta;
 }) {
   return (
@@ -197,7 +189,8 @@ function FilaDeCuenta({
             cuenta.saldoCentavos < 0 ? "font-medium" : "text-texto-secundario",
           )}
         >
-          <Saldo centavos={cuenta.saldoCentavos} moneda={moneda} />
+          <Saldo centavos={cuenta.saldoCentavos} moneda={cuenta.moneda} />
+          <span className="text-texto-secundario"> · {cuenta.moneda}</span>
         </p>
       </div>
 
@@ -259,8 +252,6 @@ function FilaDeCuenta({
 
 export function SeccionDeCuentas() {
   const queryClient = useQueryClient();
-  const { data: sesion } = useSession();
-  const moneda = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
 
   const { data, isPending, error } = useQuery({
     queryKey: ["finanzas", "cuentas"],
@@ -343,7 +334,7 @@ export function SeccionDeCuentas() {
         ) : (
           <ul className="flex flex-col divide-y divide-borde">
             {activas.map((cuenta) => (
-              <FilaDeCuenta key={cuenta.id} cuenta={cuenta} moneda={moneda} acciones={acciones} />
+              <FilaDeCuenta key={cuenta.id} cuenta={cuenta} acciones={acciones} />
             ))}
           </ul>
         )}
@@ -382,7 +373,7 @@ export function SeccionDeCuentas() {
           {ocultasAbiertas ? (
             <ul id="cuentas-ocultas" className="flex flex-col divide-y divide-borde">
               {ocultas.map((cuenta) => (
-                <FilaDeCuenta key={cuenta.id} cuenta={cuenta} moneda={moneda} acciones={acciones} />
+                <FilaDeCuenta key={cuenta.id} cuenta={cuenta} acciones={acciones} />
               ))}
             </ul>
           ) : null}
@@ -422,11 +413,7 @@ export function SeccionDeCuentas() {
         icono={SlidersHorizontal}
       >
         {aAjustar ? (
-          <FormularioAjusteDeSaldo
-            cuenta={aAjustar}
-            moneda={moneda}
-            cerrar={() => setAAjustar(null)}
-          />
+          <FormularioAjusteDeSaldo cuenta={aAjustar} cerrar={() => setAAjustar(null)} />
         ) : null}
       </Dialogo>
 
@@ -499,8 +486,8 @@ export function SeccionDeCuentas() {
               {aEliminar.saldoCentavos !== 0 ? (
                 <>
                   {" "}
-                  Su saldo de <Saldo centavos={aEliminar.saldoCentavos} moneda={moneda} /> deja de
-                  sumar al disponible.
+                  Su saldo de <Saldo centavos={aEliminar.saldoCentavos} moneda={aEliminar.moneda} />{" "}
+                  deja de sumar al disponible.
                 </>
               ) : null}{" "}
               Su historial de ajustes también deja de verse.

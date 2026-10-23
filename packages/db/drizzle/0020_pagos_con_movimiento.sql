@@ -1,0 +1,2 @@
+ALTER TABLE "pagos_de_deudas" ADD COLUMN "movimiento_id" uuid;--> statement-breakpoint
+ALTER TABLE "pagos_de_deudas" ADD CONSTRAINT "pagos_de_deudas_movimiento_id_movimientos_id_fk" FOREIGN KEY ("movimiento_id") REFERENCES "public"."movimientos"("id") ON DELETE set null ON UPDATE no action;

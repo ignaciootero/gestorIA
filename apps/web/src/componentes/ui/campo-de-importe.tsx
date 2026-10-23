@@ -10,7 +10,7 @@
 // - los miles se separan solos; no hace falta escribir el punto;
 // - la coma es el separador decimal y, para quien escribe con el teclado numérico,
 //   un punto escrito también vale como decimal;
-// - se admiten hasta dos decimales;
+// - se admiten hasta dos decimales (o los que pida `decimales`: una cotización lleva más);
 // - al pegar un importe de otro lado ("1,234.56", "$ 250.5") se interpreta solo.
 //
 // El valor que sube a quien lo usa es un número (o NaN si el campo está vacío o
@@ -53,6 +53,13 @@ type PropsCampoDeImporte = Omit<
   onChange: (valor: number) => void;
   /** Deja escribir un signo menos al principio (saldos). Los importes y límites no. */
   permitirNegativo?: boolean;
+  /** Cuántos decimales se pueden escribir: 2 en los importes (por defecto), más en una cotización. */
+  decimales?: number;
+  /**
+   * La moneda en la que se escribe (código, como "USD"): se muestra dentro del campo, a la
+   * derecha, para que nunca quede duda de en qué moneda está el número. Todo importe lo lleva.
+   */
+  moneda: string;
 };
 
 /** Cuántos caracteres "significativos" (dígitos, coma decimal y signo) hay en el texto. */
@@ -78,11 +85,12 @@ function posicionDespuesDe(texto: string, cantidad: number, decimal: string): nu
 
 export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
   function CampoDeImporte(
-    { value, onChange, onBlur, permitirNegativo = false, ...resto },
+    { value, onChange, onBlur, permitirNegativo = false, decimales, moneda, ...resto },
     referenciaExterna,
   ) {
     const { decimal } = separadoresDeImporte();
-    const [texto, setTexto] = useState(() => textoDeImporte(value));
+    const opciones = decimales === undefined ? {} : { decimales };
+    const [texto, setTexto] = useState(() => textoDeImporte(value, opciones));
     const entrada = useRef<HTMLInputElement | null>(null);
     // Dónde dejar el cursor después del próximo render (o null para no tocarlo).
     const cursorPendiente = useRef<number | null>(null);
@@ -107,7 +115,7 @@ export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
       const actual = interpretarImporteEscrito(texto);
       const esperado = value ?? Number.NaN;
       const coinciden = Object.is(actual, esperado) || actual === esperado;
-      if (!coinciden) setTexto(textoDeImporte(value));
+      if (!coinciden) setTexto(textoDeImporte(value, opciones));
     }, [value]);
 
     useLayoutEffect(() => {
@@ -120,7 +128,7 @@ export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
 
     /** Aplica un texto nuevo (ya con el cursor en `posicionCruda` dentro de él). */
     function aplicar(crudo: string, posicionCruda: number): void {
-      const formateado = darFormatoAImporteEscrito(crudo, { permitirNegativo });
+      const formateado = darFormatoAImporteEscrito(crudo, { permitirNegativo, ...opciones });
       cursorPendiente.current = posicionDespuesDe(
         formateado,
         contarSignificativos(crudo.slice(0, posicionCruda), decimal),
@@ -144,7 +152,7 @@ export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
       const esEntradaReal = typeof InputEvent !== "undefined" && nativo instanceof InputEvent;
 
       if (!esEntradaReal) {
-        crudo = normalizarImportePegado(crudo);
+        crudo = normalizarImportePegado(crudo, opciones);
         posicion = crudo.length;
       } else if (nativo.inputType === "insertText" && dato === ".") {
         // Un punto escrito es la coma decimal (con el teclado numérico es la tecla
@@ -159,7 +167,7 @@ export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
       } else if (typeof dato === "string" && dato.length > 1 && crudo === dato) {
         // Se reemplazó todo el contenido de golpe (autocompletar, lectores de
         // pantalla): se lo interpreta como un importe pegado.
-        crudo = normalizarImportePegado(crudo);
+        crudo = normalizarImportePegado(crudo, opciones);
         posicion = crudo.length;
       }
 
@@ -169,7 +177,7 @@ export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
     function alPegar(evento: ClipboardEvent<HTMLInputElement>): void {
       evento.preventDefault();
       const elemento = evento.currentTarget;
-      const pegado = normalizarImportePegado(evento.clipboardData.getData("text"));
+      const pegado = normalizarImportePegado(evento.clipboardData.getData("text"), opciones);
       const inicio = elemento.selectionStart ?? texto.length;
       const fin = elemento.selectionEnd ?? inicio;
       const crudo = texto.slice(0, inicio) + pegado + texto.slice(fin);
@@ -183,6 +191,7 @@ export const CampoDeImporte = forwardRef<HTMLInputElement, PropsCampoDeImporte>(
         type="text"
         inputMode="decimal"
         autoComplete="off"
+        sufijo={moneda}
         value={texto}
         onChange={alCambiar}
         onPaste={alPegar}

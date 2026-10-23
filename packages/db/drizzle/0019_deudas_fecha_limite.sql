@@ -1,0 +1,2 @@
+ALTER TABLE "deudas" ADD COLUMN "fecha_limite" date;--> statement-breakpoint
+ALTER TABLE "deudas" ADD CONSTRAINT "deudas_limite_no_anterior" CHECK ("deudas"."fecha_limite" is null or "deudas"."fecha_limite" >= "deudas"."fecha");

@@ -15,12 +15,7 @@ import { useSession } from "@/lib/auth-cliente";
 import { cn } from "@/lib/clases";
 import { interpretarError } from "@/lib/mensajes-de-error";
 import { zonaDelDispositivo } from "@/lib/preferencias-finanzas";
-import {
-  claseDeMonto,
-  cuentasDeMovimiento,
-  IconoDeMovimiento,
-  signoDeMonto,
-} from "./estilo-de-movimiento";
+import { cuentasDeMovimiento, IconoDeMovimiento, MontoDeMovimiento } from "./estilo-de-movimiento";
 
 function TarjetaDeTotal({
   titulo,
@@ -67,22 +62,7 @@ function notaDelAnterior(
   return `Período anterior (${anterior.nombre}): ${formatearMonto(anterior[campo], moneda)}`;
 }
 
-function FilaDeMovimiento({
-  movimiento,
-  moneda,
-}: {
-  movimiento: Pick<
-    Movimiento,
-    | "tipo"
-    | "importeCentavos"
-    | "descripcion"
-    | "fecha"
-    | "categoria"
-    | "cuentaFinanciera"
-    | "cuentaDestino"
-  >;
-  moneda: string;
-}) {
+function FilaDeMovimiento({ movimiento, moneda }: { movimiento: Movimiento; moneda: string }) {
   return (
     <li className="flex items-center justify-between gap-3 border-b border-borde py-2.5 last:border-0">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -100,10 +80,7 @@ function FilaDeMovimiento({
           </p>
         </div>
       </div>
-      <p className={cn("shrink-0 text-sm font-medium tabular-nums", claseDeMonto(movimiento.tipo))}>
-        {signoDeMonto(movimiento.tipo)}
-        {formatearMonto(movimiento.importeCentavos, moneda)}
-      </p>
+      <MontoDeMovimiento movimiento={movimiento} monedaBase={moneda} />
     </li>
   );
 }
@@ -165,9 +142,20 @@ export function ResumenDeFinanzas({ periodo }: { periodo: Periodo }) {
           moneda={moneda}
           Icono={Wallet}
           {...(data.disponibleCentavos < 0 ? { tono: "peligro" as const } : {})}
-          nota="Suma de tus cuentas"
+          nota={
+            data.disponibleEsEstimado
+              ? "Suma de tus cuentas, con las de otras monedas a la cotización de hoy (estimado)"
+              : "Suma de tus cuentas"
+          }
         />
       </div>
+
+      {data.monedasSinCotizacion.length > 0 ? (
+        <Aviso tono="advertencia">
+          No pudimos traer la cotización de {data.monedasSinCotizacion.join(", ")}: las cuentas en
+          esa moneda no están sumadas al disponible. Probá de nuevo en un rato.
+        </Aviso>
+      ) : null}
 
       <Tarjeta className="p-4">
         <h2 className="mb-1 text-sm font-medium text-texto">

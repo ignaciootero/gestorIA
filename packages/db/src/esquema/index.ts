@@ -4,4 +4,7 @@
 
 export * from "./auditoria.ts";
 export * from "./auth.ts";
+export * from "./calendario.ts";
+export * from "./contactos.ts";
 export * from "./finanzas.ts";
+export * from "./tareas.ts";

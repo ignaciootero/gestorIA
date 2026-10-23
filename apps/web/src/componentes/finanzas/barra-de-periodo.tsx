@@ -1,6 +1,6 @@
 // Barra del período: qué período se está mirando, cuándo empieza y termina, y
-// las acciones sobre él (renombrar, cerrar, reabrir, eliminar). "Abrir período" va
-// arriba a la derecha de la tarjeta.
+// las acciones sobre él (renombrar, cerrar, reabrir, eliminar). "Agregar movimiento" y,
+// si hace falta, "Abrir período" van arriba a la derecha de la tarjeta.
 //
 // Todas las pestañas del módulo (resumen, movimientos, presupuestos y
 // estadísticas) muestran los datos del período elegido acá. Por defecto es el
@@ -9,7 +9,7 @@
 "use client";
 
 import { formatearFecha } from "@gestoria/shared";
-import { CalendarPlus, Lock, Pencil, RotateCcw, Trash2, Unlock } from "lucide-react";
+import { CalendarPlus, Lock, Pencil, Plus, RotateCcw, Trash2, Unlock } from "lucide-react";
 import { Boton } from "@/componentes/ui/boton";
 import { Insignia } from "@/componentes/ui/insignia";
 import { Selector } from "@/componentes/ui/selector";
@@ -26,6 +26,9 @@ type PropsBarra = {
   onReabrir: () => void;
   onEliminar: () => void;
   onAbrir: () => void;
+  onAgregarMovimiento: () => void;
+  /** Deshabilita "Agregar movimiento" mientras se cargan los períodos. */
+  cargando?: boolean;
 };
 
 /** "Desde 01/10/2026" si está abierto; "Del 01/09/2026 al 01/10/2026" si ya cerró (la hora no se muestra). */
@@ -45,6 +48,8 @@ export function BarraDePeriodo({
   onReabrir,
   onEliminar,
   onAbrir,
+  onAgregarMovimiento,
+  cargando = false,
 }: PropsBarra) {
   const hayAbierto = periodos.some((otro) => otro.abierto);
   // Reabrir un período lo extiende hacia adelante: solo si no hay otro abierto y
@@ -54,9 +59,10 @@ export function BarraDePeriodo({
 
   return (
     <Tarjeta className="flex flex-col gap-3 p-4">
-      {/* Arriba: el selector a la izquierda y "Abrir período" en la esquina superior derecha. */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 max-w-xs flex-1">
+      {/* Arriba: el selector a la izquierda y, en la esquina superior derecha, "Agregar movimiento"
+          (la acción más frecuente) junto a "Abrir período" cuando no hay ninguno abierto. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 max-w-xs flex-1 basis-48">
           <Selector
             etiqueta="Período"
             value={periodo.id}
@@ -71,12 +77,18 @@ export function BarraDePeriodo({
           </Selector>
         </div>
 
-        {!hayAbierto ? (
-          <Boton variante="secundario" tamano="chico" onClick={onAbrir} className="shrink-0">
-            <CalendarPlus aria-hidden="true" className="size-4" />
-            Abrir período
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {!hayAbierto ? (
+            <Boton variante="secundario" tamano="chico" onClick={onAbrir}>
+              <CalendarPlus aria-hidden="true" className="size-4" />
+              Abrir período
+            </Boton>
+          ) : null}
+          <Boton onClick={onAgregarMovimiento} disabled={cargando}>
+            <Plus aria-hidden="true" className="size-4" />
+            Agregar movimiento
           </Boton>
-        ) : null}
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -5,9 +5,12 @@
 // tarjeta...) viven en "cuentas_financieras": mismo concepto cotidiano, nombre
 // de tabla distinto para no chocar ni confundirse con la de auth.
 //
-// Una sola moneda por usuario (la de `usuarios.monedaPorDefecto`): ningún
-// monto de acá guarda su propia moneda ni hay conversión (decisión registrada
-// en docs/decisiones.md, que resuelve la nota de docs/guias/convenciones.md).
+// Monedas: cada cuenta financiera tiene su moneda, y los importes de sus
+// movimientos están en esa moneda. La moneda base de la persona es
+// `usuarios.monedaPorDefecto` (pesos uruguayos por defecto): todo total, balance
+// y estadística se expresa en ella. Por eso cada movimiento guarda además el tipo
+// de cambio con que se convirtió y el importe ya convertido: el histórico no
+// cambia cuando se mueve el dólar (docs/decisiones.md, 2026-10-03).
 // Los montos se guardan en centésimos, enteros, nunca en punto flotante. Son
 // `bigint` (modo "number": se leen como número de JavaScript, exacto hasta 2^53):
 // un `integer` de 32 bits solo llega a unos 21 millones, y los topes de un importe
@@ -21,6 +24,12 @@
 // `presupuestos` se borra en duro: es una configuración vigente, no un
 // historial que deshacer.
 //
+// `deudas` y `pagos_de_deudas` son un registro aparte de la plata que le deben a la persona o
+// que ella debe a un contacto (módulo de contactos). NO mueven los saldos de las cuentas ni
+// entran en los totales y estadísticas de los movimientos: si no, lo prestado contaría como un
+// gasto y lo devuelto como un ingreso. Cuánto falta por pagar se calcula al leer (monto menos
+// pagos), no se guarda.
+//
 // `periodos` son los tramos de tiempo que abre y cierra la persona (no tienen
 // por qué coincidir con un mes). Nunca se borran: cada movimiento pertenece a
 // uno. Ver el comentario de la tabla para las reglas que garantiza la base.
@@ -28,16 +37,21 @@
 import { relations, sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
+  date,
   index,
   integer,
+  numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { usuarios } from "./auth.ts";
+import { contactos } from "./contactos.ts";
 
 const creadoEn = timestamp({ withTimezone: true }).notNull().defaultNow();
 
@@ -132,6 +146,11 @@ export const cuentasFinancieras = pgTable(
       .references(() => usuarios.id, { onDelete: "cascade" }),
     nombre: text().notNull(),
     /**
+     * Código ISO 4217 de la moneda de la cuenta ("UYU", "USD"...). No cambia una
+     * vez que la cuenta tiene movimientos: sus importes están en esta moneda.
+     */
+    moneda: text().notNull(),
+    /**
      * Punto de partida del saldo, fijado al crear la cuenta. El saldo mostrado
      * es este valor más la suma de ingresos, menos la de gastos, más los ajustes
      * manuales de la cuenta (calculado al leer, no cacheado, para que nunca se
@@ -149,7 +168,10 @@ export const cuentasFinancieras = pgTable(
     eliminadoEn: timestamp({ withTimezone: true }),
     creadoEn,
   },
-  (tabla) => [index("cuentas_financieras_usuario_idx").on(tabla.userId)],
+  (tabla) => [
+    index("cuentas_financieras_usuario_idx").on(tabla.userId),
+    check("cuentas_financieras_moneda_valida", sql`${tabla.moneda} ~ '^[A-Z]{3}$'`),
+  ],
 );
 
 /**
@@ -196,9 +218,33 @@ export const movimientos = pgTable(
      * "neutro" es una transferencia entre dos cuentas: ni ingreso ni gasto.
      */
     tipo: text().notNull(),
-    /** Siempre positivo: el signo lo da `tipo` (y, en una transferencia, la cuenta). */
+    /**
+     * En la moneda de la cuenta (la de origen, en una transferencia). Siempre
+     * positivo: el signo lo da `tipo` (y, en una transferencia, la cuenta).
+     */
     importeCentavos: bigint({ mode: "number" }).notNull(),
+    /**
+     * Cuántas unidades de la moneda a la que se convierte vale 1 unidad de la de
+     * la cuenta. En un ingreso o gasto, esa moneda es la base de la persona; en
+     * una transferencia, la de la cuenta de destino. 1 si ambas son la misma.
+     */
+    tipoDeCambio: numeric({ precision: 20, scale: 8, mode: "number" }).notNull(),
+    /**
+     * `importeCentavos` ya convertido (ver `tipoDeCambio`): en un ingreso o gasto,
+     * lo que se suma en los totales, presupuestos y estadísticas; en una
+     * transferencia, lo que llega a la cuenta de destino. Se guarda, no se
+     * recalcula, para que los totales históricos no cambien con el mercado.
+     */
+    importeConvertidoCentavos: bigint({ mode: "number" }).notNull(),
+    /** La persona fijó la cotización (o el importe recibido) en vez de usar la de la fuente. */
+    cambioManual: boolean().notNull().default(false),
     descripcion: text().notNull(),
+    /**
+     * Con quién fue (a quién se le pagó, de quién se cobró). Opcional y solo en ingresos y
+     * gastos: una transferencia entre cuentas propias no tiene contraparte. Si el contacto se
+     * borra en definitivo, el movimiento se queda sin esta referencia.
+     */
+    contactoId: uuid().references(() => contactos.id, { onDelete: "set null" }),
     categoriaId: integer()
       .notNull()
       .references(() => categorias.id),
@@ -234,9 +280,20 @@ export const movimientos = pgTable(
     index("movimientos_usuario_periodo_idx").on(tabla.userId, tabla.periodoId),
     index("movimientos_usuario_categoria_idx").on(tabla.userId, tabla.categoriaId),
     index("movimientos_usuario_cuenta_idx").on(tabla.userId, tabla.cuentaFinancieraId),
+    // "Los movimientos con este contacto", en su ficha.
+    index("movimientos_usuario_contacto_idx")
+      .on(tabla.userId, tabla.contactoId)
+      .where(sql`${tabla.contactoId} is not null`),
     index("movimientos_destino_idx").on(tabla.userId, tabla.cuentaDestinoId),
+    // Una transferencia entre cuentas propias no tiene contacto.
+    check(
+      "movimientos_contacto_no_en_transferencias",
+      sql`${tabla.contactoId} is null or ${tabla.tipo} <> 'neutro'`,
+    ),
     check("movimientos_tipo_valido", sql`${tabla.tipo} in ('ingreso', 'gasto', 'neutro')`),
     check("movimientos_importe_positivo", sql`${tabla.importeCentavos} > 0`),
+    check("movimientos_convertido_positivo", sql`${tabla.importeConvertidoCentavos} > 0`),
+    check("movimientos_tipo_de_cambio_positivo", sql`${tabla.tipoDeCambio} > 0`),
     // Una transferencia tiene cuenta de destino, y distinta de la de origen; el resto no.
     check(
       "movimientos_destino_solo_en_transferencias",
@@ -271,11 +328,110 @@ export const presupuestos = pgTable(
   ],
 );
 
+/**
+ * Cotizaciones de las monedas, traídas de la fuente pública y guardadas como
+ * caché: cuántas unidades de cada moneda vale un dólar, para un día. Son datos de
+ * mercado, iguales para todos: no llevan `userId`. El día "de hoy" se vuelve a
+ * traer cuando se vence (ver servicios/finanzas/cotizaciones.ts); los pasados no
+ * cambian.
+ */
+export const cotizaciones = pgTable(
+  "cotizaciones",
+  {
+    /** El día pedido (UTC). */
+    fecha: date({ mode: "string" }).notNull(),
+    moneda: text().notNull(),
+    /** Unidades de `moneda` por 1 USD. */
+    unidadesPorDolar: numeric({ precision: 24, scale: 10, mode: "number" }).notNull(),
+    /** El día al que corresponde el dato que devolvió la fuente (puede ser anterior al pedido). */
+    fechaDeLaFuente: date({ mode: "string" }).notNull(),
+    obtenidaEn: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (tabla) => [
+    primaryKey({ columns: [tabla.fecha, tabla.moneda] }),
+    check("cotizaciones_valor_positivo", sql`${tabla.unidadesPorDolar} > 0`),
+  ],
+);
+
+export const deudas = pgTable(
+  "deudas",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: text()
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    /**
+     * Con quién, cuando es un contacto. Sin `onDelete`: un contacto con deudas no se borra en
+     * definitivo (la limpieza lo saltea) y una deuda nunca desaparece de golpe por borrar a alguien.
+     * Es null si la deuda es con alguien que no está en los contactos (ver `nombreLibre`).
+     */
+    contactoId: uuid().references(() => contactos.id),
+    /** Con quién, cuando no es un contacto: el nombre que escribió la persona. Es null si hay `contactoId`. */
+    nombreLibre: text(),
+    /** "me_deben" (la persona prestó o espera cobrar) | "debo" (ella debe pagar). */
+    sentido: text().notNull(),
+    concepto: text().notNull(),
+    /** El total original, en centésimos de `moneda`. Siempre positivo. */
+    montoCentavos: bigint({ mode: "number" }).notNull(),
+    /** Código ISO 4217. Una deuda es en una sola moneda y no se convierte. */
+    moneda: text().notNull(),
+    /** El día en que se originó. "AAAA-MM-DD". */
+    fecha: date({ mode: "string" }).notNull(),
+    /** Hasta qué día debería saldarse ("AAAA-MM-DD"). Opcional; nunca anterior a `fecha`. */
+    fechaLimite: date({ mode: "string" }),
+    eliminadoEn: timestamp({ withTimezone: true }),
+    creadoEn,
+  },
+  (tabla) => [
+    index("deudas_usuario_idx").on(tabla.userId, tabla.eliminadoEn),
+    index("deudas_contacto_idx").on(tabla.contactoId),
+    // Una deuda es con un contacto o con un nombre escrito a mano, nunca con los dos ni con ninguno.
+    check("deudas_con_quien", sql`num_nonnulls(${tabla.contactoId}, ${tabla.nombreLibre}) = 1`),
+    check(
+      "deudas_limite_no_anterior",
+      sql`${tabla.fechaLimite} is null or ${tabla.fechaLimite} >= ${tabla.fecha}`,
+    ),
+    check("deudas_sentido_valido", sql`${tabla.sentido} in ('me_deben', 'debo')`),
+    check("deudas_monto_positivo", sql`${tabla.montoCentavos} > 0`),
+    check("deudas_moneda_valida", sql`${tabla.moneda} ~ '^[A-Z]{3}$'`),
+  ],
+);
+
+/** Un pago (o cobro) parcial o total de una deuda. Nunca puede dejar el saldo en negativo: lo valida el servicio. */
+export const pagosDeDeudas = pgTable(
+  "pagos_de_deudas",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: text()
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    deudaId: uuid()
+      .notNull()
+      .references(() => deudas.id, { onDelete: "cascade" }),
+    montoCentavos: bigint({ mode: "number" }).notNull(),
+    /** El día en que se pagó. "AAAA-MM-DD". */
+    fecha: date({ mode: "string" }).notNull(),
+    /**
+     * El ingreso o gasto que se generó junto con este pago, si la persona lo pidió. Quitar el pago
+     * elimina también ese movimiento; si el movimiento se borra en definitivo, esta referencia queda
+     * en null (el pago no se pierde).
+     */
+    movimientoId: uuid().references(() => movimientos.id, { onDelete: "set null" }),
+    eliminadoEn: timestamp({ withTimezone: true }),
+    creadoEn,
+  },
+  (tabla) => [
+    index("pagos_de_deudas_deuda_idx").on(tabla.deudaId),
+    check("pagos_de_deudas_monto_positivo", sql`${tabla.montoCentavos} > 0`),
+  ],
+);
+
 // Relaciones para `db.query.movimientos.findMany({ with: { categoria, cuentaFinanciera } })`:
 // el listado de movimientos necesita el nombre de la categoría y la cuenta, y
 // esto evita una consulta aparte por cada fila (docs/guias/rendimiento.md, N+1).
 export const movimientosRelations = relations(movimientos, ({ one }) => ({
   categoria: one(categorias, { fields: [movimientos.categoriaId], references: [categorias.id] }),
+  contacto: one(contactos, { fields: [movimientos.contactoId], references: [contactos.id] }),
   periodo: one(periodos, { fields: [movimientos.periodoId], references: [periodos.id] }),
   cuentaFinanciera: one(cuentasFinancieras, {
     fields: [movimientos.cuentaFinancieraId],

@@ -4,7 +4,12 @@
 
 "use client";
 
-import { formatearFechaHora, formatearMonto, MONEDA_POR_DEFECTO } from "@gestoria/shared";
+import {
+  formatearFechaHora,
+  formatearMonto,
+  MONEDA_POR_DEFECTO,
+  nombreCompletoDeContacto,
+} from "@gestoria/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Pencil, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -29,12 +34,7 @@ import { useSession } from "@/lib/auth-cliente";
 import { cn } from "@/lib/clases";
 import { interpretarError } from "@/lib/mensajes-de-error";
 import { zonaDelDispositivo } from "@/lib/preferencias-finanzas";
-import {
-  claseDeMonto,
-  cuentasDeMovimiento,
-  IconoDeMovimiento,
-  signoDeMonto,
-} from "./estilo-de-movimiento";
+import { cuentasDeMovimiento, IconoDeMovimiento, MontoDeMovimiento } from "./estilo-de-movimiento";
 import { FormularioMovimiento } from "./formulario-movimiento";
 
 const POR_PAGINA = 20;
@@ -49,7 +49,7 @@ const FILTROS_TIPO = [
 export function ListadoDeMovimientos({ periodo }: { periodo: Periodo }) {
   const queryClient = useQueryClient();
   const { data: sesion } = useSession();
-  const moneda = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
+  const monedaBase = sesion?.user.monedaPorDefecto ?? MONEDA_POR_DEFECTO;
 
   const [busquedaEscrita, setBusquedaEscrita] = useState("");
   const [busqueda, setBusqueda] = useState("");
@@ -205,6 +205,9 @@ export function ListadoDeMovimientos({ periodo }: { periodo: Periodo }) {
                       />
                       {movimiento.categoria.nombre} · {cuentasDeMovimiento(movimiento)} ·{" "}
                       {formatearFechaHora(movimiento.fecha, zonaDelDispositivo())}
+                      {movimiento.contacto
+                        ? ` · ${nombreCompletoDeContacto(movimiento.contacto)}`
+                        : ""}
                     </p>
                   </div>
                 </div>
@@ -214,15 +217,7 @@ export function ListadoDeMovimientos({ periodo }: { periodo: Periodo }) {
                     derecha empujando el importe hacia la izquierda. Sin mouse (táctil) se ven
                     siempre. */}
                 <div className="flex shrink-0 items-center">
-                  <p
-                    className={cn(
-                      "text-sm font-medium tabular-nums",
-                      claseDeMonto(movimiento.tipo),
-                    )}
-                  >
-                    {signoDeMonto(movimiento.tipo)}
-                    {formatearMonto(movimiento.importeCentavos, moneda)}
-                  </p>
+                  <MontoDeMovimiento movimiento={movimiento} monedaBase={monedaBase} />
 
                   <div
                     className={cn(
@@ -315,7 +310,8 @@ export function ListadoDeMovimientos({ periodo }: { periodo: Periodo }) {
           <>
             <p className="text-sm text-texto-secundario">
               Se elimina "{aEliminar.descripcion}" (
-              {formatearMonto(aEliminar.importeCentavos, moneda)}) y deja de contar en tus totales.
+              {formatearMonto(aEliminar.importeCentavos, aEliminar.cuentaFinanciera.moneda)}) y deja
+              de contar en tus totales.
             </p>
 
             {eliminar.isError ? (

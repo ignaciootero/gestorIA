@@ -9,9 +9,12 @@ lenguaje natural que se suma al final de la hoja de ruta. Se escribe siempre as�
 la g minúscula y las dos últimas letras en mayúscula.
 
 Estado actual: **pasos 1 a 7 de la hoja de ruta**. Hay monorepo, base de datos, API con
-autenticación, sistema visual, panel de admin y el primer módulo de negocio: ingresos y
+autenticación, sistema visual, panel de admin y dos módulos de negocio: ingresos y
 gastos, con transferencias entre cuentas, organizados en períodos que abre y cierra cada
-persona (no en meses calendario).
+persona (no en meses calendario), contactos (personas y empresas o servicios, con etiquetas,
+favoritos y recordatorios), tareas (to-do con tareas repetitivas, categorías, historial y tareas fallidas) y un calendario
+que junta los vencimientos de deudas, los recordatorios de contactos y las tareas pendientes, y permite
+anotar eventos a mano.
 Todavía no hay móvil ni entrada por lenguaje natural. Ver `CLAUDE.md` para el
 panorama completo.
 
@@ -158,6 +161,11 @@ En Linux: `sudo -u postgres createdb gestion && sudo -u postgres createdb gestio
 Los tests de integración usan la base **`gestion_test`**, nunca la de desarrollo. Tiene
 que existir y tener las migraciones aplicadas (pasos 3 y 4 de la puesta en marcha).
 
+El e2e levanta su propia API (puerto 3101) y su propia web (puerto 3100, carpeta de
+compilación `.next-e2e`), así que se puede correr con `pnpm dev` abierto. Las cotizaciones de
+monedas nunca salen a internet en los tests: los de la API usan una fuente falsa y los del
+navegador interceptan el pedido.
+
 ### Base de datos
 
 | Comando | Qué hace |
@@ -181,9 +189,8 @@ Una migración ya aplicada **nunca se edita**: se genera una nueva
 | `pnpm usuario:sembrar` | Carga cuentas de prueba en distintos estados, pasando por el flujo real |
 | `pnpm usuario:sembrar --listar` | Muestra los escenarios disponibles, sin tocar la base |
 | `pnpm usuario:sembrar --solo aprobada,bloqueada` | Carga solo esos escenarios |
-| `pnpm usuario:sembrar --borrar-todo` | Antes de sembrar, vacía usuarios, sesiones y auditoría (pide confirmación) |
-| `pnpm usuario:sembrar --solo finanzas` | Carga meses de finanzas realistas para el admin (si ya tiene, no toca nada) |
-| `pnpm usuario:sembrar --solo finanzas --reiniciar-finanzas` | Borra las finanzas del admin y las vuelve a sembrar (pide confirmación) |
+| `pnpm usuario:sembrar --borrar-todo` | Antes de sembrar, vacía toda la base —usuarios, sesiones, auditoría y los datos de cada cuenta— (pide confirmación; con `--forzar` no pregunta). Es la forma de volver a empezar de cero |
+| `pnpm usuario:sembrar --solo datos` | Solo la carga general de datos del admin: meses de finanzas, contactos con etiquetas y recordatorios, deudas de todos los tipos y tareas con categorías e historial (si ya tiene datos, no toca nada; trae las cotizaciones reales de cada día y, sin internet, usa 1 USD = 40 UYU) |
 
 Hasta que exista el panel de admin, estos comandos son la única forma de aprobar una
 cuenta que se registró y quedó pendiente.
@@ -198,8 +205,8 @@ en modo claro y oscuro. En producción devuelve 404.
 
 ```
 apps/
-  api/        Hono + Pino + Better Auth. Único backend, lo consumen web y móvil
-  web/        Next.js: ingreso, inicio, panel de admin y módulo de ingresos y gastos (por períodos)
+  api/        Hono + Pino + Better Auth + pg-boss (tareas programadas). Único backend, lo consumen web y móvil
+  web/        Next.js: ingreso, inicio, panel de admin y los módulos de ingresos y gastos (por períodos), contactos, tareas y calendario
   mobile/     Expo (placeholder, paso 6)
 packages/
   config/     tsconfig base y configuración compartida

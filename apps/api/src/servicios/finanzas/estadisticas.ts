@@ -26,7 +26,7 @@ export async function gastosPorCategoria(
       nombre: esquema.categorias.nombre,
       color: esquema.categorias.color,
       totalCentavos:
-        sql<number>`coalesce(sum(${esquema.movimientos.importeCentavos}), 0)::bigint`.mapWith(
+        sql<number>`coalesce(sum(${esquema.movimientos.importeConvertidoCentavos}), 0)::bigint`.mapWith(
           Number,
         ),
     })
@@ -49,6 +49,8 @@ export type PeriodoDeEvolucion = {
   nombre: string;
   ingresosCentavos: number;
   gastosCentavos: number;
+  /** Ingresos menos gastos del período: positivo si sobró, negativo si se gastó de más. */
+  balanceCentavos: number;
 };
 
 const CANTIDAD_PERIODOS_EVOLUCION = 6;
@@ -93,9 +95,10 @@ export async function evolucionPorPeriodo(
     .select({
       periodoId: esquema.movimientos.periodoId,
       tipo: esquema.movimientos.tipo,
-      total: sql<number>`coalesce(sum(${esquema.movimientos.importeCentavos}), 0)::bigint`.mapWith(
-        Number,
-      ),
+      total:
+        sql<number>`coalesce(sum(${esquema.movimientos.importeConvertidoCentavos}), 0)::bigint`.mapWith(
+          Number,
+        ),
     })
     .from(esquema.movimientos)
     .where(
@@ -110,14 +113,19 @@ export async function evolucionPorPeriodo(
     )
     .groupBy(esquema.movimientos.periodoId, esquema.movimientos.tipo);
 
-  return recientes.reverse().map(({ id, nombre }) => ({
-    periodoId: id,
-    nombre,
-    ingresosCentavos:
-      totales.find((fila) => fila.periodoId === id && fila.tipo === "ingreso")?.total ?? 0,
-    gastosCentavos:
-      totales.find((fila) => fila.periodoId === id && fila.tipo === "gasto")?.total ?? 0,
-  }));
+  return recientes.reverse().map(({ id, nombre }) => {
+    const ingresosCentavos =
+      totales.find((fila) => fila.periodoId === id && fila.tipo === "ingreso")?.total ?? 0;
+    const gastosCentavos =
+      totales.find((fila) => fila.periodoId === id && fila.tipo === "gasto")?.total ?? 0;
+    return {
+      periodoId: id,
+      nombre,
+      ingresosCentavos,
+      gastosCentavos,
+      balanceCentavos: ingresosCentavos - gastosCentavos,
+    };
+  });
 }
 
 /** Qué se mira de una categoría: lo gastado o lo ingresado. Una misma categoría puede tener las dos cosas. */
@@ -177,7 +185,9 @@ export async function evolucionDeCategoria(
   const idsDePeriodos = recientes.map((reciente) => reciente.id);
 
   const total =
-    sql<number>`coalesce(sum(${esquema.movimientos.importeCentavos}), 0)::bigint`.mapWith(Number);
+    sql<number>`coalesce(sum(${esquema.movimientos.importeConvertidoCentavos}), 0)::bigint`.mapWith(
+      Number,
+    );
 
   const [totales, ingresos, presupuesto] = await Promise.all([
     recientes.length === 0
