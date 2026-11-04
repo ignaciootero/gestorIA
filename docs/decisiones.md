@@ -8,7 +8,7 @@ Las más nuevas arriba.
 ## 2026-11-04 — Widgets de Contactos: solo lo que sirve en el día a día
 
 **Decisión.** Los widgets de la columna de Contactos quedan en: próximo cumpleaños, próximo
-recordatorio, recordatorios de la semana (la lista de lo que cayó en los últimos 7 días, sin cifra),
+recordatorio, resumen de la semana pasada (la lista de lo que cayó en los últimos 7 días, sin cifra),
 cumpleaños por mes (barras de enero a diciembre, con el número de cada mes debajo y el mes actual en
 otro color), deudas con contactos (*Tus contactos te deben*, *Les debés* y el próximo vencimiento) y
 el aviso de contactos sin teléfono ni correo, más los avisos de "sin contactos" y "recordatorios de

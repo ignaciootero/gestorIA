@@ -1348,8 +1348,8 @@ sus pestañas (ver `docs/decisiones.md`, 2026-11-04):
   vence antes, si vence en 7 días o menos o ya venció) y *Sin forma de comunicarse* (contactos sin
   teléfono ni correo).
 - **Texto**: *Próximo cumpleaños* (el más cercano entre las fechas de nacimiento), *Próximo
-  recordatorio* (el primero de mañana en adelante: los de hoy ya tienen su aviso), *Recordatorios de
-  la semana* (lo que cayó en los últimos 7 días, del historial: título, contacto y "Ayer" o "Hace N
+  recordatorio* (el primero de mañana en adelante: los de hoy ya tienen su aviso), *Resumen de la
+  semana pasada* (lo que cayó en los últimos 7 días, del historial: título, contacto y "Ayer" o "Hace N
   días", el más reciente primero, hasta ocho; sin cifra), *Les debés* (lo pendiente por moneda, sin
   mezclarlas, con los tres contactos de montos más altos) y *Próximo vencimiento* cuando falta más de
   una semana. Las deudas cuentan solo las que son con contactos, no las de un nombre escrito a mano.

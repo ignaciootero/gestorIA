@@ -270,7 +270,7 @@ function armarCifras(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null
           tipo: "dato",
           tono: "neutro",
           Icono: History,
-          titulo: "Recordatorios de la semana",
+          titulo: "Resumen de la semana pasada",
           detalle: "Los que cayeron en los últimos 7 días, el más reciente primero.",
           extras: datos.semanaPasada.map((entrada) => ({
             etiqueta: `${entrada.titulo} · ${nombreCompletoDeContacto(entrada.contacto)}`,

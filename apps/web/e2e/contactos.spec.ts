@@ -1518,7 +1518,7 @@ test.describe("widgets", () => {
     await expect(proximo).toContainText("a las 10:30");
 
     // La semana pasada es una lista de lo que ya cayó, sin cifra: qué fue, de quién y cuándo.
-    const semana = await mostrarWidget(texto, "Recordatorios de la semana");
+    const semana = await mostrarWidget(texto, "Resumen de la semana pasada");
     await expect(semana).toContainText("Tomar la pastilla · Ana Pérez");
     await expect(semana).toContainText("Ayer");
     await expect(semana).not.toContainText("Cita médica");
