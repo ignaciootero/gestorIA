@@ -5,16 +5,12 @@ import type { ClienteDb } from "@gestoria/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { limpiarBase } from "../../pruebas/auth-de-prueba.ts";
 import {
-  cadaAnio,
-  cadaMes,
   crearContactoPorApi,
-  crearEtiquetaPorApi,
   empresaValida,
   entrarComoPersona,
   type PersonaDePrueba,
   pedir,
   personaValida,
-  unaVez,
 } from "../../pruebas/contactos-de-prueba.ts";
 import { appDePrueba, clienteDePrueba, leerJson } from "../../pruebas/entorno-de-prueba.ts";
 import { crearRecordatorio } from "./recordatorios.ts";
@@ -57,24 +53,28 @@ function recordar(contactoId: string, titulo: string, fecha: string, hora = "") 
 }
 
 describe("sin contactos", () => {
-  it("devuelve todo en cero y sin cumpleaños", async () => {
+  it("devuelve todo en cero, sin cumpleaños ni deudas", async () => {
+    const sinDeudas = { totales: [], contactos: 0, mayores: [] };
     expect(await widgets()).toEqual({
-      totales: { personas: 0, empresas: 0, favoritos: 0, sinDatosDeContacto: 0 },
-      etiquetas: [],
-      rubros: [],
-      favoritos: [],
-      recordatorios: { hoy: 0, proximos7: 0, proximos30: 0, porSemana: [0, 0, 0, 0], proximos: [] },
-      porRepeticion: [],
-      historial: { total: 0, ultimos7: 0, porDia: [0, 0, 0, 0, 0, 0, 0], ultimas: [] },
-      masGastado: [],
-      monedaBase: "UYU",
+      hoy: "2026-10-20",
+      totales: { personas: 0, empresas: 0, sinDatosDeContacto: 0 },
+      recordatorios: {
+        hoy: 0,
+        proximos7: 0,
+        proximos30: 0,
+        porDia: [0, 0, 0, 0, 0, 0, 0],
+        porSemana: [0, 0, 0, 0],
+        proximos: [],
+      },
       proximoCumpleanos: null,
+      cumpleanosPorMes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      deudas: { teDeben: sinDeudas, debes: sinDeudas, proximoVencimiento: null },
     });
   });
 });
 
 describe("totales", () => {
-  it("cuenta personas, empresas, favoritos y contactos sin forma de comunicarse", async () => {
+  it("cuenta personas, empresas y contactos sin forma de comunicarse", async () => {
     await crearContactoPorApi(
       app,
       ana.cookies,
@@ -95,9 +95,8 @@ describe("totales", () => {
       empresaValida({ nombre: "Taller", favorito: true }),
     );
 
-    const { totales, favoritos } = await widgets();
-    expect(totales).toEqual({ personas: 3, empresas: 1, favoritos: 2, sinDatosDeContacto: 2 });
-    expect(favoritos.map((favorito) => favorito.nombre).sort()).toEqual(["Con correo", "Taller"]);
+    const { totales } = await widgets();
+    expect(totales).toEqual({ personas: 3, empresas: 1, sinDatosDeContacto: 2 });
   });
 
   it("no cuenta los contactos eliminados", async () => {
@@ -106,74 +105,39 @@ describe("totales", () => {
     expect((await widgets()).totales).toEqual({
       personas: 0,
       empresas: 0,
-      favoritos: 0,
       sinDatosDeContacto: 0,
     });
   });
-
-  it("muestra a lo sumo tres favoritos", async () => {
-    for (const nombre of ["A", "B", "C", "D"]) {
-      await crearContactoPorApi(app, ana.cookies, personaValida({ nombre, favorito: true }));
-    }
-    const resultado = await widgets();
-    expect(resultado.totales.favoritos).toBe(4);
-    expect(resultado.favoritos).toHaveLength(3);
-  });
 });
 
-describe("etiquetas y rubros", () => {
-  it("ordena las etiquetas por cantidad de contactos, ignora las vacías y se queda con tres", async () => {
-    const [a, b, c, d] = [
-      await crearEtiquetaPorApi(app, ana.cookies, "Familia"),
-      await crearEtiquetaPorApi(app, ana.cookies, "Trabajo"),
-      await crearEtiquetaPorApi(app, ana.cookies, "Amigos"),
-      await crearEtiquetaPorApi(app, ana.cookies, "Médicos"),
-    ];
-    await crearEtiquetaPorApi(app, ana.cookies, "Vacía");
-    await crearContactoPorApi(
-      app,
-      ana.cookies,
-      personaValida({ nombre: "1", etiquetaIds: [a, b] }),
-    );
-    await crearContactoPorApi(
-      app,
-      ana.cookies,
-      personaValida({ nombre: "2", etiquetaIds: [a, c] }),
-    );
-    await crearContactoPorApi(
-      app,
-      ana.cookies,
-      personaValida({ nombre: "3", etiquetaIds: [a, d] }),
-    );
-    await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "4", etiquetaIds: [b] }));
-
-    const { etiquetas } = await widgets();
-    expect(etiquetas.map((etiqueta) => [etiqueta.nombre, etiqueta.contactos])).toEqual([
-      ["Familia", 3],
-      ["Trabajo", 2],
-      ["Amigos", 1],
-    ]);
-    expect(etiquetas[0]?.color).toMatch(/^#/);
+describe("cumpleaños por mes", () => {
+  it("cuenta los cumpleaños de cada mes, de enero a diciembre", async () => {
+    for (const [nombre, fecha] of [
+      ["Enero", "1990-01-31"],
+      ["Octubre 1", "1985-10-01"],
+      ["Octubre 2", "2001-10-23"],
+      ["Diciembre", "1970-12-25"],
+      ["Bisiesto", "2000-02-29"],
+    ] as const) {
+      await crearContactoPorApi(
+        app,
+        ana.cookies,
+        personaValida({ nombre, fechaNacimiento: fecha }),
+      );
+    }
+    expect((await widgets()).cumpleanosPorMes).toEqual([1, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1]);
   });
 
-  it("agrupa los rubros sin distinguir mayúsculas y salta las empresas sin rubro", async () => {
-    await crearContactoPorApi(
+  it("no cuenta empresas, personas sin fecha ni contactos eliminados", async () => {
+    await crearContactoPorApi(app, ana.cookies, empresaValida());
+    await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "Sin fecha" }));
+    const borrado = await crearContactoPorApi(
       app,
       ana.cookies,
-      empresaValida({ nombre: "E1", rubro: "Electricista" }),
+      personaValida({ nombre: "Borrado", fechaNacimiento: "1990-05-05" }),
     );
-    await crearContactoPorApi(
-      app,
-      ana.cookies,
-      empresaValida({ nombre: "E2", rubro: "electricista " }),
-    );
-    await crearContactoPorApi(app, ana.cookies, empresaValida({ nombre: "E3", rubro: "Banco" }));
-    await crearContactoPorApi(app, ana.cookies, empresaValida({ nombre: "E4", rubro: "" }));
-
-    expect((await widgets()).rubros).toEqual([
-      { rubro: "Electricista", empresas: 2 },
-      { rubro: "Banco", empresas: 1 },
-    ]);
+    await pedir(app, ana.cookies, `/api/contactos/${borrado}`, "DELETE");
+    expect((await widgets()).cumpleanosPorMes).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 });
 
@@ -250,6 +214,8 @@ describe("recordatorios", () => {
     expect(recordatorios.proximos30).toBe(5);
     // Los de 29 y 30 días caen en la quinta semana: el gráfico solo muestra cuatro.
     expect(recordatorios.porSemana).toEqual([2, 1, 1, 0]);
+    // Día por día en la semana: hoy es el primero y "en 6 días" el último; "en 7 días" ya no entra.
+    expect(recordatorios.porDia).toEqual([1, 0, 0, 0, 0, 0, 1]);
   });
 
   it("lista los cinco más cercanos con su contacto", async () => {
@@ -312,104 +278,24 @@ describe("recordatorios", () => {
 describe("la ruta", () => {
   it("responde con los datos de quien tiene la sesión y con la forma esperada", async () => {
     const otra = await entrarComoPersona(app, cliente);
-    await crearContactoPorApi(app, ana.cookies, personaValida({ favorito: true }));
+    await crearContactoPorApi(app, ana.cookies, personaValida());
     await crearContactoPorApi(app, otra.cookies, empresaValida());
 
     const respuesta = await pedir(app, ana.cookies, "/api/contactos/widgets");
     expect(respuesta.status).toBe(200);
     const cuerpo = await leerJson<WidgetsDeContactos>(respuesta);
-    expect(cuerpo.totales).toEqual({
-      personas: 1,
-      empresas: 0,
-      favoritos: 1,
-      sinDatosDeContacto: 1,
-    });
+    expect(cuerpo.totales).toEqual({ personas: 1, empresas: 0, sinDatosDeContacto: 1 });
     expect(Object.keys(cuerpo).sort()).toEqual([
-      "etiquetas",
-      "favoritos",
-      "historial",
-      "masGastado",
-      "monedaBase",
-      "porRepeticion",
+      "cumpleanosPorMes",
+      "deudas",
+      "hoy",
       "proximoCumpleanos",
       "recordatorios",
-      "rubros",
       "totales",
     ]);
   });
 
   it("pide sesión", async () => {
     expect((await pedir(app, null, "/api/contactos/widgets")).status).toBe(401);
-  });
-});
-
-describe("el historial de recordatorios", () => {
-  const MS_POR_DIA = 86_400_000;
-
-  it("cuenta lo que cayó en los últimos 7 días (ayer es el último), con las tres más recientes", async () => {
-    const contacto = await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "Beto" }));
-    const hace10 = new Date(AHORA.getTime() - 10 * MS_POR_DIA);
-    // Uno diario creado hace 10 días: una entrada por día, del 10 al 19.
-    await crearRecordatorio(
-      cliente,
-      ana.userId,
-      contacto,
-      { titulo: "Pastilla", repeticion: "diaria", hora: "08:00" },
-      hace10,
-    );
-    // Uno de una sola vez que cayó hace 3 días.
-    await crearRecordatorio(
-      cliente,
-      ana.userId,
-      contacto,
-      { titulo: "Cita", repeticion: "unica", fecha: "2026-10-17", hora: "" },
-      hace10,
-    );
-
-    const { historial, porRepeticion } = await widgets();
-    expect(historial.total).toBe(11);
-    // Los últimos 7 días: del 13 al 19; la pastilla cae todos y la cita el 17.
-    expect(historial.ultimos7).toBe(8);
-    expect(historial.porDia).toEqual([1, 1, 1, 1, 2, 1, 1]);
-    expect(historial.ultimas).toHaveLength(3);
-    expect(historial.ultimas[0]).toMatchObject({ titulo: "Pastilla", diasAtras: 1 });
-    expect(historial.ultimas[0]?.contacto).toMatchObject({ nombre: "Beto", tipo: "persona" });
-    // Solo queda vigente el diario (la cita se dio de baja al pasar al historial).
-    expect(porRepeticion).toEqual([{ repeticion: "diaria", total: 1 }]);
-  });
-
-  it("los recordatorios vigentes se reparten por repetición, de más a menos", async () => {
-    const contacto = await crearContactoPorApi(app, ana.cookies, personaValida());
-    for (const datos of [
-      cadaAnio("Cumple A", 2, 11),
-      cadaAnio("Cumple B", 3, 11),
-      cadaMes("Mensual", 15),
-      unaVez("Una vez", "2026-10-25"),
-    ]) {
-      await crearRecordatorio(cliente, ana.userId, contacto, datos, AHORA);
-    }
-    const { porRepeticion, historial } = await widgets();
-    expect(porRepeticion).toEqual([
-      { repeticion: "anual", total: 2 },
-      { repeticion: "unica", total: 1 },
-      { repeticion: "mensual", total: 1 },
-    ]);
-    // Recién creados: todavía no pasó nada.
-    expect(historial.total).toBe(0);
-  });
-
-  it("no mezcla el historial de una persona con el de otra", async () => {
-    const contacto = await crearContactoPorApi(app, ana.cookies, personaValida());
-    await crearRecordatorio(
-      cliente,
-      ana.userId,
-      contacto,
-      { titulo: "Mío", repeticion: "unica", fecha: "2026-10-15", hora: "" },
-      new Date(AHORA.getTime() - 10 * MS_POR_DIA),
-    );
-    const otra = await entrarComoPersona(app, cliente);
-    const { historial } = await obtenerWidgetsDeContactos(cliente, otra.userId, AHORA);
-    expect(historial.total).toBe(0);
-    expect((await widgets()).historial.total).toBe(1);
   });
 });

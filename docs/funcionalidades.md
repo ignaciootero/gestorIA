@@ -1340,18 +1340,23 @@ gráficos abajo; ver "Widgets de Finanzas", Categorías). La pantalla de inicio 
 Contactos con lo más importante (ver "Pantalla de inicio"). Los avisos
 van primero:
 
+Solo lo que sirve en el día a día; lo demás (etiquetas, rubros, favoritos, el historial) ya está en
+sus pestañas (ver `docs/decisiones.md`, 2026-11-04):
+
 - **Avisos**: *Todavía sin contactos* (sin ninguno), *Recordatorio(s) de hoy* (con los
-  títulos y los contactos) y *Sin forma de comunicarse* (contactos sin teléfono ni correo).
-- **Cifras**: *Tus contactos* (anillo con el porcentaje de personas), *Próximo cumpleaños*
-  (el más cercano entre las fechas de nacimiento), *Próximos recordatorios* (barras con las
-  próximas cuatro semanas), *Tus etiquetas* y *Empresas por rubro* (rankings; los rubros se
-  agrupan sin distinguir mayúsculas), *Favoritos* y *Con quién más gastaste* (ranking de los últimos 90
-  días, según los movimientos cargados con un contacto, en la moneda base).
-- **Del historial de recordatorios**: *Lo que pasó esta semana* (texto: cuántos recordatorios cayeron
-  en los últimos 7 días y los tres más recientes con "ayer" o "hace N días"), *Historial de la semana*
-  (barras: cuántos cayeron cada uno de los últimos 7 días, la última es ayer) y *Recordatorios por
-  repetición* (ranking de los vigentes según cada cuánto se repiten; aparece con más de una
-  repetición).
+  títulos y los contactos), *Próximo vencimiento* / *Deuda vencida* (la deuda con un contacto que
+  vence antes, si vence en 7 días o menos o ya venció) y *Sin forma de comunicarse* (contactos sin
+  teléfono ni correo).
+- **Texto**: *Próximo cumpleaños* (el más cercano entre las fechas de nacimiento), *Próximo
+  recordatorio* (el primero de mañana en adelante: los de hoy ya tienen su aviso), *Tus contactos te
+  deben* y *Les debés* (lo pendiente por moneda, sin mezclarlas, con los tres contactos de montos más
+  altos; solo deudas con contactos, no las de un nombre escrito a mano) y *Próximo vencimiento* cuando
+  falta más de una semana.
+- **Gráficos**: *Recordatorios de la semana* (barras con cada uno de los próximos 7 días, la primera
+  —resaltada— es hoy, y los primeros de la lista) y *Cumpleaños por mes* (barras de enero a diciembre
+  con el mes actual resaltado y el mes con más cumpleaños).
+
+El resumen de Contactos de la pantalla de inicio sale del mismo pedido y no cambió.
 
 ### Pantalla y formularios
 

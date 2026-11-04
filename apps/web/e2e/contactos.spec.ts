@@ -1467,22 +1467,24 @@ test.describe("widgets", () => {
     await expect(columna.getByText("Sin forma de comunicarse")).toBeVisible();
   });
 
-  test("el historial de recordatorios tiene su aviso, su gráfico de la semana y el reparto por repetición", async ({
+  test("muestra el próximo recordatorio, los de la semana y los cumpleaños por mes", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const cuenta = await crearCuentaAprobada();
-    await entrar(page, cuenta);
-    const ana = await crearPersona(page, { nombre: "Ana", apellido: "Pérez" });
-    await sembrarRecordatorioDiarioAntiguoDePrueba(
-      cuenta.email,
-      ana,
-      "Tomar la pastilla",
-      3,
-      diaDeCalendario(),
-    );
+    await entrar(page, await crearCuentaAprobada());
+    const ana = await crearPersona(page, {
+      nombre: "Ana",
+      apellido: "Pérez",
+      fechaNacimiento: nacimientoEn(40),
+    });
     await pedirApi(page, "POST", `/api/contactos/${ana}/recordatorios`, {
       titulo: "Cita médica",
+      repeticion: "unica",
+      fecha: diaDeCalendario(2),
+      hora: "10:30",
+    });
+    await pedirApi(page, "POST", `/api/contactos/${ana}/recordatorios`, {
+      titulo: "Devolver el libro",
       repeticion: "unica",
       fecha: diaDeCalendario(5),
       hora: "",
@@ -1501,17 +1503,23 @@ test.describe("widgets", () => {
 
     const columna = page.getByRole("complementary", { name: "Widgets" });
     const texto = columna.getByRole("region", { name: /Widgets de contactos: texto/ });
-    const reciente = await mostrarWidget(texto, "Lo que pasó esta semana");
-    await expect(reciente.getByText("3", { exact: true })).toBeVisible();
-    await expect(reciente).toContainText("Tomar la pastilla · Ana Pérez");
-    await expect(reciente).toContainText("ayer");
+    const proximo = await mostrarWidget(texto, "Próximo recordatorio");
+    await expect(proximo).toContainText("en 2 días");
+    await expect(proximo).toContainText("Cita médica (Ana Pérez)");
+    await expect(proximo).toContainText("a las 10:30");
 
     const graficos = columna.getByRole("region", { name: /Widgets de contactos: gráficos/ });
-    const semana = await mostrarWidget(graficos, "Historial de la semana");
-    await expect(semana).toContainText("La última barra es ayer");
-    const repeticion = await mostrarWidget(graficos, "Recordatorios por repetición");
-    await expect(repeticion.getByText("Todos los días", { exact: true })).toBeVisible();
-    await expect(repeticion.getByText("Una sola vez", { exact: true })).toBeVisible();
+    const semana = await mostrarWidget(graficos, "Recordatorios de la semana");
+    await expect(semana.getByText("2", { exact: true })).toBeVisible();
+    await expect(semana).toContainText("Devolver el libro · Ana Pérez");
+    const porMes = await mostrarWidget(graficos, "Cumpleaños por mes");
+    await expect(porMes).toContainText("es el mes con más (1)");
+
+    // Los widgets que se sacaron ya no están en ninguno de los dos carruseles.
+    const sacados = ["Tus contactos", "Tus etiquetas", "Favoritos", "Historial de la semana"];
+    for (const titulo of sacados) {
+      await expect(columna.getByText(titulo, { exact: true })).toHaveCount(0);
+    }
   });
 
   test("el resumen de Contactos de la pantalla de inicio destaca el próximo cumpleaños", async ({

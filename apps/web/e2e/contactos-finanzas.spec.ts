@@ -1058,34 +1058,45 @@ test.describe("widgets con plata", () => {
     await expect(destacado).toContainText(new RegExp(`Debés ${dinero("US$ 70,00").source}`));
   });
 
-  test("'con quién más gastaste' aparece en los widgets de Contactos", async ({ page }) => {
+  test("las deudas con contactos y su vencimiento aparecen en los widgets de Contactos", async ({
+    page,
+  }) => {
     await entrar(page, await crearCuentaAprobada());
     const taller = await crearContacto(page, { nombre: "Taller Sur" });
-    const { cuentaId, categoriaId } = await prepararFinanzas(page);
-    await pedirApi(page, "POST", "/api/finanzas/movimientos", {
-      tipo: "gasto",
-      importe: 750,
-      descripcion: "Service",
-      fecha: new Date().toISOString(),
-      categoriaId,
-      cuentaFinancieraId: cuentaId,
+    await crearDeuda(page, {
       contactoId: taller,
+      concepto: "Arreglo",
+      monto: 750,
+      fechaLimite: hoy(),
     });
+    await crearDeuda(page, { contactoId: taller, monto: 70, moneda: "USD", sentido: "debo" });
 
-    // Está en el carrusel de gráficos de la columna de Contactos: se pasa hasta llegar a él.
+    // Están en el carrusel de texto de la columna de Contactos: se pasa hasta llegar a cada uno.
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/contactos");
-    const zona = page.getByRole("region", { name: "Widgets de contactos: gráficos" });
-    const tarjeta = zona.locator(
-      "xpath=.//div[@data-visual][.//p[normalize-space()='Con quién más gastaste']]",
-    );
-    for (let vuelta = 0; vuelta < 10 && (await tarjeta.count()) === 0; vuelta++) {
-      const antes = await zona.getByRole("group").getAttribute("aria-label");
-      await zona.getByRole("button", { name: "Widget siguiente" }).click();
-      await expect(zona.getByRole("group")).not.toHaveAttribute("aria-label", antes ?? "");
+    const zona = page.getByRole("region", { name: "Widgets de contactos: texto" });
+    async function mostrar(titulo: string) {
+      const tarjeta = zona.getByRole("group").filter({ hasText: titulo });
+      for (let vuelta = 0; vuelta < 10 && !(await tarjeta.isVisible()); vuelta++) {
+        const antes = await zona.getByRole("group").getAttribute("aria-label");
+        await zona.getByRole("button", { name: "Widget siguiente" }).click();
+        await expect(zona.getByRole("group")).not.toHaveAttribute("aria-label", antes ?? "");
+      }
+      await expect(tarjeta).toBeVisible();
+      return tarjeta;
     }
-    await expect(tarjeta.getByText("Taller Sur")).toBeVisible();
-    await expect(tarjeta.getByText(dinero("$ 750,00"))).toBeVisible();
+
+    // Vence hoy: es un aviso.
+    const vencimiento = await mostrar("Próximo vencimiento");
+    await expect(vencimiento).toContainText("Vence hoy");
+    await expect(vencimiento).toContainText(/Taller Sur te tiene que pagar/);
+
+    const teDeben = await mostrar("Tus contactos te deben");
+    await expect(teDeben).toContainText(dinero("$ 750,00"));
+    await expect(teDeben).toContainText("1 deuda pendiente con 1 contacto.");
+
+    const debes = await mostrar("Les debés");
+    await expect(debes).toContainText(dinero("US$ 70,00"));
   });
 });
 

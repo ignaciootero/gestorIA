@@ -1,5 +1,8 @@
 // Convierte los datos que devuelve la API (GET /api/contactos/widgets) en la lista de
-// widgets de Contactos: primero los avisos y después las cifras y curiosidades.
+// widgets de Contactos: primero los avisos y después las cifras.
+//
+// Solo lo que le sirve a la persona en el día a día: cumpleaños, recordatorios, deudas con sus
+// contactos y contactos sin forma de comunicarse (ver docs/decisiones.md).
 //
 // La API cuenta y ordena; acá se escribe en español de todos los días. Es una función
 // pura para que sea fácil de leer y de probar: no toca el DOM ni pide nada.
@@ -9,25 +12,27 @@ import {
   edadQueCumple,
   formatearDiaYMes,
   formatearMonto,
-  NOMBRES_DE_REPETICION,
+  NOMBRES_DE_MES,
   nombreCompletoDeContacto,
 } from "@gestoria/shared";
 import {
+  ArrowDownLeft,
+  ArrowUpRight,
   Bell,
-  BookUser,
   Cake,
   CalendarClock,
-  History,
-  Receipt,
-  Repeat,
-  Star,
-  Tag,
+  CalendarDays,
+  ChartColumn,
+  HandCoins,
   UserPlus,
   UserRoundX,
-  Wrench,
 } from "lucide-react";
 import type { DatoDeWidget } from "@/componentes/widgets/tipos";
-import type { WidgetsDeContactos } from "@/lib/api-contactos";
+import type { DeudasConContactos, WidgetsDeContactos } from "@/lib/api-contactos";
+import { totalesEnPalabras } from "@/lib/api-deudas";
+
+/** Cuántos días antes de la fecha límite una deuda pasa a ser un aviso. */
+const DIAS_DE_AVISO_DE_VENCIMIENTO = 7;
 
 function plural(cantidad: number, singular: string, pluralDe: string): string {
   return cantidad === 1 ? singular : pluralDe;
@@ -39,7 +44,49 @@ function enumerar(nombres: string[]): string {
   return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
 }
 
-function armarAvisos(datos: WidgetsDeContactos): DatoDeWidget[] {
+function conMayuscula(texto: string): string {
+  return texto.charAt(0).toLocaleUpperCase("es") + texto.slice(1);
+}
+
+/**
+ * La deuda que vence antes. Si vence en una semana o menos, o ya venció, es un aviso; si falta
+ * más, un dato.
+ */
+function armarVencimiento(datos: WidgetsDeContactos): DatoDeWidget | null {
+  const deuda = datos.deudas.proximoVencimiento;
+  if (!deuda) return null;
+
+  const nombre = nombreCompletoDeContacto(deuda.contacto);
+  const monto = formatearMonto(deuda.centavos, deuda.moneda);
+  const vencida = deuda.dias < 0;
+  const esAviso = deuda.dias <= DIAS_DE_AVISO_DE_VENCIMIENTO;
+
+  let cuando: string;
+  if (deuda.dias < -1) cuando = `Venció hace ${-deuda.dias} días`;
+  else if (deuda.dias === -1) cuando = "Venció ayer";
+  else if (deuda.dias === 0) cuando = "Vence hoy";
+  else cuando = `Vence ${describirDiasRestantes(deuda.dias)}`;
+
+  return {
+    id: "vencimiento-de-deuda",
+    tipo: esAviso ? "aviso" : "dato",
+    categoria: "texto",
+    tono: vencida ? "peligro" : esAviso ? "advertencia" : "neutro",
+    Icono: HandCoins,
+    titulo: vencida ? "Deuda vencida" : "Próximo vencimiento",
+    valor: cuando,
+    detalle:
+      deuda.sentido === "me_deben"
+        ? `${nombre} te tiene que pagar ${monto} (${deuda.concepto}).`
+        : `Le tenés que pagar ${monto} a ${nombre} (${deuda.concepto}).`,
+    extras: [
+      { etiqueta: "Fecha límite", valor: formatearDiaYMes(deuda.fechaLimite) },
+      { etiqueta: "Falta", valor: monto },
+    ],
+  };
+}
+
+function armarAvisos(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null): DatoDeWidget[] {
   const avisos: DatoDeWidget[] = [];
   const { totales, recordatorios } = datos;
   const cantidad = totales.personas + totales.empresas;
@@ -80,6 +127,8 @@ function armarAvisos(datos: WidgetsDeContactos): DatoDeWidget[] {
     });
   }
 
+  if (vencimiento?.tipo === "aviso") avisos.push(vencimiento);
+
   if (totales.sinDatosDeContacto > 0) {
     avisos.push({
       id: "contactos-sin-datos",
@@ -100,26 +149,34 @@ function armarAvisos(datos: WidgetsDeContactos): DatoDeWidget[] {
   return avisos;
 }
 
-function armarCifras(datos: WidgetsDeContactos): DatoDeWidget[] {
-  const { totales, recordatorios, proximoCumpleanos } = datos;
-  const cantidad = totales.personas + totales.empresas;
-  if (cantidad === 0) return [];
-
-  const total: DatoDeWidget = {
-    id: "total-de-contactos",
-    categoria: "grafico",
+/** "Te deben" o "Les debés": por moneda, con los contactos de montos más altos. */
+function armarDeuda(
+  id: string,
+  titulo: string,
+  Icono: DatoDeWidget["Icono"],
+  deudas: DeudasConContactos,
+): DatoDeWidget | null {
+  if (deudas.totales.length === 0) return null;
+  const cantidad = deudas.totales.reduce((suma, total) => suma + total.deudas, 0);
+  return {
+    id,
+    categoria: "texto",
     tipo: "dato",
     tono: "neutro",
-    Icono: BookUser,
-    titulo: "Tus contactos",
-    valor: String(cantidad),
-    detalle: `${totales.personas} ${plural(totales.personas, "persona", "personas")} y ${totales.empresas} ${plural(totales.empresas, "empresa o servicio", "empresas o servicios")}.`,
-    visual: {
-      tipo: "anillo",
-      porcentaje: Math.round((totales.personas / cantidad) * 100),
-      color: "var(--color-acento)",
-    },
+    Icono,
+    titulo,
+    valor: totalesEnPalabras(deudas.totales),
+    detalle: `${cantidad} ${plural(cantidad, "deuda pendiente", "deudas pendientes")} con ${deudas.contactos} ${plural(deudas.contactos, "contacto", "contactos")}.`,
+    extras: deudas.mayores.map((contacto) => ({
+      etiqueta: nombreCompletoDeContacto(contacto),
+      valor: formatearMonto(contacto.centavos, contacto.moneda),
+    })),
   };
+}
+
+function armarCifras(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null): DatoDeWidget[] {
+  const { totales, recordatorios, proximoCumpleanos } = datos;
+  if (totales.personas + totales.empresas === 0) return [];
 
   const cumpleanos: DatoDeWidget | null = proximoCumpleanos
     ? {
@@ -141,181 +198,90 @@ function armarCifras(datos: WidgetsDeContactos): DatoDeWidget[] {
       }
     : null;
 
-  const proximos: DatoDeWidget | null =
-    recordatorios.proximos30 > 0
+  // Los de hoy ya están en su aviso: el próximo es el primero de mañana en adelante.
+  const siguiente = recordatorios.proximos.find((recordatorio) => recordatorio.dias > 0);
+  const proximoRecordatorio: DatoDeWidget | null = siguiente
+    ? {
+        id: "proximo-recordatorio",
+        categoria: "texto",
+        tipo: "dato",
+        tono: "neutro",
+        Icono: CalendarClock,
+        titulo: "Próximo recordatorio",
+        valor: describirDiasRestantes(siguiente.dias),
+        detalle: `${siguiente.titulo} (${nombreCompletoDeContacto(siguiente.contacto)}), el ${formatearDiaYMes(siguiente.fecha)}${siguiente.hora ? ` a las ${siguiente.hora}` : ""}.`,
+        extras: [
+          { etiqueta: "Fecha", valor: formatearDiaYMes(siguiente.fecha) },
+          { etiqueta: "Hora", valor: siguiente.hora ?? "Todo el día" },
+        ],
+      }
+    : null;
+
+  // La semana que viene, día por día: la primera barra (resaltada) es hoy.
+  const deLaSemana = recordatorios.proximos.filter((recordatorio) => recordatorio.dias < 7);
+  const semana: DatoDeWidget | null =
+    recordatorios.proximos7 > 0
       ? {
-          id: "recordatorios-proximos",
+          id: "recordatorios-de-la-semana",
           categoria: "grafico",
           tipo: "dato",
           tono: "neutro",
-          Icono: CalendarClock,
-          titulo: "Próximos recordatorios",
-          valor: String(recordatorios.proximos30),
-          detalle: `${recordatorios.proximos30 === 1 ? "Cae" : "Caen"} en los próximos 30 días. Las barras son las próximas cuatro semanas.`,
-          visual: { tipo: "barras", valores: recordatorios.porSemana },
-        }
-      : null;
-
-  const favoritos: DatoDeWidget | null =
-    totales.favoritos > 0
-      ? {
-          id: "favoritos",
-          categoria: "texto",
-          tipo: "dato",
-          tono: "neutro",
-          Icono: Star,
-          titulo: "Favoritos",
-          valor: String(totales.favoritos),
-          detalle: `${enumerar(datos.favoritos.map((favorito) => nombreCompletoDeContacto(favorito)))}${totales.favoritos > datos.favoritos.length ? " y más" : ""}.`,
-        }
-      : null;
-
-  const mayorEtiqueta = datos.etiquetas[0]?.contactos || 1;
-  const etiquetas: DatoDeWidget | null =
-    datos.etiquetas.length >= 1
-      ? {
-          id: "etiquetas-principales",
-          categoria: "grafico",
-          tipo: "dato",
-          tono: "neutro",
-          Icono: Tag,
-          titulo: "Tus etiquetas",
-          detalle: "Las que más contactos tienen.",
-          visual: {
-            tipo: "ranking",
-            filas: datos.etiquetas.map((etiqueta) => ({
-              etiqueta: etiqueta.nombre,
-              texto: `${etiqueta.contactos}`,
-              proporcion: etiqueta.contactos / mayorEtiqueta,
-              color: etiqueta.color,
-            })),
-          },
-        }
-      : null;
-
-  const mayorRubro = datos.rubros[0]?.empresas || 1;
-  const rubros: DatoDeWidget | null =
-    datos.rubros.length >= 1
-      ? {
-          id: "rubros-principales",
-          categoria: "grafico",
-          tipo: "dato",
-          tono: "neutro",
-          Icono: Wrench,
-          titulo: "Empresas por rubro",
-          detalle: "Los rubros que más se repiten.",
-          visual: {
-            tipo: "ranking",
-            filas: datos.rubros.map((rubro) => ({
-              etiqueta: rubro.rubro,
-              texto: `${rubro.empresas}`,
-              proporcion: rubro.empresas / mayorRubro,
-              color: "var(--color-acento)",
-            })),
-          },
-        }
-      : null;
-
-  // Con quién más se gastó (movimientos de Finanzas cargados con un contacto), en la moneda base.
-  const mayorGasto = datos.masGastado[0]?.gastoCentavos || 1;
-  const masGastado: DatoDeWidget | null =
-    datos.masGastado.length >= 1
-      ? {
-          id: "mas-gastado",
-          categoria: "grafico",
-          tipo: "dato",
-          tono: "neutro",
-          Icono: Receipt,
-          titulo: "Con quién más gastaste",
-          detalle: "En los últimos 90 días, según los movimientos que cargaste con un contacto.",
-          visual: {
-            tipo: "ranking",
-            filas: datos.masGastado.map((contacto) => ({
-              etiqueta: nombreCompletoDeContacto(contacto),
-              texto: formatearMonto(contacto.gastoCentavos, datos.monedaBase),
-              proporcion: contacto.gastoCentavos / mayorGasto,
-              color: "var(--color-acento)",
-            })),
-          },
-        }
-      : null;
-
-  // El histórico: lo que ya pasó de los recordatorios (también de los que se repiten, que siguen vivos).
-  const { historial } = datos;
-  const hace = (dias: number) => (dias === 1 ? "ayer" : `hace ${dias} días`);
-  const delHistorial: DatoDeWidget | null =
-    historial.ultimos7 > 0
-      ? {
-          id: "historial-reciente",
-          categoria: "texto",
-          tipo: "dato",
-          tono: "neutro",
-          Icono: History,
-          titulo: "Lo que pasó esta semana",
-          valor: String(historial.ultimos7),
-          detalle: `${plural(historial.ultimos7, "Recordatorio que ya cayó", "Recordatorios que ya cayeron")} en los últimos 7 días. Quedan en el historial de la pestaña Recordatorios.`,
-          extras: historial.ultimas.map((entrada) => ({
-            etiqueta: `${entrada.titulo} · ${nombreCompletoDeContacto(entrada.contacto)}`,
-            valor: hace(entrada.diasAtras),
+          Icono: CalendarDays,
+          titulo: "Recordatorios de la semana",
+          valor: String(recordatorios.proximos7),
+          detalle: `${recordatorios.proximos7 === 1 ? "Cae" : "Caen"} en los próximos 7 días. La primera barra es hoy.`,
+          visual: { tipo: "barras", valores: recordatorios.porDia, resaltada: 0 },
+          extras: deLaSemana.slice(0, 3).map((recordatorio) => ({
+            etiqueta: `${recordatorio.titulo} · ${nombreCompletoDeContacto(recordatorio.contacto)}`,
+            valor: conMayuscula(describirDiasRestantes(recordatorio.dias)),
           })),
         }
       : null;
-  const graficoDelHistorial: DatoDeWidget | null =
-    historial.ultimos7 > 0
+
+  // Cumpleaños por mes, de enero a diciembre, con el mes actual resaltado.
+  const totalDeCumpleanos = datos.cumpleanosPorMes.reduce((suma, cantidad) => suma + cantidad, 0);
+  const mesActual = Number(datos.hoy.slice(5, 7)) - 1;
+  const mayor = Math.max(...datos.cumpleanosPorMes);
+  const mesConMas = datos.cumpleanosPorMes.indexOf(mayor);
+  const esteMes = datos.cumpleanosPorMes[mesActual] ?? 0;
+  const porMes: DatoDeWidget | null =
+    totalDeCumpleanos > 0
       ? {
-          id: "historial-de-la-semana",
+          id: "cumpleanos-por-mes",
           categoria: "grafico",
           tipo: "dato",
           tono: "neutro",
-          Icono: History,
-          titulo: "Historial de la semana",
-          valor: String(historial.ultimos7),
-          detalle: `Cuántos recordatorios cayeron cada día de los últimos 7. La última barra es ayer. En total, el historial tiene ${historial.total}.`,
-          visual: { tipo: "barras", valores: historial.porDia },
+          Icono: ChartColumn,
+          titulo: "Cumpleaños por mes",
+          valor: String(totalDeCumpleanos),
+          detalle: `${conMayuscula(NOMBRES_DE_MES[mesConMas] ?? "")} es el mes con más (${mayor}). Este mes ${esteMes === 1 ? "hay uno" : `hay ${esteMes}`}. La barra resaltada es este mes.`,
+          visual: { tipo: "barras", valores: datos.cumpleanosPorMes, resaltada: mesActual },
         }
       : null;
 
-  // Cómo se reparten los recordatorios vigentes según cada cuánto se repiten.
-  const mayorRepeticion = Math.max(1, ...datos.porRepeticion.map((una) => una.total));
-  const porRepeticion: DatoDeWidget | null =
-    datos.porRepeticion.length > 1
-      ? {
-          id: "recordatorios-por-repeticion",
-          categoria: "grafico",
-          tipo: "dato",
-          tono: "neutro",
-          Icono: Repeat,
-          titulo: "Recordatorios por repetición",
-          detalle: "Cuántos recordatorios vigentes tenés según cada cuánto se repiten.",
-          visual: {
-            tipo: "ranking",
-            filas: datos.porRepeticion.map((una) => ({
-              etiqueta: NOMBRES_DE_REPETICION[una.repeticion],
-              texto: String(una.total),
-              proporcion: una.total / mayorRepeticion,
-              color: "var(--color-acento)",
-            })),
-          },
-        }
-      : null;
+  const teDeben = armarDeuda(
+    "te-deben",
+    "Tus contactos te deben",
+    ArrowDownLeft,
+    datos.deudas.teDeben,
+  );
+  const debes = armarDeuda("debes", "Les debés", ArrowUpRight, datos.deudas.debes);
 
   // La columna lateral separa por categoría (texto arriba, gráficos abajo); la pantalla de inicio
   // los muestra todos juntos, por eso van intercalados.
   return [
-    total,
     cumpleanos,
-    proximos,
-    delHistorial,
-    graficoDelHistorial,
-    porRepeticion,
-    masGastado,
-    etiquetas,
-    favoritos,
-    rubros,
+    proximoRecordatorio,
+    semana,
+    porMes,
+    teDeben,
+    debes,
+    vencimiento?.tipo === "dato" ? vencimiento : null,
   ].filter((widget) => widget !== null);
 }
 
 /** Los widgets de Contactos, con los avisos primero. */
 export function armarWidgetsDeContactos(datos: WidgetsDeContactos): DatoDeWidget[] {
-  return [...armarAvisos(datos), ...armarCifras(datos)];
+  const vencimiento = armarVencimiento(datos);
+  return [...armarAvisos(datos, vencimiento), ...armarCifras(datos, vencimiento)];
 }

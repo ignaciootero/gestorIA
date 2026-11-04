@@ -355,32 +355,98 @@ describe("la lista de opciones para elegir un contacto", () => {
 });
 
 describe("los widgets con plata", () => {
-  it("'con quién más gastaste' suma los últimos 90 días, de mayor a menor, solo gastos y solo con contacto", async () => {
+  it("los widgets de Contactos suman las deudas pendientes por sentido y moneda, con los que más deben", async () => {
     const carla = await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "Carla" }));
-    await movimiento({ contactoId: taller, importe: 300, fecha: "2026-10-10T12:00:00.000Z" });
-    await movimiento({ contactoId: taller, importe: 200, fecha: "2026-09-10T12:00:00.000Z" });
-    await movimiento({ contactoId: carla, importe: 450, fecha: "2026-10-01T12:00:00.000Z" });
-    // Fuera de la ventana de 90 días, ingresos y sin contacto: no cuentan.
-    await movimiento({ contactoId: carla, importe: 5000, fecha: "2026-05-01T12:00:00.000Z" });
-    await movimiento({
-      contactoId: carla,
-      tipo: "ingreso",
-      importe: 9999,
-      fecha: "2026-10-10T12:00:00.000Z",
+    const beto = await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "Beto" }));
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: taller, monto: 300 });
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: taller, monto: 200 });
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: carla, monto: 450 });
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: beto, monto: 100 });
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: carla, monto: 20, moneda: "USD" });
+    // Pagada en parte: cuenta lo que falta.
+    const enParte = await crearDeudaPorApi(app, ana.cookies, { contactoId: beto, monto: 1000 });
+    await pedir(app, ana.cookies, `/api/finanzas/deudas/${enParte}/pagos`, "POST", {
+      monto: 600,
+      fecha: "2026-10-05",
     });
-    await movimiento({ importe: 7777, fecha: "2026-10-10T12:00:00.000Z" });
+    // Saldada, con alguien que no es contacto y en el otro sentido: no cuentan acá.
+    const saldada = await crearDeudaPorApi(app, ana.cookies, { contactoId: carla, monto: 10 });
+    await pedir(app, ana.cookies, `/api/finanzas/deudas/${saldada}/pagos`, "POST", {
+      monto: 10,
+      fecha: "2026-10-05",
+    });
+    await crearDeudaPorApi(app, ana.cookies, { nombreLibre: "Vecino", monto: 9999 });
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: taller, monto: 70, sentido: "debo" });
 
-    const widgets = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
-    expect(widgets.monedaBase).toBe("UYU");
-    expect(widgets.masGastado).toEqual([
-      { nombre: "Taller Sur", apellido: null, gastoCentavos: 50_000, movimientos: 2 },
-      { nombre: "Carla", apellido: "Pérez", gastoCentavos: 45_000, movimientos: 1 },
+    const { deudas } = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
+    expect(deudas.teDeben.totales).toEqual([
+      { moneda: "USD", centavos: 2000, deudas: 1 },
+      { moneda: "UYU", centavos: 145_000, deudas: 5 },
     ]);
+    expect(deudas.teDeben.contactos).toBe(3);
+    // Por moneda y, dentro de cada una, de mayor a menor (las del Taller y las de Beto se suman;
+    // empatan y van por nombre). Carla en pesos queda cuarta y no entra: son hasta tres.
+    expect(deudas.teDeben.mayores).toEqual([
+      { tipo: "persona", nombre: "Carla", apellido: "Pérez", moneda: "USD", centavos: 2000 },
+      { tipo: "persona", nombre: "Beto", apellido: "Pérez", moneda: "UYU", centavos: 50_000 },
+      { tipo: "empresa", nombre: "Taller Sur", apellido: null, moneda: "UYU", centavos: 50_000 },
+    ]);
+    expect(deudas.debes).toEqual({
+      totales: [{ moneda: "UYU", centavos: 7000, deudas: 1 }],
+      contactos: 1,
+      mayores: [
+        { tipo: "empresa", nombre: "Taller Sur", apellido: null, moneda: "UYU", centavos: 7000 },
+      ],
+    });
   });
 
-  it("sin movimientos con contacto, la lista viene vacía", async () => {
-    const widgets = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
-    expect(widgets.masGastado).toEqual([]);
+  it("el próximo vencimiento es la deuda con fecha límite que vence antes, aunque ya haya vencido", async () => {
+    await crearDeudaPorApi(app, ana.cookies, { contactoId: taller, monto: 100 });
+    await crearDeudaPorApi(app, ana.cookies, {
+      contactoId: taller,
+      concepto: "Repuesto",
+      monto: 300,
+      sentido: "debo",
+      fechaLimite: "2026-10-25",
+    });
+    await crearDeudaPorApi(app, ana.cookies, {
+      contactoId: taller,
+      concepto: "Arreglo",
+      monto: 200,
+      fechaLimite: "2026-10-15",
+    });
+    // Con alguien que no es contacto: no cuenta, aunque venza antes.
+    await crearDeudaPorApi(app, ana.cookies, {
+      nombreLibre: "Vecino",
+      monto: 50,
+      fechaLimite: "2026-10-02",
+    });
+
+    const { deudas } = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
+    expect(deudas.proximoVencimiento).toEqual({
+      concepto: "Arreglo",
+      sentido: "me_deben",
+      contacto: { tipo: "empresa", nombre: "Taller Sur", apellido: null },
+      moneda: "UYU",
+      centavos: 20_000,
+      fechaLimite: "2026-10-15",
+      dias: -5,
+    });
+  });
+
+  it("sin deudas con contactos no hay totales ni vencimiento, y no ve las de otra persona", async () => {
+    const otra = await entrarComoPersona(app, cliente);
+    await prepararFinanzas(app, otra.cookies);
+    const suyo = await crearContactoPorApi(app, otra.cookies, personaValida({ nombre: "Suyo" }));
+    await crearDeudaPorApi(app, otra.cookies, {
+      contactoId: suyo,
+      monto: 500,
+      fechaLimite: "2026-10-30",
+    });
+
+    const { deudas } = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
+    const vacio = { totales: [], contactos: 0, mayores: [] };
+    expect(deudas).toEqual({ teDeben: vacio, debes: vacio, proximoVencimiento: null });
   });
 
   it("los widgets de Finanzas traen lo que le deben y lo que debe, por moneda", async () => {

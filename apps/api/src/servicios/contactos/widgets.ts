@@ -2,49 +2,56 @@
 //
 // Devuelve datos, no frases: la web decide cómo escribirlos (mismo criterio que los
 // widgets de Finanzas). Todo filtra por la persona de la sesión.
+//
+// Solo lo que le sirve a la persona en el día a día: el próximo cumpleaños, los recordatorios
+// que vienen (el próximo y los de la semana), los cumpleaños por mes, las deudas con sus
+// contactos y los contactos sin forma de comunicarse. Lo demás (etiquetas, rubros, favoritos,
+// el historial) ya está en sus pestañas.
 
 import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
-import {
-  diasEntre,
-  proximaOcurrencia,
-  REPETICIONES_VALIDAS,
-  type Repeticion,
-  type TipoDeContacto,
-} from "@gestoria/shared";
-import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
-import { obtenerMonedaBase } from "../finanzas/moneda-base.ts";
-import { listarEtiquetas } from "./etiquetas.ts";
-import { listarHistorial } from "./historial-de-recordatorios.ts";
+import { diasEntre, proximaOcurrencia, type TipoDeContacto } from "@gestoria/shared";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { type Deuda, deudasPendientesConContactos } from "../finanzas/deudas.ts";
 import { hoyDeLaPersona, listarRecordatorios } from "./recordatorios.ts";
 
-/** Cuántas semanas hacia adelante cuenta el gráfico de recordatorios. */
+/** Cuántas semanas hacia adelante cuenta el gráfico de recordatorios (lo usa el inicio). */
 const SEMANAS_DEL_GRAFICO = 4;
 const DIAS_DE_LA_SEMANA = 7;
-const CANTIDAD_EN_LISTAS = 3;
-/** Cuántos días hacia atrás cuenta el gráfico del histórico (ayer es el último). */
-const DIAS_DEL_HISTORIAL = 7;
-/** Cuántos días hacia atrás cuenta "con quién más gastaste". */
-const DIAS_DE_GASTOS = 90;
+/** Cuántos recordatorios que vienen se mandan con su detalle. */
+const RECORDATORIOS_PROXIMOS = 5;
+/** Cuántos contactos se nombran en cada widget de deudas. */
+const CONTACTOS_POR_DEUDA = 3;
+const MESES = 12;
+
+type ContactoBreve = { tipo: TipoDeContacto; nombre: string; apellido: string | null };
+
+/** Lo que falta cobrar o pagar, por moneda: las monedas nunca se mezclan. */
+export type TotalDeDeudas = { moneda: string; centavos: number; deudas: number };
+
+export type DeudasConContactos = {
+  totales: TotalDeDeudas[];
+  /** Cuántos contactos distintos. */
+  contactos: number;
+  /** Los contactos con más plata pendiente (por moneda), hasta tres. */
+  mayores: (ContactoBreve & { moneda: string; centavos: number })[];
+};
 
 export type WidgetsDeContactos = {
+  /** El día de hoy para la persona ("AAAA-MM-DD"), en su zona horaria. */
+  hoy: string;
   totales: {
     personas: number;
     empresas: number;
-    favoritos: number;
     /** Contactos sin ningún teléfono ni correo: no hay cómo comunicarse con ellos. */
     sinDatosDeContacto: number;
   };
-  /** Las etiquetas con más contactos (solo las que tienen alguno). */
-  etiquetas: { nombre: string; color: string; contactos: number }[];
-  /** Los rubros que más se repiten entre las empresas. */
-  rubros: { rubro: string; empresas: number }[];
-  /** Hasta tres favoritos, para nombrarlos. */
-  favoritos: { nombre: string; apellido: string | null }[];
   recordatorios: {
     hoy: number;
     proximos7: number;
     proximos30: number;
+    /** Cuántos caen en cada uno de los próximos 7 días (el primero es hoy). */
+    porDia: number[];
     /** Cuántos caen en cada una de las próximas cuatro semanas (la primera arranca hoy). */
     porSemana: number[];
     /** Los que vienen, los más cercanos primero (hoy incluido). */
@@ -55,35 +62,9 @@ export type WidgetsDeContactos = {
       /** "HH:MM"; null es "todo el día". */
       hora: string | null;
       dias: number;
-      contacto: { tipo: TipoDeContacto; nombre: string; apellido: string | null };
+      contacto: ContactoBreve;
     }[];
   };
-  /** Los recordatorios vigentes por cómo se repiten (solo los que tienen alguno), de más a menos. */
-  porRepeticion: { repeticion: Repeticion; total: number }[];
-  /** Lo que ya pasó de los recordatorios (ver historial-de-recordatorios.ts). */
-  historial: {
-    /** Cuántas entradas tiene el histórico. */
-    total: number;
-    /** Cuántas en los últimos 7 días (ayer incluido, hoy no: todavía no terminó). */
-    ultimos7: number;
-    /** Cuántas cayeron cada uno de los últimos 7 días; el último es ayer. */
-    porDia: number[];
-    /** Las más recientes. */
-    ultimas: {
-      titulo: string;
-      repeticion: Repeticion;
-      diasAtras: number;
-      contacto: { tipo: TipoDeContacto; nombre: string; apellido: string | null };
-    }[];
-  };
-  /** Con quién más se gastó en los últimos 90 días, en la moneda base (hasta tres). */
-  masGastado: {
-    nombre: string;
-    apellido: string | null;
-    gastoCentavos: number;
-    movimientos: number;
-  }[];
-  monedaBase: string;
   /** El próximo cumpleaños de una persona con fecha de nacimiento; null si no hay ninguna. */
   proximoCumpleanos: {
     nombre: string;
@@ -93,7 +74,69 @@ export type WidgetsDeContactos = {
     dias: number;
     nacimiento: string;
   } | null;
+  /** Cuántos cumpleaños caen en cada mes, de enero a diciembre. */
+  cumpleanosPorMes: number[];
+  deudas: {
+    /** Lo que los contactos le deben a la persona. */
+    teDeben: DeudasConContactos;
+    /** Lo que la persona les debe. */
+    debes: DeudasConContactos;
+    /**
+     * La deuda pendiente con fecha límite que vence antes (o que ya venció). `dias` es negativo
+     * si ya pasó. Null si ninguna tiene fecha límite.
+     */
+    proximoVencimiento: {
+      concepto: string;
+      sentido: Deuda["sentido"];
+      contacto: ContactoBreve;
+      moneda: string;
+      centavos: number;
+      fechaLimite: string;
+      dias: number;
+    } | null;
+  };
 };
+
+/** Suma las deudas de un sentido por moneda y arma el ranking de contactos. */
+function resumirDeudas(lista: Deuda[]): DeudasConContactos {
+  const porMoneda = new Map<string, TotalDeDeudas>();
+  // Por contacto y moneda: una deuda en pesos y otra en dólares con la misma persona no se suman.
+  const porContacto = new Map<string, DeudasConContactos["mayores"][number]>();
+
+  for (const deuda of lista) {
+    if (!deuda.contacto) continue;
+    const total = porMoneda.get(deuda.moneda) ?? { moneda: deuda.moneda, centavos: 0, deudas: 0 };
+    total.centavos += deuda.pendienteCentavos;
+    total.deudas += 1;
+    porMoneda.set(deuda.moneda, total);
+
+    const clave = `${deuda.contacto.id}:${deuda.moneda}`;
+    const deEse = porContacto.get(clave) ?? {
+      tipo: deuda.contacto.tipo,
+      nombre: deuda.contacto.nombre,
+      apellido: deuda.contacto.apellido,
+      moneda: deuda.moneda,
+      centavos: 0,
+    };
+    deEse.centavos += deuda.pendienteCentavos;
+    porContacto.set(clave, deEse);
+  }
+
+  return {
+    totales: [...porMoneda.values()].sort((a, b) => a.moneda.localeCompare(b.moneda)),
+    contactos: new Set(lista.flatMap((deuda) => (deuda.contacto ? [deuda.contacto.id] : []))).size,
+    // Los montos de monedas distintas no se comparan entre sí: se ordena por moneda y, dentro de
+    // cada una, de mayor a menor.
+    mayores: [...porContacto.values()]
+      .sort(
+        (a, b) =>
+          a.moneda.localeCompare(b.moneda) ||
+          b.centavos - a.centavos ||
+          a.nombre.localeCompare(b.nombre, "es"),
+      )
+      .slice(0, CONTACTOS_POR_DEUDA),
+  };
+}
 
 export async function obtenerWidgetsDeContactos(
   cliente: ClienteDb,
@@ -103,79 +146,41 @@ export async function obtenerWidgetsDeContactos(
   const { contactos } = esquema;
   const activos = and(eq(contactos.userId, userId), isNull(contactos.eliminadoEn));
 
-  const desde = new Date(ahora.getTime() - DIAS_DE_GASTOS * 86_400_000);
-  const { movimientos } = esquema;
-
-  const [hoy, filas, etiquetas, sinDatos, { recordatorios }, gastos, monedaBase, historial] =
-    await Promise.all([
-      hoyDeLaPersona(cliente, userId, ahora),
-      cliente.db
-        .select({
-          tipo: contactos.tipo,
-          nombre: contactos.nombre,
-          apellido: contactos.apellido,
-          rubro: contactos.rubro,
-          favorito: contactos.favorito,
-          fechaNacimiento: contactos.fechaNacimiento,
-        })
-        .from(contactos)
-        .where(activos),
-      listarEtiquetas(cliente, userId),
-      cliente.db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(contactos)
-        .where(
-          and(
-            activos,
-            sql`not exists (select 1 from ${esquema.telefonosDeContactos} where ${esquema.telefonosDeContactos.contactoId} = ${contactos.id})`,
-            sql`not exists (select 1 from ${esquema.correosDeContactos} where ${esquema.correosDeContactos.contactoId} = ${contactos.id})`,
-          ),
+  const [hoy, filas, sinDatos, { recordatorios }, deudas] = await Promise.all([
+    hoyDeLaPersona(cliente, userId, ahora),
+    cliente.db
+      .select({
+        tipo: contactos.tipo,
+        nombre: contactos.nombre,
+        apellido: contactos.apellido,
+        fechaNacimiento: contactos.fechaNacimiento,
+      })
+      .from(contactos)
+      .where(activos),
+    cliente.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(contactos)
+      .where(
+        and(
+          activos,
+          sql`not exists (select 1 from ${esquema.telefonosDeContactos} where ${esquema.telefonosDeContactos.contactoId} = ${contactos.id})`,
+          sql`not exists (select 1 from ${esquema.correosDeContactos} where ${esquema.correosDeContactos.contactoId} = ${contactos.id})`,
         ),
-      listarRecordatorios(cliente, userId, { ahora, limit: 500 }),
-      // Con quién más se gastó: el importe ya convertido a la moneda base que guarda cada movimiento.
-      cliente.db
-        .select({
-          nombre: contactos.nombre,
-          apellido: contactos.apellido,
-          gastoCentavos: sql<number>`sum(${movimientos.importeConvertidoCentavos})`.mapWith(Number),
-          movimientos: sql<number>`count(*)`.mapWith(Number),
-        })
-        .from(movimientos)
-        .innerJoin(contactos, eq(contactos.id, movimientos.contactoId))
-        .where(
-          and(
-            eq(movimientos.userId, userId),
-            eq(movimientos.tipo, "gasto"),
-            isNull(movimientos.eliminadoEn),
-            gte(movimientos.fecha, desde),
-            lte(movimientos.fecha, ahora),
-            isNull(contactos.eliminadoEn),
-          ),
-        )
-        .groupBy(contactos.id, contactos.nombre, contactos.apellido)
-        .orderBy(desc(sql`sum(${movimientos.importeConvertidoCentavos})`), contactos.nombre)
-        .limit(CANTIDAD_EN_LISTAS),
-      obtenerMonedaBase(cliente, userId),
-      listarHistorial(cliente, userId, { ahora, limit: 500 }),
-    ]);
+      ),
+    listarRecordatorios(cliente, userId, { ahora, limit: 500 }),
+    deudasPendientesConContactos(cliente, userId),
+  ]);
 
   const personas = filas.filter((fila) => fila.tipo === "persona");
-  const empresas = filas.filter((fila) => fila.tipo === "empresa");
-
-  // Sin distinguir mayúsculas ("Electricista" y "electricista" son el mismo rubro); se
-  // muestra como lo escribió la primera empresa que lo tiene.
-  const rubros = new Map<string, { rubro: string; empresas: number }>();
-  for (const empresa of empresas) {
-    const rubro = empresa.rubro?.trim();
-    if (!rubro) continue;
-    const clave = rubro.toLocaleLowerCase("es");
-    const actual = rubros.get(clave);
-    rubros.set(clave, { rubro: actual?.rubro ?? rubro, empresas: (actual?.empresas ?? 0) + 1 });
-  }
 
   let proximoCumpleanos: WidgetsDeContactos["proximoCumpleanos"] = null;
+  const cumpleanosPorMes = Array.from({ length: MESES }, () => 0);
   for (const persona of personas) {
     if (!persona.fechaNacimiento) continue;
+    const mes = Number(persona.fechaNacimiento.slice(5, 7));
+    const lugar = mes - 1;
+    if (cumpleanosPorMes[lugar] !== undefined) cumpleanosPorMes[lugar] += 1;
+
     // El cumpleaños es un recordatorio anual: el día y el mes de la fecha de nacimiento.
     const fecha = proximaOcurrencia(
       {
@@ -183,7 +188,7 @@ export async function obtenerWidgetsDeContactos(
         fecha: null,
         diaSemana: null,
         diaDelMes: Number(persona.fechaNacimiento.slice(8, 10)),
-        mes: Number(persona.fechaNacimiento.slice(5, 7)),
+        mes,
       },
       hoy,
     );
@@ -200,54 +205,50 @@ export async function obtenerWidgetsDeContactos(
     }
   }
 
+  const porDia = Array.from({ length: DIAS_DE_LA_SEMANA }, () => 0);
   const porSemana = Array.from({ length: SEMANAS_DEL_GRAFICO }, () => 0);
   for (const recordatorio of recordatorios) {
+    const dia = recordatorio.diasRestantes;
+    if (porDia[dia] !== undefined) porDia[dia] += 1;
     const semana = Math.floor(recordatorio.diasRestantes / DIAS_DE_LA_SEMANA);
     if (semana < SEMANAS_DEL_GRAFICO && porSemana[semana] !== undefined) porSemana[semana] += 1;
   }
 
-  const porDiaDelHistorial = Array.from({ length: DIAS_DEL_HISTORIAL }, () => 0);
-  for (const entrada of historial.entradas) {
-    // diasAtras 1 es ayer: va en el último lugar del gráfico.
-    const lugar = DIAS_DEL_HISTORIAL - entrada.diasAtras;
-    if (lugar >= 0 && lugar < DIAS_DEL_HISTORIAL && porDiaDelHistorial[lugar] !== undefined) {
-      porDiaDelHistorial[lugar] += 1;
-    }
-  }
-
-  const porRepeticion = new Map<Repeticion, number>();
-  for (const recordatorio of recordatorios) {
-    porRepeticion.set(
-      recordatorio.repeticion,
-      (porRepeticion.get(recordatorio.repeticion) ?? 0) + 1,
-    );
+  // La que vence antes, aunque ya haya vencido: una vencida es la que más urge.
+  let proximoVencimiento: WidgetsDeContactos["deudas"]["proximoVencimiento"] = null;
+  for (const deuda of deudas) {
+    if (!deuda.contacto || !deuda.fechaLimite) continue;
+    const antes = proximoVencimiento?.fechaLimite;
+    if (antes !== undefined && deuda.fechaLimite >= antes) continue;
+    proximoVencimiento = {
+      concepto: deuda.concepto,
+      sentido: deuda.sentido,
+      contacto: {
+        tipo: deuda.contacto.tipo,
+        nombre: deuda.contacto.nombre,
+        apellido: deuda.contacto.apellido,
+      },
+      moneda: deuda.moneda,
+      centavos: deuda.pendienteCentavos,
+      fechaLimite: deuda.fechaLimite,
+      dias: diasEntre(hoy, deuda.fechaLimite),
+    };
   }
 
   return {
+    hoy,
     totales: {
       personas: personas.length,
-      empresas: empresas.length,
-      favoritos: filas.filter((fila) => fila.favorito).length,
+      empresas: filas.length - personas.length,
       sinDatosDeContacto: sinDatos[0]?.total ?? 0,
     },
-    etiquetas: etiquetas
-      .filter((etiqueta) => etiqueta.contactos > 0)
-      .sort((a, b) => b.contactos - a.contactos || a.nombre.localeCompare(b.nombre, "es"))
-      .slice(0, CANTIDAD_EN_LISTAS)
-      .map(({ nombre, color, contactos: cantidad }) => ({ nombre, color, contactos: cantidad })),
-    rubros: [...rubros.values()]
-      .sort((a, b) => b.empresas - a.empresas || a.rubro.localeCompare(b.rubro, "es"))
-      .slice(0, CANTIDAD_EN_LISTAS),
-    favoritos: filas
-      .filter((fila) => fila.favorito)
-      .slice(0, CANTIDAD_EN_LISTAS)
-      .map(({ nombre, apellido }) => ({ nombre, apellido })),
     recordatorios: {
-      hoy: recordatorios.filter((recordatorio) => recordatorio.diasRestantes === 0).length,
+      hoy: porDia[0] ?? 0,
       proximos7: recordatorios.filter((recordatorio) => recordatorio.diasRestantes < 7).length,
       proximos30: recordatorios.filter((recordatorio) => recordatorio.diasRestantes < 30).length,
+      porDia,
       porSemana,
-      proximos: recordatorios.slice(0, 5).map((recordatorio) => ({
+      proximos: recordatorios.slice(0, RECORDATORIOS_PROXIMOS).map((recordatorio) => ({
         titulo: recordatorio.titulo,
         repeticion: recordatorio.repeticion,
         fecha: recordatorio.proximaFecha,
@@ -260,31 +261,12 @@ export async function obtenerWidgetsDeContactos(
         },
       })),
     },
-    porRepeticion: [...porRepeticion.entries()]
-      .map(([repeticion, total]) => ({ repeticion, total }))
-      // A igual cantidad, en el orden de siempre de las repeticiones (una vez, diaria, semanal...).
-      .sort(
-        (a, b) =>
-          b.total - a.total ||
-          REPETICIONES_VALIDAS.indexOf(a.repeticion) - REPETICIONES_VALIDAS.indexOf(b.repeticion),
-      ),
-    historial: {
-      total: historial.total,
-      ultimos7: porDiaDelHistorial.reduce((suma, cantidad) => suma + cantidad, 0),
-      porDia: porDiaDelHistorial,
-      ultimas: historial.entradas.slice(0, CANTIDAD_EN_LISTAS).map((entrada) => ({
-        titulo: entrada.titulo,
-        repeticion: entrada.repeticion,
-        diasAtras: entrada.diasAtras,
-        contacto: {
-          tipo: entrada.contacto.tipo,
-          nombre: entrada.contacto.nombre,
-          apellido: entrada.contacto.apellido,
-        },
-      })),
-    },
-    masGastado: gastos,
-    monedaBase,
     proximoCumpleanos,
+    cumpleanosPorMes,
+    deudas: {
+      teDeben: resumirDeudas(deudas.filter((deuda) => deuda.sentido === "me_deben")),
+      debes: resumirDeudas(deudas.filter((deuda) => deuda.sentido === "debo")),
+      proximoVencimiento,
+    },
   };
 }
