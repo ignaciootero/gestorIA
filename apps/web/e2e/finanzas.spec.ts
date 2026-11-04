@@ -189,7 +189,10 @@ test.describe("acceso al módulo", () => {
     const cuenta = await crearCuentaAprobada();
     await entrar(page, cuenta);
 
-    await page.getByRole("link", { name: "Finanzas" }).click();
+    await page
+      .getByRole("complementary", { name: "Navegación" })
+      .getByRole("link", { name: "Finanzas" })
+      .click();
     await expect(page).toHaveURL(/\/finanzas$/);
     await expect(page.getByRole("heading", { name: "Finanzas" })).toBeVisible();
   });

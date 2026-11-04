@@ -1,10 +1,9 @@
-// Pantalla de inicio.
+// Pantalla de inicio: un carrusel con el resumen de cada módulo (ver PanelDeInicio).
 //
-// No lleva columna de widgets aparte: sus widgets son el contenido principal
-// (cifras y avisos de cada módulo sobre la persona), así que usan el lugar de las
-// dos columnas. Los módulos nuevos suman sus widgets en PanelDeInicio cuando se
-// pidan (CLAUDE.md, Hoja de ruta, paso 7). Esta pantalla solo se ve con sesión
-// iniciada.
+// No lleva columna de widgets aparte: los resúmenes son el contenido principal y usan el lugar de las
+// dos columnas. Entra entera en la ventana, sin desplazamiento vertical. Los módulos nuevos suman su
+// resumen en PanelDeInicio cuando se pidan (CLAUDE.md, Hoja de ruta, paso 7). Esta pantalla solo se
+// ve con sesión iniciada.
 
 import { tituloDePantalla } from "@gestoria/shared";
 import type { Metadata } from "next";
@@ -17,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function PaginaDeInicio() {
   return (
-    <EstructuraDeApp fusionada>
+    <EstructuraDeApp fusionada pantallaFija>
       <PanelDeInicio />
     </EstructuraDeApp>
   );

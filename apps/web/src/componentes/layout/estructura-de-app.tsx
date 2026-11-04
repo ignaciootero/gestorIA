@@ -6,7 +6,7 @@
 // Los widgets los pone cada página (`widgets`), porque dependen de dónde está
 // parada la persona: Finanzas muestra los suyos y las pantallas sin widgets
 // (administración) se quedan con dos columnas, sin una tercera vacía. La pantalla
-// de inicio tampoco pasa `widgets`: sus widgets son el contenido principal, que
+// de inicio tampoco pasa `widgets`: sus resúmenes son el contenido principal, que
 // ocupa el lugar de las dos columnas (ver PanelDeInicio).
 //
 // Las dos columnas laterales se pueden esconder con una pestaña pegada al borde de
@@ -42,6 +42,11 @@
 // queden pegadas justo debajo. `max-h` + `overflow-y-auto` es por si algún
 // día el menú o los widgets crecen más que la pantalla: se desplazan solos en
 // vez de cortarse sin forma de llegar al final.
+//
+// Una pantalla puede pedir entrar entera en la ventana, sin desplazamiento vertical (`pantallaFija`,
+// hoy la de inicio): la grilla se marca con `data-pantalla-fija`, el marco de la aplicación pasa a medir
+// el alto de la ventana (ver `.marco-de-la-app` en globals.css) y la fila de la grilla y el contenido
+// pueden achicarse hasta lo que queda entre la barra y el pie.
 //
 // En pantallas angostas no entran las tres columnas: los widgets se ocultan
 // primero (son lo menos esencial) y, si todavía no entra, también el menú,
@@ -81,6 +86,7 @@ export function EstructuraDeApp({
   children,
   widgets,
   fusionada = false,
+  pantallaFija = false,
 }: {
   children: ReactNode;
   /** Contenido de la columna derecha. Sin él, la pantalla tiene solo menú y contenido. */
@@ -90,11 +96,15 @@ export function EstructuraDeApp({
    * centrado en la pantalla. Sin `widgets`, claro.
    */
   fusionada?: boolean;
+  /** La pantalla entra entera en la ventana, sin desplazamiento vertical (inicio). */
+  pantallaFija?: boolean;
 }) {
   return (
     <div
+      data-pantalla-fija={pantallaFija || undefined}
       className={cn(
         "grid w-full flex-1 grid-cols-1 gap-6 px-4 sm:px-8",
+        pantallaFija && "min-h-0 grid-rows-[minmax(0,1fr)]",
         widgets ? COLUMNAS_CON_WIDGETS : fusionada ? COLUMNAS_FUSIONADAS : COLUMNAS_SIN_WIDGETS,
       )}
     >
@@ -120,7 +130,9 @@ export function EstructuraDeApp({
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-col gap-6 py-6">{children}</main>
+      <main className={cn("flex min-w-0 flex-col gap-6 py-6", pantallaFija && "min-h-0")}>
+        {children}
+      </main>
 
       {widgets ? (
         <>

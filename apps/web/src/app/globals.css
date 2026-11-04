@@ -189,6 +189,26 @@
   }
 
   /*
+   * Pantallas que entran enteras en la ventana, sin desplazamiento vertical (hoy, la de inicio).
+   *
+   * La pantalla lo pide marcando su grilla con `data-pantalla-fija` (ver EstructuraDeApp): entonces
+   * el marco de la aplicación (barra, contenido y pie) mide justo el alto de la ventana en vez de
+   * crecer con el contenido, y el contenido se acomoda en lo que queda entre la barra y el pie. Está
+   * en CSS porque lo decide algo que está mucho más abajo (`:has`), sin que el marco sepa de pantallas.
+   *
+   * En una ventana muy baja no hay lugar para todo sin cortar algo: ahí vuelve a desplazarse como
+   * cualquier otra pantalla, porque un contenido cortado es peor que un desplazamiento.
+   */
+  @media (min-height: 560px) {
+    .marco-de-la-app:has([data-pantalla-fija]) {
+      height: 100dvh;
+    }
+    .marco-de-la-app:has([data-pantalla-fija]) > .contenido-de-la-app {
+      min-height: 0;
+    }
+  }
+
+  /*
    * Botones: se levantan al pasar el mouse y se hunden al presionarlos.
    *
    * Está en CSS y no en clases de Tailwind porque son tres estados que se pisan

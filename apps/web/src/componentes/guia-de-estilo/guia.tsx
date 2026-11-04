@@ -14,6 +14,13 @@ import {
 } from "@gestoria/ui-tokens";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
+import {
+  BarrasConEtiquetas,
+  BloqueDeGrafico,
+  Destacado,
+  LineaDeAviso,
+  ListaBreve,
+} from "@/componentes/inicio/piezas-de-resumen";
 import { Isotipo, Logotipo } from "@/componentes/marca/logotipo";
 import { BotonDeFallida } from "@/componentes/tareas/fila-de-tarea";
 import { Aviso } from "@/componentes/ui/aviso";
@@ -404,6 +411,44 @@ export function GuiaDeEstilo() {
             difuminado como halo—, con el trazo pintado por un gradiente radial centrado en el
             puntero.
           </p>
+        </Tarjeta>
+      </Seccion>
+
+      <Seccion titulo="Resúmenes de la pantalla de inicio">
+        <p className="text-sm text-texto-secundario">
+          Las piezas con las que se arma el resumen de cada módulo: una cifra destacada, a lo sumo
+          un aviso, una lista corta y un gráfico con sus números y etiquetas escritos (se lee sin
+          ejes ni leyendas). Las barras crecen desde abajo al aparecer, en cascada.
+        </p>
+        <Tarjeta className="grid gap-6 p-6 md:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <Destacado etiqueta="Hechas hoy" valor="3 de 5" detalle="Te faltan 2." />
+            <LineaDeAviso tono="advertencia">Tenés una tarea atrasada.</LineaDeAviso>
+            <ListaBreve
+              titulo="Lo que falta hoy"
+              vacio="No tenés tareas pendientes."
+              filas={[
+                { id: "1", principal: "Regar las plantas", secundario: "18:00" },
+                { id: "2", principal: "Comprar pan", secundario: "Todo el día" },
+              ]}
+            />
+          </div>
+          <BloqueDeGrafico
+            titulo="Últimos 7 días"
+            descripcion="Ejemplo de la guía de estilo."
+            pie="Cada barra son las tareas hechas de las que había ese día."
+          >
+            <BarrasConEtiquetas
+              color="bg-origen-tareas"
+              columnas={[3, 4, 2, 5, 4, 1, 3].map((valor, posicion) => ({
+                etiqueta: ["mié", "jue", "vie", "sáb", "dom", "lun", "hoy"][posicion] ?? "",
+                valor,
+                total: 5,
+                texto: `${valor}/5`,
+                resaltada: posicion === 6,
+              }))}
+            />
+          </BloqueDeGrafico>
         </Tarjeta>
       </Seccion>
 

@@ -69,9 +69,9 @@ export default function LayoutRaiz({ children }: { children: ReactNode }) {
             abajo, así no queda flotando en el medio en las pantallas cortas.
             `relative z-10` la pone por encima del canvas, que está en z-0.
           */}
-          <div className="relative z-10 flex min-h-dvh flex-col">
+          <div className="marco-de-la-app relative z-10 flex min-h-dvh flex-col">
             <Navbar />
-            <div className="flex flex-1 flex-col">{children}</div>
+            <div className="contenido-de-la-app flex flex-1 flex-col">{children}</div>
             <PieDePagina />
           </div>
         </Proveedores>

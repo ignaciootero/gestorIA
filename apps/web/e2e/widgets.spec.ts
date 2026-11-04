@@ -1,7 +1,7 @@
-// Tests end-to-end de los widgets: la pantalla de inicio (donde los widgets son el
-// contenido principal, sin columna aparte) y el carrusel de la columna lateral de
-// Finanzas (avance automático, pausa por mouse y teclado, flechas y reducir movimiento),
-// y la variedad de widgets: cifras sueltas y cada tipo de mini gráfico.
+// Tests end-to-end de los widgets de Finanzas, en la columna lateral de su pantalla: lo que dice
+// cada uno, el carrusel (avance automático, pausa por mouse y teclado, flechas y reducir
+// movimiento) y la variedad de widgets: cifras sueltas y cada tipo de mini gráfico. La pantalla
+// de inicio, con su carrusel de resúmenes, tiene su propio archivo (inicio.spec.ts).
 //
 // Los datos se preparan hablando con la API desde la sesión del navegador, en vez
 // de pasar por los formularios: acá se prueba lo que muestran los widgets, y los
@@ -129,37 +129,92 @@ async function prepararDatos(
   return { cuentaEnRojo: primera.nombre, categoria: grande.nombre };
 }
 
-/** La tarjeta de un widget (con su tipo en `data-visual`), ubicada por su título. */
-function widget(pagina: Page, titulo: string): Locator {
-  return pagina.locator(`xpath=//div[@data-visual][.//p[normalize-space()='${titulo}']]`);
-}
-
 /** Uno de los dos carruseles de la columna lateral: el de texto (arriba) o el de gráficos (abajo). */
 function carrusel(pagina: Page, categoria: "texto" | "gráficos" = "texto"): Locator {
   return pagina.getByRole("region", { name: `Widgets de finanzas: ${categoria}` });
 }
 
-test.describe("pantalla de inicio", () => {
-  test("los widgets son el contenido principal: no hay columna de widgets aparte", async ({
-    page,
-  }) => {
-    await entrar(page, await crearCuentaAprobada());
+/**
+ * Abre la pantalla de Finanzas, donde están los widgets (en la columna lateral, de a uno por carrusel).
+ * Con reducir movimiento, para que los carruseles no avancen solos mientras se los recorre.
+ */
+async function abrirWidgetsDeFinanzas(pagina: Page): Promise<void> {
+  await pagina.emulateMedia({ reducedMotion: "reduce" });
+  await pagina.goto("/finanzas");
+  await expect(carrusel(pagina).getByRole("group", { name: /^1 de / })).toBeVisible();
+}
 
-    await expect(page.getByRole("heading", { name: /^Hola, / })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Finanzas" })).toBeVisible();
-    await expect(page.getByRole("complementary", { name: "Widgets" })).toHaveCount(0);
-    await expect(page.getByText("Todavía no hay módulos")).toHaveCount(0);
-  });
+/** Cuántos widgets tiene un carrusel (0 si no está). */
+async function widgetsDelCarrusel(zona: Locator): Promise<number> {
+  if ((await zona.count()) === 0) return 0;
+  const nombre = await zona.getByRole("group").getAttribute("aria-label");
+  return Number(nombre?.split(" de ")[1] ?? 0);
+}
 
+/** Pasa al widget siguiente de un carrusel (dando la vuelta) y espera a que se vea. */
+async function pasarAlSiguiente(zona: Locator): Promise<void> {
+  const nombre = (await zona.getByRole("group").getAttribute("aria-label")) ?? "";
+  const [actual, total] = nombre.split(" de ").map(Number) as [number, number];
+  await zona.getByRole("button", { name: "Widget siguiente" }).click();
+  const siguiente = (actual % total) + 1;
+  await expect(zona.getByRole("group", { name: `${siguiente} de ${total}` })).toBeVisible();
+}
+
+/**
+ * Lo que muestra cada widget de un carrusel, en orden (título y tipo de gráfico). Lo recorre entero y
+ * lo deja de nuevo en el primero.
+ */
+async function recorrerCarrusel(
+  pagina: Page,
+  categoria: "texto" | "gráficos",
+): Promise<{ titulo: string; visual: string }[]> {
+  const zona = carrusel(pagina, categoria);
+  const total = await widgetsDelCarrusel(zona);
+  const vistos: { titulo: string; visual: string }[] = [];
+  for (let posicion = 1; posicion <= total; posicion++) {
+    const tarjeta = zona.locator("[data-visual]");
+    vistos.push({
+      titulo: ((await tarjeta.locator("p.line-clamp-2").textContent()) ?? "").trim(),
+      visual: (await tarjeta.getAttribute("data-visual")) ?? "",
+    });
+    await pasarAlSiguiente(zona);
+  }
+  return vistos;
+}
+
+/**
+ * Lleva el carrusel que tiene el widget hasta mostrarlo y devuelve su tarjeta. Falla si no está en
+ * ninguno de los dos.
+ */
+async function mostrarWidget(pagina: Page, titulo: string): Promise<Locator> {
+  for (const categoria of ["texto", "gráficos"] as const) {
+    const zona = carrusel(pagina, categoria);
+    const total = await widgetsDelCarrusel(zona);
+    for (let posicion = 1; posicion <= total; posicion++) {
+      const tarjeta = zona.locator(
+        `xpath=.//div[@data-visual][.//p[normalize-space()='${titulo}']]`,
+      );
+      if ((await tarjeta.count()) > 0) return tarjeta;
+      await pasarAlSiguiente(zona);
+    }
+  }
+  throw new Error(`No hay ningún widget "${titulo}"`);
+}
+
+// Lo que dicen los widgets de Finanzas. Antes se revisaba en la cuadrícula de la pantalla de inicio;
+// desde que el inicio es un carrusel de resúmenes (ver inicio.spec.ts), los widgets están solo en la
+// columna lateral de Finanzas, y se recorren sus carruseles para ver cada uno.
+test.describe("contenido de los widgets de Finanzas", () => {
   test("sin períodos avisa que hay que abrir el primero y muestra el disponible", async ({
     page,
   }) => {
     await entrar(page, await crearCuentaAprobada());
+    await abrirWidgetsDeFinanzas(page);
 
-    const aviso = widget(page, "Todavía sin períodos");
+    const aviso = await mostrarWidget(page, "Todavía sin períodos");
     await expect(aviso).toBeVisible();
     await expect(aviso.getByText("Aviso", { exact: true })).toBeVisible();
-    await expect(widget(page, "Disponible").getByText("$ 0,00")).toBeVisible();
+    await expect((await mostrarWidget(page, "Disponible")).getByText("$ 0,00")).toBeVisible();
     // Sin período no hay balance ni ritmo que mostrar.
     await expect(page.getByText(/^Balance de /)).toHaveCount(0);
   });
@@ -167,39 +222,45 @@ test.describe("pantalla de inicio", () => {
   test("con movimientos muestra las cifras, las curiosidades y los avisos", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     const { cuentaEnRojo, categoria } = await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
     // Avisos
-    const enRojo = widget(page, "Cuenta en rojo");
-    await expect(enRojo.getByText("-$ 3.200,00")).toBeVisible();
-    await expect(enRojo.getByText(`${cuentaEnRojo} tiene el saldo en negativo.`)).toBeVisible();
-    const superado = widget(page, "Presupuesto superado");
-    await expect(superado.getByText("$ 100,00")).toBeVisible();
-    await expect(superado.getByText(/Te pasaste en /)).toBeVisible();
-    await expect(widget(page, "Hace días que no cargás nada").getByText("4 días")).toBeVisible();
+    const enRojo = await mostrarWidget(page, "Cuenta en rojo");
+    await expect(enRojo.getByText("-$ 3.200,00").first()).toBeVisible();
+    await expect(
+      enRojo.getByText(`${cuentaEnRojo} tiene el saldo en negativo.`).first(),
+    ).toBeVisible();
+    const superado = await mostrarWidget(page, "Presupuesto superado");
+    await expect(superado.getByText("$ 100,00").first()).toBeVisible();
+    await expect(superado.getByText(/Te pasaste en /).first()).toBeVisible();
+    await expect(
+      (await mostrarWidget(page, "Hace días que no cargás nada")).getByText("4 días").first(),
+    ).toBeVisible();
 
     // Cifras y curiosidades
-    await expect(widget(page, "Disponible").getByText("$ 6.800,00")).toBeVisible();
-    await expect(widget(page, "Balance de Prueba").getByText("$ 6.800,00")).toBeVisible();
-    await expect(widget(page, "Donde más gastás").getByText(categoria)).toBeVisible();
-    const mayor = widget(page, "Tu gasto más grande");
-    await expect(mayor.getByText("$ 3.000,00")).toBeVisible();
-    await expect(mayor.getByText(/Alquiler/)).toBeVisible();
-    await expect(widget(page, "Movimientos cargados").getByText("3")).toBeVisible();
+    await expect(
+      (await mostrarWidget(page, "Disponible")).getByText("$ 6.800,00").first(),
+    ).toBeVisible();
+    await expect(
+      (await mostrarWidget(page, "Balance de Prueba")).getByText("$ 6.800,00").first(),
+    ).toBeVisible();
+    await expect(
+      (await mostrarWidget(page, "Donde más gastás")).getByText(categoria).first(),
+    ).toBeVisible();
+    const mayor = await mostrarWidget(page, "Tu gasto más grande");
+    await expect(mayor.getByText("$ 3.000,00").first()).toBeVisible();
+    await expect(mayor.getByText(/Alquiler/).first()).toBeVisible();
+    await expect(
+      (await mostrarWidget(page, "Movimientos cargados")).getByText("3", { exact: true }).first(),
+    ).toBeVisible();
   });
 
   test("los avisos van antes que las cifras", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page);
-    await page.reload();
-    // `allTextContents` no espera: primero hay que dejar que carguen los widgets.
-    await expect(widget(page, "Disponible")).toBeVisible();
+    await abrirWidgetsDeFinanzas(page);
 
-    const titulos = await page
-      .locator(
-        "xpath=//section[@aria-labelledby='widgets-de-finanzas']//li//div[contains(@class,'rounded-tarjeta')]/div[1]/p",
-      )
-      .allTextContents();
+    const titulos = (await recorrerCarrusel(page, "texto")).map((widget) => widget.titulo);
 
     const ultimoAviso = titulos.lastIndexOf("Hace días que no cargás nada");
     const primeraCifra = titulos.indexOf("Disponible");
@@ -749,12 +810,12 @@ test.describe("variedad de widgets", () => {
   test("hay widgets de cifra sola y con cada tipo de mini gráfico", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page, { conPeriodoAnterior: true });
-    await page.reload();
-    await expect(widget(page, "Disponible")).toBeVisible();
+    await abrirWidgetsDeFinanzas(page);
 
-    const tipos = await page
-      .locator("section[aria-labelledby='widgets-de-finanzas'] [data-visual]")
-      .evaluateAll((tarjetas) => tarjetas.map((tarjeta) => tarjeta.getAttribute("data-visual")));
+    const tipos = [
+      ...(await recorrerCarrusel(page, "texto")),
+      ...(await recorrerCarrusel(page, "gráficos")),
+    ].map((widget) => widget.visual);
 
     // De cada forma hay al menos una: solo texto, línea, barras, comparación, anillo, avance y ranking.
     for (const esperado of [
@@ -775,9 +836,9 @@ test.describe("variedad de widgets", () => {
   test("el balance compara lo que entró con lo que salió", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const balance = widget(page, "Balance de Prueba");
+    const balance = await mostrarWidget(page, "Balance de Prueba");
     await expect(balance).toHaveAttribute("data-visual", "comparacion");
     await expect(balance.getByText("Entró")).toBeVisible();
     await expect(balance.getByText("$ 10.000,00")).toBeVisible();
@@ -790,9 +851,9 @@ test.describe("variedad de widgets", () => {
   }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page, { conPeriodoAnterior: true });
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const ritmo = widget(page, "Ritmo de gasto");
+    const ritmo = await mostrarWidget(page, "Ritmo de gasto");
     await expect(ritmo).toHaveAttribute("data-visual", "linea");
     // Se llevan $ 3.200 gastados contra $ 1.000 del período anterior a esta altura: 220 % más.
     await expect(ritmo.getByText(/^\+220/)).toBeVisible();
@@ -807,9 +868,9 @@ test.describe("variedad de widgets", () => {
   }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page, { conPeriodoAnterior: true });
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const evolucion = widget(page, "Gasto por período");
+    const evolucion = await mostrarWidget(page, "Gasto por período");
     await expect(evolucion).toHaveAttribute("data-visual", "barras");
     await expect(evolucion.locator("div.flex-1.rounded-sm")).toHaveCount(2);
     await expect(evolucion.locator("div.flex-1.rounded-sm.bg-acento")).toHaveCount(1);
@@ -819,9 +880,9 @@ test.describe("variedad de widgets", () => {
   test("donde más gastás lleva un anillo con el porcentaje adentro", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     const { categoria } = await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const donde = widget(page, "Donde más gastás");
+    const donde = await mostrarWidget(page, "Donde más gastás");
     await expect(donde).toHaveAttribute("data-visual", "anillo");
     await expect(donde.getByText(categoria)).toBeVisible();
     // 3.000 de 3.200 gastados: 94 %.
@@ -833,9 +894,9 @@ test.describe("variedad de widgets", () => {
   }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const presupuestos = widget(page, "Presupuestos del período");
+    const presupuestos = await mostrarWidget(page, "Presupuestos del período");
     await expect(presupuestos).toHaveAttribute("data-visual", "progreso");
     // Gastó 200 sobre un límite de 100: se pasó, así que la barra va llena y en rojo.
     await expect(presupuestos.getByText(/^200/)).toBeVisible();
@@ -847,9 +908,9 @@ test.describe("variedad de widgets", () => {
   }) => {
     await entrar(page, await crearCuentaAprobada());
     const { categoria } = await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const ranking = widget(page, "Tus mayores gastos");
+    const ranking = await mostrarWidget(page, "Tus mayores gastos");
     await expect(ranking).toHaveAttribute("data-visual", "ranking");
     await expect(ranking.getByRole("listitem")).toHaveCount(2);
     await expect(ranking.getByRole("listitem").first()).toContainText(categoria);
@@ -859,9 +920,9 @@ test.describe("variedad de widgets", () => {
   test("el gasto por día dibuja las barras de los últimos días", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    const porDia = widget(page, "Gasto por día");
+    const porDia = await mostrarWidget(page, "Gasto por día");
     await expect(porDia).toHaveAttribute("data-visual", "barras");
     await expect(porDia.locator("div.flex-1.rounded-sm")).toHaveCount(7);
   });
@@ -869,25 +930,39 @@ test.describe("variedad de widgets", () => {
   test("los avisos y las cifras sin gráfico siguen siendo solo texto", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page);
-    await page.reload();
+    await abrirWidgetsDeFinanzas(page);
 
-    await expect(widget(page, "Cuenta en rojo")).toHaveAttribute("data-visual", "cifra");
-    await expect(widget(page, "Disponible")).toHaveAttribute("data-visual", "cifra");
-    await expect(widget(page, "Tu gasto más grande")).toHaveAttribute("data-visual", "cifra");
-    await expect(widget(page, "Movimientos cargados")).toHaveAttribute("data-visual", "cifra");
+    await expect(await mostrarWidget(page, "Cuenta en rojo")).toHaveAttribute(
+      "data-visual",
+      "cifra",
+    );
+    await expect(await mostrarWidget(page, "Disponible")).toHaveAttribute("data-visual", "cifra");
+    await expect(await mostrarWidget(page, "Tu gasto más grande")).toHaveAttribute(
+      "data-visual",
+      "cifra",
+    );
+    await expect(await mostrarWidget(page, "Movimientos cargados")).toHaveAttribute(
+      "data-visual",
+      "cifra",
+    );
   });
 
   test("los gráficos son decorativos para un lector de pantalla", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page, { conPeriodoAnterior: true });
-    await page.reload();
-    await expect(widget(page, "Ritmo de gasto")).toBeVisible();
+    await abrirWidgetsDeFinanzas(page);
 
-    // Ningún <svg> está expuesto: lo que dicen lo dice el texto de la tarjeta.
-    const expuestos = await page
-      .locator("section[aria-labelledby='widgets-de-finanzas'] svg")
-      .evaluateAll((svgs) => svgs.filter((svg) => !svg.closest("[aria-hidden='true']")).length);
-    expect(expuestos).toBe(0);
+    // Ningún <svg> de ningún gráfico está expuesto: lo que dicen lo dice el texto de la tarjeta.
+    const zona = carrusel(page, "gráficos");
+    const total = await widgetsDelCarrusel(zona);
+    expect(total).toBeGreaterThan(1);
+    for (let vuelta = 0; vuelta < total; vuelta++) {
+      const expuestos = await zona
+        .locator("[data-visual] svg")
+        .evaluateAll((svgs) => svgs.filter((svg) => !svg.closest("[aria-hidden='true']")).length);
+      expect(expuestos).toBe(0);
+      await pasarAlSiguiente(zona);
+    }
   });
 });
 
@@ -903,17 +978,6 @@ test.describe("pantallas sin widgets", () => {
 });
 
 test.describe("accesibilidad de los widgets", () => {
-  test("la pantalla de inicio con datos no tiene violaciones", async ({ page }) => {
-    await entrar(page, await crearCuentaAprobada());
-    await prepararDatos(page);
-    await page.reload();
-    await expect(widget(page, "Cuenta en rojo")).toBeVisible();
-
-    const resultados = await new AxeBuilder({ page }).analyze();
-
-    expect(resultados.violations).toEqual([]);
-  });
-
   test("la pantalla de Finanzas con el carrusel no tiene violaciones", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await entrar(page, await crearCuentaAprobada());
@@ -930,8 +994,8 @@ test.describe("accesibilidad de los widgets", () => {
     await page.emulateMedia({ colorScheme: "dark" });
     await entrar(page, await crearCuentaAprobada());
     await prepararDatos(page);
-    await page.reload();
-    await expect(widget(page, "Cuenta en rojo")).toBeVisible();
+    await abrirWidgetsDeFinanzas(page);
+    await expect(carrusel(page).getByText("Cuenta en rojo")).toBeVisible();
 
     const resultados = await new AxeBuilder({ page }).analyze();
 

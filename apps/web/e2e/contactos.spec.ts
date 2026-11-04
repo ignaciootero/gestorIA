@@ -1,6 +1,6 @@
 // Tests end-to-end del módulo de contactos: alta de personas y empresas, validaciones,
 // búsqueda y filtros, favoritos, edición, eliminación, recordatorios, etiquetas y los
-// widgets de la columna lateral y de la pantalla de inicio.
+// widgets de la columna lateral y el resumen de Contactos de la pantalla de inicio.
 //
 // Los datos de partida se preparan hablando con la API desde la sesión del navegador, en
 // vez de pasar por los formularios: los formularios se prueban en los tests de alta y
@@ -1075,7 +1075,7 @@ test.describe("recordatorios", () => {
     await expect(ficha.getByText(/No tiene recordatorios/)).toBeVisible();
   });
 
-  test("uno de hoy aparece como aviso en los widgets de Contactos y en la pantalla de inicio", async ({
+  test("uno de hoy aparece como aviso en los widgets de Contactos y en el resumen del inicio", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -1088,12 +1088,12 @@ test.describe("recordatorios", () => {
       hora: "18:00",
     });
 
-    // Pantalla de inicio: los widgets de Contactos son una sección más.
+    // Pantalla de inicio: el resumen de Contactos lo avisa.
     await page.goto("/inicio");
-    const seccion = page.getByRole("region", { name: "Contactos" });
-    await expect(seccion).toBeVisible();
-    await expect(seccion.getByText("Recordatorio de hoy")).toBeVisible();
-    await expect(seccion.getByText(/Pagar la cuota a las 18:00 \(Ana Pérez\)/)).toBeVisible();
+    await page.getByRole("tab", { name: "Contactos" }).click();
+    const aviso = page.locator("[data-resumen='contactos'] [data-aviso]");
+    await expect(aviso).toContainText("Recordatorio de hoy");
+    await expect(aviso).toContainText(/Pagar la cuota a las 18:00 \(Ana Pérez\)/);
 
     // Columna lateral de la pantalla de Contactos.
     await abrirContactos(page);
@@ -1514,7 +1514,7 @@ test.describe("widgets", () => {
     await expect(repeticion.getByText("Una sola vez", { exact: true })).toBeVisible();
   });
 
-  test("la pantalla de inicio muestra la cuadrícula con el total, el cumpleaños y los favoritos", async ({
+  test("el resumen de Contactos de la pantalla de inicio destaca el próximo cumpleaños", async ({
     page,
   }) => {
     await entrar(page, await crearCuentaAprobada());
@@ -1527,14 +1527,12 @@ test.describe("widgets", () => {
     });
     await crearEmpresa(page, { nombre: "Taller", rubro: "Mecánico", telefono: "2411 1111" });
     await page.goto("/inicio");
+    await page.getByRole("tab", { name: "Contactos" }).click();
 
-    const seccion = page.getByRole("region", { name: "Contactos" });
-    await expect(seccion.getByText("Tus contactos")).toBeVisible();
-    await expect(seccion.getByText("1 persona y 1 empresa o servicio.")).toBeVisible();
-    await expect(seccion.getByText("Próximo cumpleaños")).toBeVisible();
-    await expect(seccion.getByText("en 4 días")).toBeVisible();
-    await expect(seccion.getByText(/Ana Pérez cumple \d+ el /)).toBeVisible();
-    await expect(seccion.getByText("Favoritos")).toBeVisible();
+    const destacado = page.locator("[data-resumen='contactos'] [data-destacado]");
+    await expect(destacado).toContainText("Próximo cumpleaños");
+    await expect(destacado).toContainText("Ana Pérez");
+    await expect(destacado).toContainText(/Cumple \d+ el .+ \(en 4 días\)\./);
   });
 });
 

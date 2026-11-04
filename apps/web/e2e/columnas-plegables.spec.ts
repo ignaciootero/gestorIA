@@ -88,7 +88,7 @@ test.describe("menú de navegación", () => {
     await botonDelMenu(page, "Ocultar el menú").click();
     await expect(menu(page)).toBeHidden();
 
-    await expect(page.getByRole("link", { name: "Finanzas" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Finanzas", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Cerrar sesión" })).toHaveCount(0);
   });
 
@@ -330,7 +330,7 @@ test.describe("la pestaña", () => {
 });
 
 test.describe("dónde hay pestañas", () => {
-  test("la pantalla de inicio solo tiene la del menú: sus widgets son el contenido", async ({
+  test("la pantalla de inicio solo tiene la del menú: sus resúmenes son el contenido", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

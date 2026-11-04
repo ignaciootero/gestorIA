@@ -1043,23 +1043,19 @@ test.describe("ver la dirección en el mapa", () => {
 });
 
 test.describe("widgets con plata", () => {
-  test("lo que te deben y debés aparece en los widgets de Finanzas y en inicio", async ({
-    page,
-  }) => {
+  test("lo que te deben y debés aparece en el resumen de Finanzas del inicio", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await entrar(page, await crearCuentaAprobada());
     const beto = await crearContacto(page, { nombre: "Beto" });
     await crearDeuda(page, { contactoId: beto, monto: 1500 });
     await crearDeuda(page, { contactoId: beto, monto: 70, moneda: "USD", sentido: "debo" });
 
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/inicio");
-    const seccion = page.getByRole("region", { name: "Finanzas" });
-    const teDeben = seccion.locator(
-      "xpath=.//div[@data-visual][.//p[normalize-space()='Te deben']]",
-    );
-    await expect(teDeben).toContainText(dinero("$ 1.500,00"));
-    const debes = seccion.locator("xpath=.//div[@data-visual][.//p[normalize-space()='Debés']]");
-    await expect(debes).toContainText(dinero("US$ 70,00"));
+    // El primer resumen del carrusel es el de Finanzas: lo que te deben y lo que debés van con el disponible.
+    const destacado = page.locator("[data-resumen='finanzas'] [data-destacado]");
+    await expect(destacado).toContainText(new RegExp(`Te deben ${dinero("$ 1.500,00").source}`));
+    await expect(destacado).toContainText(new RegExp(`Debés ${dinero("US$ 70,00").source}`));
   });
 
   test("'con quién más gastaste' aparece en los widgets de Contactos", async ({ page }) => {
@@ -1076,11 +1072,20 @@ test.describe("widgets con plata", () => {
       contactoId: taller,
     });
 
-    await page.goto("/inicio");
-    const seccion = page.getByRole("region", { name: "Contactos" });
-    await expect(seccion.getByText("Con quién más gastaste")).toBeVisible();
-    await expect(seccion.getByText("Taller Sur")).toBeVisible();
-    await expect(seccion.getByText(dinero("$ 750,00"))).toBeVisible();
+    // Está en el carrusel de gráficos de la columna de Contactos: se pasa hasta llegar a él.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/contactos");
+    const zona = page.getByRole("region", { name: "Widgets de contactos: gráficos" });
+    const tarjeta = zona.locator(
+      "xpath=.//div[@data-visual][.//p[normalize-space()='Con quién más gastaste']]",
+    );
+    for (let vuelta = 0; vuelta < 10 && (await tarjeta.count()) === 0; vuelta++) {
+      const antes = await zona.getByRole("group").getAttribute("aria-label");
+      await zona.getByRole("button", { name: "Widget siguiente" }).click();
+      await expect(zona.getByRole("group")).not.toHaveAttribute("aria-label", antes ?? "");
+    }
+    await expect(tarjeta.getByText("Taller Sur")).toBeVisible();
+    await expect(tarjeta.getByText(dinero("$ 750,00"))).toBeVisible();
   });
 });
 
