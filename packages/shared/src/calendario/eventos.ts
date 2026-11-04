@@ -189,27 +189,45 @@ export function ocurrenciasEnRango(
  * puede ocultar las tareas diarias y dejar las semanales, mensuales y anuales. Se guardan los que se
  * **ocultan**, así un origen o una repetición nuevos aparecen visibles sin migrar nada.
  *
- * También se filtra por estado (pendiente, atrasada, finalizada; ver `estadoDeEvento`). Por defecto se
- * ocultan las finalizadas (completadas o fallidas): el calendario sirve para ver lo que falta, y un mes
- * pasado lleno de tareas hechas lo taparía. Los estados también se guardan como "ocultos"; lo que cambia es
- * el valor por defecto, que no es "todo visible".
+ * Esos mismos orígenes se filtran también por estado, cada uno con los suyos (ver `estadosDeOrigen`): las
+ * tareas son pendientes, atrasadas o finalizadas, y los recordatorios, próximos o pasados. Por defecto se
+ * ocultan las tareas finalizadas y los recordatorios pasados: el calendario sirve para ver lo que falta, y un
+ * mes pasado lleno de cosas hechas lo taparía. Los estados también se guardan como "ocultos"; lo que cambia
+ * es el valor por defecto, que no es "todo visible". Finanzas y los manuales no tienen estado que filtrar.
  */
 export type FiltroDeEventos = {
   origenesOcultos: ReadonlySet<OrigenDeEvento>;
   repeticionesOcultas: Readonly<Record<OrigenConRepeticion, ReadonlySet<RepeticionDeEvento>>>;
-  estadosOcultos: ReadonlySet<EstadoDeEvento>;
+  estadosOcultos: Readonly<Record<OrigenConRepeticion, ReadonlySet<EstadoParaFiltrar>>>;
 };
 
 /**
- * En qué punto está un evento, tal como se filtra. "Finalizada" junta lo completado (una tarea tildada o un
- * recordatorio cuyo día ya pasó) y lo fallido (una tarea que se dio por perdida). Solo las tareas pueden
- * estar atrasadas o fallidas.
+ * En qué punto está un evento. "Finalizada" junta lo completado (una tarea tildada o un recordatorio cuyo
+ * día ya pasó) y lo fallido (una tarea que se dio por perdida). Solo las tareas pueden estar atrasadas o
+ * fallidas. Son también los estados por los que se filtran las tareas.
  */
 export const ESTADOS_DE_EVENTO = ["pendiente", "atrasada", "finalizada"] as const;
 export type EstadoDeEvento = (typeof ESTADOS_DE_EVENTO)[number];
 
+/**
+ * Los estados por los que se filtran los recordatorios de Contactos: un recordatorio no se tilda ni se
+ * atrasa, solo es próximo (hoy o más adelante) o pasado (su día ya pasó).
+ */
+export const ESTADOS_DE_RECORDATORIO = ["proximo", "pasado"] as const;
+export type EstadoDeRecordatorio = (typeof ESTADOS_DE_RECORDATORIO)[number];
+
+/** Cualquiera de los estados por los que se filtra, de tareas o de recordatorios. */
+export type EstadoParaFiltrar = EstadoDeEvento | EstadoDeRecordatorio;
+
+/** Los estados que ofrece el filtro de cada origen. */
+export function estadosDeOrigen(origen: OrigenConRepeticion): readonly EstadoParaFiltrar[] {
+  return origen === "tareas" ? ESTADOS_DE_EVENTO : ESTADOS_DE_RECORDATORIO;
+}
+
 /** Los estados que el filtro oculta mientras la persona no cambie nada. */
-export const ESTADOS_OCULTOS_POR_DEFECTO: readonly EstadoDeEvento[] = ["finalizada"];
+export const ESTADOS_OCULTOS_POR_DEFECTO: Readonly<
+  Record<OrigenConRepeticion, readonly EstadoParaFiltrar[]>
+> = { tareas: ["finalizada"], contactos: ["pasado"] };
 
 /**
  * El estado de un evento. Lo completado y lo fallido vienen del origen y están finalizados; una tarea de
@@ -220,6 +238,15 @@ export function estadoDeEvento(evento: EventoDeCalendario, hoy: string): EstadoD
   if (evento.fallido || evento.completado) return "finalizada";
   if (evento.origen === "tareas" && evento.dia < hoy) return "atrasada";
   return "pendiente";
+}
+
+/**
+ * El estado de un evento tal como lo filtra su origen: el de `estadoDeEvento` para las tareas, y próximo o
+ * pasado para los recordatorios (pasado es el que viene completado: su día ya pasó; el de hoy es próximo).
+ */
+export function estadoParaFiltrar(evento: EventoDeCalendario, hoy: string): EstadoParaFiltrar {
+  if (evento.origen === "contactos") return evento.completado ? "pasado" : "proximo";
+  return estadoDeEvento(evento, hoy);
 }
 
 /**
@@ -261,16 +288,24 @@ export function filtroSinRestricciones(): FiltroDeEventos {
   return {
     origenesOcultos: new Set(),
     repeticionesOcultas: { tareas: new Set(), contactos: new Set() },
-    estadosOcultos: new Set(ESTADOS_OCULTOS_POR_DEFECTO),
+    estadosOcultos: {
+      tareas: new Set(ESTADOS_OCULTOS_POR_DEFECTO.tareas),
+      contactos: new Set(ESTADOS_OCULTOS_POR_DEFECTO.contactos),
+    },
   };
 }
 
-/** true si los estados ocultos son los de la primera vez. */
+/** true si los estados ocultos de cada origen son los de la primera vez. */
 export function estadosPorDefecto(filtro: FiltroDeEventos): boolean {
-  return (
-    filtro.estadosOcultos.size === ESTADOS_OCULTOS_POR_DEFECTO.length &&
-    ESTADOS_OCULTOS_POR_DEFECTO.every((estado) => filtro.estadosOcultos.has(estado))
-  );
+  return ORIGENES_CON_REPETICION.every((origen) => {
+    const ocultos = filtro.estadosOcultos[origen];
+    const porDefecto = ESTADOS_OCULTOS_POR_DEFECTO[origen];
+    return ocultos.size === porDefecto.length && porDefecto.every((estado) => ocultos.has(estado));
+  });
+}
+
+function esOrigenConRepeticion(origen: OrigenDeEvento): origen is OrigenConRepeticion {
+  return (ORIGENES_CON_REPETICION as readonly OrigenDeEvento[]).includes(origen);
 }
 
 /** true si el evento se muestra con ese filtro. `hoy` hace falta para saber qué tareas están atrasadas. */
@@ -280,15 +315,12 @@ export function pasaElFiltro(
   hoy: string,
 ): boolean {
   if (filtro.origenesOcultos.has(evento.origen)) return false;
-  if (filtro.estadosOcultos.has(estadoDeEvento(evento, hoy))) return false;
-  if (evento.repeticion === null) return true;
-  // Solo Tareas y Contactos tienen repetición; para otro origen no hay nada que filtrar.
-  const ocultas = (
-    filtro.repeticionesOcultas as Readonly<
-      Record<string, ReadonlySet<RepeticionDeEvento> | undefined>
-    >
-  )[evento.origen];
-  return !ocultas?.has(evento.repeticion);
+  // Solo Tareas y Contactos tienen estado y repetición; para otro origen no hay nada más que filtrar.
+  if (!esOrigenConRepeticion(evento.origen)) return true;
+  if (filtro.estadosOcultos[evento.origen].has(estadoParaFiltrar(evento, hoy))) return false;
+  return (
+    evento.repeticion === null || !filtro.repeticionesOcultas[evento.origen].has(evento.repeticion)
+  );
 }
 
 /**

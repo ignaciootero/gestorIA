@@ -1153,9 +1153,16 @@ test.describe("agregar, editar y eliminar a mano", () => {
 });
 
 test.describe("tareas completadas", () => {
-  type Estado = "pendiente" | "atrasada" | "finalizada";
-  const chipDeEstado = (pagina: Page, estado: Estado): Locator =>
-    pagina.locator(`[data-filtro='estado'] [data-estado='${estado}']`);
+  type Estado = "pendiente" | "atrasada" | "finalizada" | "proximo" | "pasado";
+  /** El botón de un estado en el grupo de un origen (por defecto, el de las tareas). */
+  const chipDeEstado = (
+    pagina: Page,
+    estado: Estado,
+    origen: "tareas" | "contactos" = "tareas",
+  ): Locator =>
+    pagina.locator(
+      `fieldset[data-origen='${origen}'] [data-filtro='estado'] [data-estado='${estado}']`,
+    );
 
   async function abrirFiltros(pagina: Page): Promise<void> {
     await pagina.getByRole("button", { name: /Más filtros/ }).click();
@@ -1271,8 +1278,15 @@ test.describe("tareas completadas", () => {
       "false",
     );
 
+    // Mostrar las tareas finalizadas no trae los recordatorios pasados: tienen su propio estado.
     await abrirFiltros(page);
     await mostrarCerradas(page);
+    await expect(casilla(page, ayer).locator("[data-origen='contactos']")).toHaveCount(0);
+    await expect(chipDeEstado(page, "pasado", "contactos")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await chipDeEstado(page, "pasado", "contactos").click();
     await masFiltrosCerrar(page);
     await expect(casilla(page, ayer).locator("[data-origen='contactos']")).toHaveAttribute(
       "data-completado",
@@ -1457,6 +1471,15 @@ test.describe("tareas completadas", () => {
     await abrirFiltros(page);
     await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "false");
     await expect(chipDeEstado(page, "pendiente")).toHaveAttribute("aria-pressed", "true");
+    // Antes los recordatorios pasados contaban como finalizados: siguen ocultos.
+    await expect(chipDeEstado(page, "pasado", "contactos")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await expect(chipDeEstado(page, "proximo", "contactos")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   test("un valor guardado dañado vuelve a ocultar las completadas", async ({ page }) => {
@@ -1479,9 +1502,14 @@ test.describe("tareas completadas", () => {
     for (const estado of ["pendiente", "atrasada", "finalizada"] as const) {
       await expect(chipDeEstado(page, estado)).toHaveAttribute("aria-pressed", "true");
     }
+    for (const estado of ["proximo", "pasado"] as const) {
+      await expect(chipDeEstado(page, estado, "contactos")).toHaveAttribute("aria-pressed", "true");
+    }
   });
 
-  test("por defecto están marcadas pendiente y atrasada, y no finalizada", async ({ page }) => {
+  test("por defecto están marcadas pendiente, atrasada y próximo, y no finalizada ni pasado", async ({
+    page,
+  }) => {
     await entrar(page, await crearCuentaAprobada());
     await abrirCalendario(page);
     await abrirFiltros(page);
@@ -1492,10 +1520,59 @@ test.describe("tareas completadas", () => {
     ] as const) {
       await expect(chipDeEstado(page, estado)).toHaveAttribute("aria-pressed", marcado);
     }
-    // Los tres tienen texto, no solo color ni ícono.
-    await expect(page.locator("[data-filtro='estado']")).toContainText(
-      /Pendientes.*Atrasadas.*Finalizadas/,
+    for (const [estado, marcado] of [
+      ["proximo", "true"],
+      ["pasado", "false"],
+    ] as const) {
+      await expect(chipDeEstado(page, estado, "contactos")).toHaveAttribute(
+        "aria-pressed",
+        marcado,
+      );
+    }
+    // Todos tienen texto, no solo color ni ícono; los recordatorios no tienen los de las tareas.
+    const estadosDe = (origen: string) =>
+      page.locator(`fieldset[data-origen='${origen}'] [data-filtro='estado']`);
+    await expect(estadosDe("tareas")).toContainText(/Pendientes.*Atrasadas.*Finalizadas/);
+    await expect(estadosDe("contactos")).toContainText(/Próximos.*Pasados/);
+    await expect(estadosDe("contactos").locator("[data-estado='atrasada']")).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Estado de Contactos" })).toBeVisible();
+  });
+
+  test("los recordatorios próximos y pasados se muestran u ocultan por su cuenta y se recuerdan", async ({
+    page,
+  }) => {
+    await entrar(page, await crearCuentaAprobada());
+    const contacto = await crearPersona(page, "Lucía");
+    await pedirApi(page, "POST", `/api/contactos/${contacto}/recordatorios`, {
+      titulo: "Llamar",
+      repeticion: "diaria",
+      hora: "09:00",
+    });
+    const ayer = sumarDias(hoy(), -1);
+    const contactosDe = (dia: string) => casilla(page, dia).locator("[data-origen='contactos']");
+    await abrirCalendario(page);
+    await expect(contactosDe(hoy())).toHaveCount(1);
+    await expect(contactosDe(ayer)).toHaveCount(0);
+
+    await abrirFiltros(page);
+    await chipDeEstado(page, "pasado", "contactos").click();
+    await expect(contactosDe(ayer)).toHaveCount(1);
+    await chipDeEstado(page, "proximo", "contactos").click();
+    await expect(contactosDe(hoy())).toHaveCount(0);
+    await expect(contactosDe(ayer)).toHaveCount(1);
+    // Los estados de las tareas no cambiaron.
+    await expect(chipDeEstado(page, "pendiente")).toHaveAttribute("aria-pressed", "true");
+    await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "false");
+
+    await page.reload();
+    await expect(contactosDe(ayer)).toHaveCount(1);
+    await expect(contactosDe(hoy())).toHaveCount(0);
+    await abrirFiltros(page);
+    await expect(chipDeEstado(page, "proximo", "contactos")).toHaveAttribute(
+      "aria-pressed",
+      "false",
     );
+    await expect(chipDeEstado(page, "pasado", "contactos")).toHaveAttribute("aria-pressed", "true");
   });
 
   test("cada estado se muestra u oculta por su cuenta", async ({ page }) => {

@@ -6,7 +6,7 @@
 // Las clases de Tailwind se escriben enteras (no armadas con texto) para que se detecten al compilar.
 
 import {
-  type EstadoDeEvento,
+  type EstadoParaFiltrar,
   type MarcadorDeEstado,
   ORIGENES_DE_EVENTO,
   type OrigenDeEvento,
@@ -96,8 +96,10 @@ export const ICONOS_DE_MARCADOR: Record<
 };
 
 /** Cómo se llaman los estados en el filtro (en plural: cada botón es un conjunto de eventos). */
-export const NOMBRES_DE_ESTADO: Record<EstadoDeEvento, string> = {
+export const NOMBRES_DE_ESTADO: Record<EstadoParaFiltrar, string> = {
   pendiente: "Pendientes",
   atrasada: "Atrasadas",
   finalizada: "Finalizadas",
+  proximo: "Próximos",
+  pasado: "Pasados",
 };

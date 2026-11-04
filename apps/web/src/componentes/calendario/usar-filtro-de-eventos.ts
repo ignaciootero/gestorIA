@@ -1,5 +1,5 @@
 // El estado del filtro de eventos del calendario: qué orígenes, qué repeticiones y qué estados
-// (pendiente, completada, atrasada, fallida) se ocultan.
+// se ocultan (los de las tareas y los de los recordatorios, por separado).
 //
 // Se aplica sobre lo que ya llegó del servidor, así que cambiarlo es instantáneo y no vuelve a pedir
 // nada. Se recuerda en este navegador (ver lib/preferencias-calendario.ts).
@@ -7,7 +7,7 @@
 "use client";
 
 import type {
-  EstadoDeEvento,
+  EstadoParaFiltrar,
   FiltroDeEventos,
   OrigenConRepeticion,
   OrigenDeEvento,
@@ -51,8 +51,14 @@ export function useFiltroDeEventos() {
       origenesOcultos.delete(origen);
       cambiar({ ...filtro, origenesOcultos });
     },
-    alternarEstado: (estado: EstadoDeEvento) =>
-      cambiar({ ...filtro, estadosOcultos: alternar(filtro.estadosOcultos, estado) }),
+    alternarEstado: (origen: OrigenConRepeticion, estado: EstadoParaFiltrar) =>
+      cambiar({
+        ...filtro,
+        estadosOcultos: {
+          ...filtro.estadosOcultos,
+          [origen]: alternar(filtro.estadosOcultos[origen], estado),
+        },
+      }),
     /** Quita las restricciones de origen y de repetición: se ve todo. Los estados quedan como están. */
     mostrarTodo: () =>
       cambiar({ ...filtroSinRestricciones(), estadosOcultos: filtro.estadosOcultos }),

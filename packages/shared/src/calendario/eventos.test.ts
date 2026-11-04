@@ -6,12 +6,15 @@ import {
   cantidadDeRestriccionesPorRepeticion,
   compararEventos,
   DIAS_MAXIMOS_POR_CONSULTA_DE_EVENTOS,
-  ESTADOS_OCULTOS_POR_DEFECTO,
-  type EstadoDeEvento,
+  ESTADOS_DE_EVENTO,
+  ESTADOS_DE_RECORDATORIO,
+  type EstadoParaFiltrar,
   type EventoDeCalendario,
   esquemaEventoDeCalendario,
   esquemaRangoDeEventos,
   estadoDeEvento,
+  estadoParaFiltrar,
+  estadosDeOrigen,
   estadosPorDefecto,
   type FiltroDeEventos,
   filtroSinRestricciones,
@@ -229,7 +232,7 @@ describe("pasaElFiltro", () => {
   ): FiltroDeEventos => ({
     origenesOcultos: new Set(origenesOcultos),
     repeticionesOcultas: { tareas: new Set(tareas), contactos: new Set(contactos) },
-    estadosOcultos: new Set(ESTADOS_OCULTOS_POR_DEFECTO),
+    estadosOcultos: filtroSinRestricciones().estadosOcultos,
   });
 
   it("sin restricciones todo pasa", () => {
@@ -271,13 +274,13 @@ describe("pasaElFiltro", () => {
     expect(pasa(tarea("anual"), sinRecordatoriosAnuales)).toBe(true);
   });
 
-  const mostrando = (...estados: EstadoDeEvento[]): FiltroDeEventos => ({
+  /** Un filtro que muestra solo esos estados, de tareas y de recordatorios. */
+  const mostrando = (...estados: EstadoParaFiltrar[]): FiltroDeEventos => ({
     ...filtroSinRestricciones(),
-    estadosOcultos: new Set(
-      (["pendiente", "atrasada", "finalizada"] as const).filter(
-        (estado) => !estados.includes(estado),
-      ),
-    ),
+    estadosOcultos: {
+      tareas: new Set(ESTADOS_DE_EVENTO.filter((estado) => !estados.includes(estado))),
+      contactos: new Set(ESTADOS_DE_RECORDATORIO.filter((estado) => !estados.includes(estado))),
+    },
   });
 
   it("por defecto se ven las pendientes y las atrasadas, y se ocultan las finalizadas (completadas y fallidas)", () => {
@@ -317,15 +320,50 @@ describe("pasaElFiltro", () => {
     expect(pasa(tarea("unica"), mostrando())).toBe(false);
   });
 
-  it("Finanzas y los eventos manuales son siempre pendientes, aunque su día haya pasado", () => {
+  it("Finanzas y los eventos manuales no se filtran por estado, aunque su día haya pasado", () => {
     const pasado = { dia: "2026-10-01" };
-    expect(pasa(evento({ origen: "finanzas", ...pasado }), mostrando("pendiente"))).toBe(true);
-    expect(pasa(evento({ origen: "manual", ...pasado }), mostrando("atrasada"))).toBe(false);
+    expect(pasa(evento({ origen: "finanzas", ...pasado }), mostrando())).toBe(true);
+    expect(pasa(evento({ origen: "manual", ...pasado }), mostrando())).toBe(true);
+  });
+
+  it("por defecto se ven los recordatorios próximos y se ocultan los pasados", () => {
+    const libre = filtroSinRestricciones();
+    const recordatorioDeHoy = evento({ origen: "contactos", repeticion: "unica", dia: HOY });
+    const pasado = evento({
+      origen: "contactos",
+      repeticion: "unica",
+      dia: "2026-10-19",
+      completado: true,
+    });
+    expect(pasa(recordatorioDeHoy, libre)).toBe(true);
+    expect(pasa(pasado, libre)).toBe(false);
+    expect(pasa(pasado, mostrando("pasado"))).toBe(true);
+    expect(pasa(recordatorioDeHoy, mostrando("pasado"))).toBe(false);
+    expect(pasa(recordatorioDeHoy, mostrando("proximo"))).toBe(true);
+  });
+
+  it("los estados de las tareas no afectan a los recordatorios, y al revés", () => {
+    const recordatorio = evento({ origen: "contactos", repeticion: "unica", dia: HOY });
+    const pasado = evento({ origen: "contactos", repeticion: "unica", completado: true });
+    const pendiente = tarea("unica");
+    const hecha = evento({ origen: "tareas", repeticion: "unica", completado: true });
+    // Ocultar las tareas pendientes deja los recordatorios próximos.
+    expect(pasa(recordatorio, mostrando("proximo"))).toBe(true);
+    expect(pasa(pendiente, mostrando("proximo"))).toBe(false);
+    // Mostrar las tareas finalizadas no trae los recordatorios pasados.
+    expect(pasa(hecha, mostrando("pendiente", "finalizada", "proximo"))).toBe(true);
+    expect(pasa(pasado, mostrando("pendiente", "finalizada", "proximo"))).toBe(false);
   });
 
   it("un estado cerrado también respeta el filtro de origen y de repetición", () => {
     const hechaDiaria = evento({ origen: "tareas", repeticion: "diaria", completado: true });
-    const base = { ...filtro([], ["diaria"]), estadosOcultos: new Set<EstadoDeEvento>() };
+    const base = {
+      ...filtro([], ["diaria"]),
+      estadosOcultos: {
+        tareas: new Set<EstadoParaFiltrar>(),
+        contactos: new Set<EstadoParaFiltrar>(),
+      },
+    };
     expect(pasa(hechaDiaria, base)).toBe(false);
     expect(
       pasa(hechaDiaria, {
@@ -351,7 +389,7 @@ describe("restricciones del filtro", () => {
   ): FiltroDeEventos => ({
     origenesOcultos: new Set(origenesOcultos),
     repeticionesOcultas: { tareas: new Set(tareas), contactos: new Set(contactos) },
-    estadosOcultos: new Set(ESTADOS_OCULTOS_POR_DEFECTO),
+    estadosOcultos: filtroSinRestricciones().estadosOcultos,
   });
 
   it("sin nada oculto no hay restricciones", () => {
@@ -433,6 +471,31 @@ describe("estadoDeEvento", () => {
   });
 });
 
+describe("estadoParaFiltrar", () => {
+  it("las tareas usan sus tres estados", () => {
+    expect(estadoParaFiltrar(evento({ origen: "tareas", dia: HOY }), HOY)).toBe("pendiente");
+    expect(estadoParaFiltrar(evento({ origen: "tareas", dia: "2026-10-19" }), HOY)).toBe(
+      "atrasada",
+    );
+    expect(estadoParaFiltrar(evento({ origen: "tareas", fallido: true }), HOY)).toBe("finalizada");
+  });
+
+  it("un recordatorio es próximo hasta que pasa su día (el de hoy sigue próximo)", () => {
+    expect(estadoParaFiltrar(evento({ origen: "contactos", dia: HOY }), HOY)).toBe("proximo");
+    expect(estadoParaFiltrar(evento({ origen: "contactos", dia: "2026-10-25" }), HOY)).toBe(
+      "proximo",
+    );
+    expect(
+      estadoParaFiltrar(evento({ origen: "contactos", dia: "2026-10-19", completado: true }), HOY),
+    ).toBe("pasado");
+  });
+
+  it("cada origen ofrece sus estados", () => {
+    expect(estadosDeOrigen("tareas")).toEqual(["pendiente", "atrasada", "finalizada"]);
+    expect(estadosDeOrigen("contactos")).toEqual(["proximo", "pasado"]);
+  });
+});
+
 describe("marcadorDeEventos", () => {
   const HOY = "2026-10-20";
   const tareaDe = (datos: Partial<EventoDeCalendario>) => evento({ origen: "tareas", ...datos });
@@ -480,10 +543,17 @@ describe("estadosPorDefecto", () => {
   it("el filtro nuevo tiene los estados por defecto y cambiarlos lo deja de ser", () => {
     const libre = filtroSinRestricciones();
     expect(estadosPorDefecto(libre)).toBe(true);
-    expect(
-      estadosPorDefecto({ ...libre, estadosOcultos: new Set<EstadoDeEvento>(["pendiente"]) }),
-    ).toBe(false);
-    expect(estadosPorDefecto({ ...libre, estadosOcultos: new Set<EstadoDeEvento>() })).toBe(false);
+    const conOcultos = (tareas: EstadoParaFiltrar[], contactos: EstadoParaFiltrar[]) =>
+      estadosPorDefecto({
+        ...libre,
+        estadosOcultos: { tareas: new Set(tareas), contactos: new Set(contactos) },
+      });
+    expect(conOcultos(["finalizada"], ["pasado"])).toBe(true);
+    expect(conOcultos(["finalizada", "pendiente"], ["pasado"])).toBe(false);
+    expect(conOcultos([], ["pasado"])).toBe(false);
+    // Cambiar solo los de los recordatorios también lo deja de ser.
+    expect(conOcultos(["finalizada"], [])).toBe(false);
+    expect(conOcultos(["finalizada"], ["pasado", "proximo"])).toBe(false);
   });
 
   it("ocultar estados no cuenta como restricción de origen o de repetición", () => {
