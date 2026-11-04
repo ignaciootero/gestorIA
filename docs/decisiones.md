@@ -5,6 +5,107 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-03 — Datos de prueba: tres cuentas fijas en vez de escenarios
+
+**Decisión.** `pnpm usuario:sembrar` carga siempre lo mismo: `iotero` (admin, con el panel lleno),
+`dpaolillo1` (un año de uso) y `dpaolillo2` (vacía), más cuentas en distintos estados para el panel. Se
+sacaron los escenarios sueltos (`--solo`, `--listar`) y la dependencia de `ADMIN_*` del `.env`: el admin de
+prueba es siempre `iotero`. Detalle en `docs/funcionalidades.md`.
+
+**Por qué así.**
+- **Contraseñas cortas a pedido** (`iotero`, `dpaolillo1`): se registran con una válida y se les guarda el
+  hash de la pedida, con el algoritmo de Better Auth. No se bajó el mínimo de la aplicación: el registro
+  sigue exigiendo 8 caracteres, y el ingreso ya no exigía largo (para contraseñas viejas). Son cuentas de
+  prueba con contraseñas publicadas en el repositorio: solo para ambientes de prueba.
+- **Todo fechado hacia atrás** (altas, cambios de estado, auditoría, última conexión, contactos, deudas,
+  recordatorios): un panel donde "todo pasó hoy" no muestra cómo se ve con uso real.
+- **La carga no manda correos**, aunque haya SMTP en el `.env`: registrar cada cuenta disparaba el correo de
+  verificación a direcciones `@ejemplo.test`, que rebotan y agotan el cupo diario del servidor de correo (pasó
+  con el Gmail de desarrollo al cargar las 15 cuentas).
+- **Un año sin reescribir las semillas**: Finanzas acepta cuántos meses y la semilla del azar, Tareas cuántos
+  días de historial (se arma por tramos de 31 días, el máximo que arma el servicio por vez), y el histórico de
+  recordatorios se genera por tramos de 60 días, como la limpieza periódica con la aplicación en uso. Los
+  contactos de dpaolillo1 son una carga propia (`sembrar-contactos-de-un-anio.ts`) para que no se vea igual
+  que el admin.
+- **Saldos que dependen de lo que pasó**: a fin de mes se paga la tarjeta entera y se ahorra lo que sobra en
+  el banco. Con montos fijos (pensados para seis meses), un año dejaba el BROU en -$ 111.000.
+
+---
+
+## 2026-11-03 — Ambiente de prueba en Render, en el plan gratuito
+
+**Decisión.** Un ambiente de prueba en Render (gratis), descrito en `render.yaml`: **un solo servicio web con
+la web y la API juntas** y una base PostgreSQL gratuita, sin SMTP. La producción sigue prevista en un VPS con
+Coolify; esto es para probar y mostrar. Detalle en `docs/despliegue-render.md`.
+
+**Por qué así.**
+- **Web y API en el mismo servicio, con la web reenviando `/api/...`.** `onrender.com` está en la lista de
+  sufijos públicos: dos subdominios suyos no comparten cookies, así que con dos servicios la web nunca vería la
+  sesión que arma la API (y los navegadores bloquean cada vez más las cookies de terceros). El reenvío
+  (`rewrites` de Next, activo solo con `URL_API_INTERNA`) deja todo en un mismo sitio. De paso hay un solo
+  servicio que se duerme y se despierta, no dos.
+- **Migraciones al arrancar y scripts desde la máquina local**: el plan gratuito no tiene "pre-deploy command"
+  ni consola. El admin se crea con el script de siempre contra la base de Render (`contra-render.ts`), así la
+  contraseña sigue sin quedar en ningún archivo.
+- **Las URLs salen de `RENDER_EXTERNAL_URL`** y la base de `DATABASE_URL` (Render no da host ni puerto por
+  separado en el Blueprint): no hay que cargar cada URL a mano.
+- **Sin correo**, como se pidió: el enlace de verificación queda en el log del servicio.
+
+**Arreglos que salieron al desplegar con https** (valen también para la producción):
+- `proxy.ts` de la web no reconocía la cookie de sesión con el prefijo `__Secure-` que Better Auth usa con
+  https: con sesión iniciada, redirigía siempre a /ingresar.
+- `proxy.ts` también interceptaba `/api/...`: con la API detrás de la web, el propio pedido de ingreso se
+  redirigía a /ingresar. Ahora `/api/` queda fuera.
+
+**Sobre "sin servicios con plan gratuito limitado"** (CLAUDE.md): Render no es una dependencia del código; el
+ambiente se puede tirar o mudar sin tocar nada de la aplicación. Sus límites (se duerme a los 15 minutos, la
+base vence a los 30 días) están documentados.
+
+**Alternativas descartadas.** Dos servicios (web y API) con un dominio propio en común para compartir cookies
+(hace falta comprar un dominio); dos servicios con cookies `SameSite=None` (los navegadores las bloquean como
+de terceros); un Dockerfile propio (más para mantener, y el entorno Node de Render alcanza).
+
+---
+
+## 2026-11-03 — Pantalla de inicio: un carrusel con el resumen de cada módulo, sin desplazamiento
+
+**Decisión.** La pantalla de inicio dejó de ser una cuadrícula con todos los widgets de Finanzas y Contactos
+(una mezcla larga y difícil de leer) y pasó a ser un **carrusel con un resumen por módulo** —Finanzas,
+Calendario, Tareas y Contactos— que pasa solo cada 15 segundos y **entra entero en la ventana**. Cada resumen
+tiene la misma forma: una cifra destacada, a lo sumo un aviso (el más grave), una lista corta y **un gráfico
+con sus números escritos**. El detalle queda en cada módulo; los widgets siguen en la columna lateral de
+Finanzas, Contactos y Tareas.
+
+**Por qué así.**
+- **Una sola cosa a la vez** (guía de usabilidad): un resumen por vista se entiende sin esfuerzo; la cuadrícula
+  obligaba a recorrer una docena de tarjetas para encontrar lo importante.
+- **Misma forma en los cuatro**: lo que cambia es el dato, no dónde buscarlo.
+- **Gráficos con etiquetas escritas** (barras con el número arriba y el día o la semana abajo) en vez de mini
+  gráficos sin ejes: en una pantalla para mirar de pasada, hay que leerlos sin interpretar escalas.
+- **Sin endpoints nuevos**: cada resumen usa el pedido y la clave de caché de su módulo, así no hay dos cálculos
+  del mismo dato y los resúmenes se ponen al día con cualquier cambio en el módulo. Los cuatro se piden juntos al
+  entrar: pasar de uno a otro es instantáneo.
+- **Se puede detener** (WCAG 2.2.2): botón de pausa, además de detenerse con el mouse encima y con el foco del
+  teclado adentro; con reducir movimiento no avanza solo. Patrón de carrusel con pestañas de la WAI-ARIA: las
+  pestañas dicen cuántos resúmenes hay y llevan directo a cualquiera, y la activa muestra cuánto falta para el
+  cambio.
+- **Sin desplazamiento vertical**: la pantalla marca su grilla con `data-pantalla-fija` y el marco de la
+  aplicación pasa a medir el alto de la ventana (un selector `:has` en `globals.css`), sin que el marco tenga que
+  saber de pantallas. En pantallas angostas se omite la lista y en las bajas se esconden detalles secundarios.
+  **Por debajo de 560 px de alto la página vuelve a desplazarse**: un resumen cortado es peor que un
+  desplazamiento.
+- **15 segundos por resumen** (12 en los widgets laterales): un resumen tiene una cifra, una lista y un gráfico.
+- **Cada resumen lleva el color de origen de su módulo** (ícono, barras y la barra de tiempo de su pestaña):
+  es el mismo uso que en el calendario —distinguir módulos que se muestran juntos— y siempre va con ícono y
+  nombre. Se actualizó la guía de estética (Colores).
+
+**Alternativas descartadas.** Mantener la cuadrícula y achicarla (sigue siendo mucho para mirar de una vez);
+mostrar los cuatro resúmenes a la vez en una grilla de 2x2 (no entran sin scroll con un gráfico legible cada uno,
+y vuelve a ser una mezcla); un endpoint propio para el inicio (duplicaría cálculos que ya hacen los widgets);
+una librería de carruseles (es poco código con Motion, que ya está, y la accesibilidad hay que cuidarla igual).
+
+---
+
 ## 2026-10-22 — Tareas: las atrasadas de más de una semana fallan solas
 
 **Decisión.** Una tarea pendiente (suelta o de repetitiva) que lleva más de 7 días atrasada se da por fallida
@@ -160,7 +261,15 @@ vuelve a los de por defecto. Lo guardado cuando "completada" y "fallida" eran do
 "finalizadas ocultas". La clave vieja `mostrar-completados` ya no se lee. El marcador del mes se resuelve con
 `marcadorDeEventos`: pendiente > atrasada > finalizada, y con todo finalizado, completada / fallida / mixta
 (los recordatorios de Contactos solo tienen "próximo" —círculo lleno— y "pasado" —círculo vacío—)
-según cómo terminó, así un día con una sola tarea pendiente nunca parece cerrado.) Los recordatorios
+según cómo terminó, así un día con una sola tarea pendiente nunca parece cerrado.)
+(Más tarde el filtro de estado pasó a ser **por categoría**: Tareas tiene Pendientes, Atrasadas y
+Finalizadas, y Contactos, Próximos y Pasados, cada uno en su grupo de "Más filtros" junto a sus
+repeticiones; Finanzas y los manuales no se filtran por estado, porque no lo tienen. Un único filtro para
+todo obligaba a que "Finalizadas" significara también "recordatorios pasados" y "Pendientes" escondiera los
+vencimientos de Finanzas. El estado de cada origen sale de `estadoParaFiltrar(evento, hoy)` y los ocultos se
+guardan por origen (`{ tareas: [...], contactos: [...] }`, como las repeticiones) en la misma clave; lo
+guardado como lista se lee como estados de las tareas, y si ocultaba las finalizadas también oculta los
+recordatorios pasados, que es lo que pasaba antes.) Los recordatorios
 de Contactos no se tildan, así que se consideran completados cuando **su día ya pasó** (antes de hoy en la
 zona de la persona; el de hoy no): una regla simple que no inventa un estado nuevo para guardar. Los
 vencimientos de deudas siguen sin completarse hasta que se saldan.

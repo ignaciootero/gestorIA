@@ -7,7 +7,8 @@
 // con las mismas reglas que los que carga la interfaz. Las fechas se calculan hacia atrás desde
 // hoy, de modo que siempre hay deudas vencidas, por vencer y recientes.
 //
-// También el histórico de recordatorios: algunos recordatorios que se repiten se crean "hace unas
+// Los recordatorios son fechas puntuales: cumpleaños, aniversarios, citas y vencimientos (lo que se repite
+// seguido va en Tareas). También el histórico: algunos anuales se crean "hace unas
 // semanas" (con un `ahora` anterior) y de una sola vez que ya pasaron se insertan directo, y después se
 // pasa al histórico lo que ya ocurrió, como lo haría la limpieza periódica. Y personas dadas de alta con
 // la casilla "Crear un recordatorio de su cumpleaños" marcada (y una sin marcar).
@@ -236,7 +237,7 @@ export async function sembrarContactosDe(contexto: Contexto): Promise<ResumenDeS
     notas: "Vino a arreglar la pérdida del baño. Cobra un 10% menos en efectivo.",
     etiquetaIds: ids("Servicios"),
   });
-  await contacto({
+  const clinica = await contacto({
     ...empresaVacia,
     nombre: "Clínica Dental Sonrisa",
     rubro: "Odontología",
@@ -256,6 +257,8 @@ export async function sembrarContactosDe(contexto: Contexto): Promise<ResumenDeS
   });
 
   // ---------- Recordatorios ----------
+  // Fechas puntuales de cada contacto: cumpleaños y aniversarios (anuales) y citas o vencimientos de
+  // una sola vez. Lo que se repite seguido (llamar a la abuela, revisar una factura) va en Tareas.
   const recordatorios: [string, Parameters<typeof crearRecordatorio>[3]][] = [
     // Los importantes llevan el distintivo.
     [
@@ -270,21 +273,49 @@ export async function sembrarContactosDe(contexto: Contexto): Promise<ResumenDeS
       },
     ],
     [
+      marta,
+      {
+        titulo: "Aniversario de casados de mamá y papá",
+        repeticion: "anual",
+        diaDelMes: 21,
+        mes: 9,
+        hora: "",
+      },
+    ],
+    [
       diego,
       { titulo: "Cumpleaños de Diego", repeticion: "anual", diaDelMes: 2, mes: 8, hora: "09:00" },
     ],
-    [elsa, { titulo: "Llamar a la abuela", repeticion: "semanal", diaSemana: 7, hora: "11:00" }],
+    [
+      elsa,
+      {
+        titulo: "Cumpleaños de la abuela",
+        repeticion: "anual",
+        diaDelMes: 23,
+        mes: 11,
+        hora: "",
+        importante: true,
+      },
+    ],
+    [
+      lucia,
+      { titulo: "Cumpleaños de Lucía", repeticion: "anual", diaDelMes: 30, mes: 5, hora: "" },
+    ],
     [
       lucia,
       { titulo: "Devolver el libro prestado", repeticion: "unica", fecha: hace(-9), hora: "" },
     ],
     [
-      camila,
-      { titulo: "Pasarle la factura del mes", repeticion: "mensual", diaDelMes: 28, hora: "" },
+      martin,
+      { titulo: "Casamiento de Martín", repeticion: "unica", fecha: hace(-38), hora: "20:00" },
+    ],
+    [
+      clinica,
+      { titulo: "Turno con el dentista", repeticion: "unica", fecha: hace(-6), hora: "15:30" },
     ],
     [
       antel,
-      { titulo: "Revisar la factura de Antel", repeticion: "mensual", diaDelMes: 10, hora: "" },
+      { titulo: "Vence el contrato de fibra", repeticion: "unica", fecha: hace(-52), hora: "" },
     ],
   ];
   for (const [contactoId, datos] of recordatorios) {
@@ -316,42 +347,23 @@ export async function sembrarContactosDe(contexto: Contexto): Promise<ResumenDeS
   });
 
   // ---------- Recordatorios que ya acumularon historia ----------
-  // Se crean con un "ahora" de hace unas semanas; al pasar al histórico, cada vez que cayeron queda una entrada.
+  // Anuales que cayeron hace pocas semanas: se crean con un "ahora" anterior y, al pasar al histórico,
+  // dejan su entrada de este año.
   const antes = (dias: number): Date => new Date(ahora.getTime() - dias * DIA);
-  const diaDelMesDe = (dias: number): number => Number(hace(dias).slice(8, 10));
+  const anualHace = (dias: number) => ({
+    repeticion: "anual" as const,
+    diaDelMes: Number(hace(dias).slice(8, 10)),
+    mes: Number(hace(dias).slice(5, 7)),
+  });
   const conHistoria: [string, Date, Parameters<typeof crearRecordatorio>[3]][] = [
-    [
-      elsa,
-      antes(20),
-      {
-        titulo: "Tomar la medicación de la abuela",
-        repeticion: "diaria",
-        hora: "08:30",
-        importante: true,
-      },
-    ],
-    [elsa, antes(28), { titulo: "Pasar a verla", repeticion: "semanal", diaSemana: 7, hora: "" }],
+    [diego, antes(10), { titulo: "Aniversario de la sociedad", ...anualHace(3), hora: "" }],
     [
       camila,
-      antes(45),
-      {
-        titulo: "Pagar la cuota del gimnasio",
-        repeticion: "mensual",
-        diaDelMes: diaDelMesDe(10),
-        hora: "",
-      },
+      antes(30),
+      { titulo: "Cumpleaños de su hija Sofía", ...anualHace(18), hora: "", importante: true },
     ],
-    [
-      diego,
-      antes(10),
-      {
-        titulo: "Aniversario de la sociedad",
-        repeticion: "anual",
-        diaDelMes: diaDelMesDe(3),
-        mes: Number(hace(3).slice(5, 7)),
-        hora: "",
-      },
-    ],
+    [rodrigo, antes(60), { titulo: "Cumpleaños de Rodrigo", ...anualHace(41), hora: "" }],
+    [elsa, antes(80), { titulo: "Aniversario del abuelo", ...anualHace(67), hora: "" }],
   ];
   for (const [contactoId, creado, datos] of conHistoria) {
     await crearRecordatorio(cliente, userId, contactoId, datos, creado);
@@ -360,7 +372,7 @@ export async function sembrarContactosDe(contexto: Contexto): Promise<ResumenDeS
   // De una sola vez que ya pasaron (la API no deja crearlos en el pasado): dejan su única entrada.
   for (const [contactoId, titulo, dias, hora, importante] of [
     [lucia, "Entregar los papeles del seguro", 5, "10:00", false],
-    [antel, "Pedir el cambio de plan", 12, null, false],
+    [antel, "Instalación de la fibra", 12, null, false],
     [marta, "Llevar a mamá al control", 21, "16:30", true],
   ] as const) {
     await cliente.db.insert(esquema.recordatoriosDeContactos).values({

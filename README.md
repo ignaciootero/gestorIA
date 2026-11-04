@@ -186,11 +186,8 @@ Una migración ya aplicada **nunca se edita**: se genera una nueva
 | `pnpm usuario:aprobar --listar` | Muestra las solicitudes pendientes y si ya confirmaron el correo |
 | `pnpm usuario:aprobar <usuario>` | Aprueba una cuenta. Acepta el usuario o el correo |
 | `pnpm usuario:aprobar <usuario> --rechazar` | La rechaza y le cierra las sesiones abiertas |
-| `pnpm usuario:sembrar` | Carga cuentas de prueba en distintos estados, pasando por el flujo real |
-| `pnpm usuario:sembrar --listar` | Muestra los escenarios disponibles, sin tocar la base |
-| `pnpm usuario:sembrar --solo aprobada,bloqueada` | Carga solo esos escenarios |
-| `pnpm usuario:sembrar --borrar-todo` | Antes de sembrar, vacía toda la base —usuarios, sesiones, auditoría y los datos de cada cuenta— (pide confirmación; con `--forzar` no pregunta). Es la forma de volver a empezar de cero |
-| `pnpm usuario:sembrar --solo datos` | Solo la carga general de datos del admin: meses de finanzas, contactos con etiquetas y recordatorios, deudas de todos los tipos y tareas con categorías e historial (si ya tiene datos, no toca nada; trae las cotizaciones reales de cada día y, sin internet, usa 1 USD = 40 UYU) |
+| `pnpm usuario:sembrar` | Carga los datos de prueba: `iotero`/`iotero` (admin, con el panel lleno), `dpaolillo1`/`dpaolillo1` (un año de uso) y `dpaolillo2`/`dpaolillo2` (vacía), más cuentas en distintos estados para el panel (contraseña `prueba1234`). No pisa cuentas que ya existen ni manda correos. Ver docs/funcionalidades.md |
+| `pnpm usuario:sembrar --borrar-todo` | Antes de cargar, borra todas las cuentas con sus datos (pide confirmación; con `--forzar` no pregunta). Es la forma de volver a empezar de cero |
 
 Hasta que exista el panel de admin, estos comandos son la única forma de aprobar una
 cuenta que se registró y quedó pendiente.
@@ -228,6 +225,13 @@ Lefthook se instala solo con `pnpm install`:
 
 No se saltean. Si un hook falla, se arregla la causa.
 
+## Ambiente de prueba en Render
+
+Hay un ambiente de prueba gratuito en [Render](https://render.com), descrito en `render.yaml`: la web y la
+API en un solo servicio y una base PostgreSQL gratuita, sin correo. No es la producción. Cómo ponerlo en
+marcha, cargar las cuentas de prueba desde tu máquina y sus límites (se duerme sin visitas, la base vence a los 30 días):
+[docs/despliegue-render.md](docs/despliegue-render.md).
+
 ## Restauración de backups
 
 Todavía no aplica: no hay entorno de producción. Se documenta acá al configurar los
@@ -242,4 +246,5 @@ backups automáticos en Coolify, junto con la prueba de restauración
 | [docs/funcionalidades.md](docs/funcionalidades.md) | Qué hace el sistema hoy y dónde está en el código |
 | [docs/librerias.md](docs/librerias.md) | Cada dependencia, para qué está y con qué licencia |
 | [docs/decisiones.md](docs/decisiones.md) | Decisiones de arquitectura, con fecha y alternativas |
+| [docs/despliegue-render.md](docs/despliegue-render.md) | El ambiente de prueba en Render: cómo está armado y cómo ponerlo en marcha |
 | [docs/guias/](docs/guias/) | Convenciones, seguridad, testing, usabilidad, estética y rendimiento |

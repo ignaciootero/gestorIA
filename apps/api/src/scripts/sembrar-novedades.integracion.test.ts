@@ -68,7 +68,8 @@ describe("la carga de datos de ejemplo", () => {
 
   it("siembra contactos con cumpleaños automáticos e historial de recordatorios", async () => {
     const resumen = await sembrarContactosDe({ cliente, userId: ana.userId, ahora: AHORA });
-    expect(resumen.historial).toBeGreaterThan(20);
+    // Cuatro anuales que cayeron hace poco y tres de una sola vez que ya pasaron.
+    expect(resumen.historial).toBe(7);
 
     const widgets = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
     expect(widgets.historial.total).toBe(resumen.historial);
@@ -91,10 +92,15 @@ describe("la carga de datos de ejemplo", () => {
     });
     expect(deTomas.total).toBe(0);
 
-    // Los de una sola vez que pasaron y los que se repiten, en el histórico.
+    // Los recordatorios son fechas puntuales: anuales (cumpleaños, aniversarios) o de una sola vez. Lo
+    // que se repite seguido va en Tareas.
+    const todos = await listarRecordatorios(cliente, ana.userId, { ahora: AHORA });
+    expect(new Set(todos.recordatorios.map((r) => r.repeticion))).toEqual(
+      new Set(["unica", "anual"]),
+    );
     const { entradas } = await listarHistorial(cliente, ana.userId, { ahora: AHORA, limit: 500 });
     const repeticiones = new Set(entradas.map((entrada) => entrada.repeticion));
-    expect(repeticiones).toEqual(new Set(["unica", "diaria", "semanal", "mensual", "anual"]));
+    expect(repeticiones).toEqual(new Set(["unica", "anual"]));
     expect(entradas.some((entrada) => entrada.titulo === "Entregar los papeles del seguro")).toBe(
       true,
     );

@@ -312,48 +312,53 @@ Scripts disponibles:
   en la auditoría, pero sin sesión de admin que atribuírsela: `adminId` queda `null` y el
   panel lo muestra como "Acción por consola", no como "(cuenta eliminada)" (ese texto es
   solo para cuando sí hubo un admin pero esa cuenta se borró después).
-- `pnpm usuario:sembrar` carga cuentas de prueba pasando por el flujo real (registro,
-  aprobación o rechazo, bloqueo, reseteo de contraseña), para tener un historial de
-  auditoría creíble sin armarlo a mano. Todas quedan con el correo confirmado, admin
-  incluido: verificar un correo de verdad es justamente la prueba manual que este script
-  no reemplaza. Cada escenario es una combinación con sentido (por ejemplo, una cuenta
-  bloqueada después de haber sido aprobada) y tiene un nombre fijo, así que
-  `--listar` los muestra, `--solo <nombres>` carga solo algunos y `--borrar-todo` (pide
-  confirmación) vacía usuarios, sesiones y auditoría antes de sembrar, para no chocar con
-  una corrida anterior. Todas las acciones quedan atribuidas al admin de
-  `ADMIN_USUARIO`/`ADMIN_EMAIL` (los mismos datos que `pnpm usuario:admin`): si esa cuenta
-  ya existe se reusa tal cual, sin tocarle la contraseña; si no, se crea ahí mismo con la
-  contraseña fija `adminadmin` (nunca con la de un admin real, que se pide por consola y
-  no se guarda en ningún archivo). Pensado para desarrollo, nunca se corre en producción.
-- El escenario `datos` es la **única carga general de datos de prueba**: siempre carga a la misma cuenta
-  (el **admin**), primero las finanzas (`sembrar-finanzas.ts`) y sobre ellas los contactos y deudas
-  (`sembrar-contactos.ts`) y las tareas (`sembrar-tareas.ts`: 11 repetitivas de todos los tipos —también *cada varios días* y una que se da por
-  fallida sola—, tareas sueltas, atrasadas (una a punto de darse por fallida), fallidas a mano y solas,
-  lo hecho hoy de otros días y tres semanas de historial con lo hecho y lo que quedó sin hacer). Los contactos
-  suman dos personas con fecha de nacimiento (una con el recordatorio de cumpleaños automático y otra sin) y
-  recordatorios con historia —uno diario, uno semanal, uno mensual y uno anual creados semanas atrás, y tres
-  de una sola vez que ya pasaron— que se pasan al histórico de recordatorios. Para volver a empezar se usa `--borrar-todo`, que vacía la base antes.
-  Las finanzas son seis meses que simulan el uso real, pasando por los mismos servicios que usa la
-  API: cuentas (BROU, Efectivo, Tarjeta, Mercado Pago, Ahorros y una cuenta vieja), categorías
-  propias, seis períodos que arrancan el día 5 (el último abierto, con movimientos de esta
-  semana), unos 190 movimientos —sueldo, alquiler, servicios, supermercado, transporte,
-  suscripciones, salidas, un viaje, ingresos extra—, un mes que cierra **en rojo** (el del viaje:
-  una notebook y un arreglo del auto llevan los gastos a $ 147.200 contra $ 82.500 de ingresos),
-  transferencias (retiros, ahorro, pago de la tarjeta, recarga de la billetera), presupuestos y también lo que hace la gente: corregir un
-  importe mal tipeado y una categoría equivocada, borrar movimientos repetidos, duplicar y editar
-  uno, reemplazar una categoría por otra nueva, renombrar categorías y un período, ocultar la
-  cuenta vieja, contar el efectivo y ajustar el saldo, eliminar un período de "pruebas" con sus
-  movimientos y reabrir el período actual. Las fechas se calculan hacia atrás desde hoy y el
-  "azar" tiene semilla fija, así que sale igual en cada corrida.
-  Los contactos y deudas son 13 contactos —personas y empresas, con teléfonos, correos, notas,
-  favoritos, las etiquetas por defecto (Familia, Amigos, Trabajo, Servicios) y una propia—, 6 recordatorios y 11 deudas que
-  cubren los casos: las que le deben y las que debe; con un contacto o con alguien que no lo es
-  (un vecino, el almacén, un club); sin fecha límite, con una ya vencida, por vencer y lejana;
-  sin pagos, con pagos parciales y saldadas; y pagos que generan su ingreso o gasto en BROU o en la
-  cuenta en dólares, incluso uno en dólares cobrado en pesos con la cotización acordada. Pasa por
-  los mismos servicios que la API y las fechas se calculan hacia atrás desde hoy. Los pagos que
-  generan movimiento usan el período abierto y las cuentas de las finanzas. **No pisa nada**: si el
-  admin ya tiene finanzas, contactos o deudas, el escenario se saltea.
+- `pnpm usuario:sembrar` carga los **datos de prueba**: tres cuentas para entrar y mirar, más las que
+  pueblan el panel de admin. Pasa por los mismos servicios que la API (registro por Better Auth,
+  finanzas, contactos, tareas, calendario), así los datos salen con las mismas reglas que los que carga
+  la interfaz. Está en `apps/api/src/scripts/` (`sembrar-datos-de-prueba.ts` y `cuentas-de-prueba.ts`).
+
+  | Usuario / contraseña | Qué tiene |
+  |---|---|
+  | `iotero` / `iotero` | **Admin.** Datos en todos los módulos y, sobre todo, lo que solo ve un admin: 4 solicitudes pendientes (una con el correo sin confirmar), cuentas aprobadas, rechazadas (una rechazada y aprobada después), una bloqueada con su motivo, una bloqueada y desbloqueada, una con la contraseña reseteada, su última conexión y un año de auditoría |
+  | `dpaolillo1` / `dpaolillo1` | **Un año de uso.** Doce meses de finanzas, contactos (familia, amigos, trabajo, servicios) con sus cumpleaños, aniversarios y fechas puntuales y el histórico del año, deudas repartidas en el año, un año de tareas y eventos en el calendario |
+  | `dpaolillo2` / `dpaolillo2` | **Vacía.** Recién aprobada: solo tiene lo que la aplicación crea sola para cualquier cuenta nueva (categorías, etiquetas, cuentas por defecto), que aparece al entrar |
+  | las demás | Contraseña `prueba1234` |
+
+  - Las contraseñas de `iotero` y `dpaolillo1` son más cortas que el mínimo (8): el registro no las
+    aceptaría, así que se registran con otra y se les guarda el hash de la pedida, con el mismo algoritmo
+    de Better Auth. El ingreso no exige largo mínimo (a propósito, para contraseñas viejas), así que entran.
+    Son cuentas de prueba: con estas contraseñas conocidas, el ambiente donde se carguen es para probar.
+  - Todo lo que el panel muestra con fecha (alta, cambio de estado, auditoría, última conexión) se **fecha
+    hacia atrás**, para que se vea como un año de uso. La última conexión sale de una sesión ya vencida
+    (no sirve para entrar).
+  - **No manda correos**, aunque el `.env` tenga SMTP: registrar cada cuenta dispararía el correo de
+    verificación a direcciones inventadas (`@ejemplo.test`), que rebotan y gastan el cupo diario del
+    servidor. Las cuentas ya quedan con el correo confirmado.
+  - **No pisa nada**: una cuenta que ya existe (por usuario o correo) se deja como está. `--borrar-todo`
+    (pide confirmación; con `--forzar` no pregunta) borra antes todas las cuentas y, en cascada, sus datos.
+    `--test` la carga en `gestion_test`.
+  - **Las finanzas** (`sembrar-finanzas.ts`) simulan el uso real, con los meses que se pidan (seis para el
+    admin, doce para dpaolillo1) y otra semilla del azar para cada cuenta: cuentas (BROU, Efectivo,
+    Tarjeta, Mercado Pago, Ahorros, una en dólares y una cuenta vieja), categorías propias, períodos que
+    arrancan el día 5 (el último abierto, con movimientos de esta semana), sueldo, alquiler, servicios,
+    supermercado, transporte, suscripciones, salidas, un viaje, ingresos extra, un mes que cierra en rojo,
+    compra de dólares cada tres meses, presupuestos y lo que hace la gente (corregir un importe mal
+    tipeado, borrar repetidos, reemplazar y renombrar categorías, ocultar la cuenta vieja, ajustar el
+    efectivo, reabrir el período actual). A fin de cada mes **paga la tarjeta entera y pasa a Ahorros lo
+    que sobra en el banco** por encima de un colchón: depende de los saldos y no de montos fijos, así las
+    cuentas no se van al rojo aunque se siembren muchos meses. Trae la cotización real de cada día (sin
+    internet, usa 1 USD = 40 UYU).
+  - **Los contactos**: el admin tiene los de `sembrar-contactos.ts` (13 contactos, recordatorios, deudas
+    de todos los tipos con pagos que generan movimiento) y dpaolillo1 los de
+    `sembrar-contactos-de-un-anio.ts` (17 contactos, distintos, fechados a lo largo del año). En las dos,
+    los recordatorios son **fechas puntuales**: cumpleaños (con el recordatorio automático), aniversarios
+    y citas o vencimientos de una sola vez; lo que se repite seguido (llamar a la abuela, pagar una cuota)
+    está en Tareas. El histórico de un año se arma por tramos, como lo haría la limpieza periódica con la
+    aplicación en uso.
+  - **Las tareas** (`sembrar-tareas.ts`): 11 repetitivas de todos los tipos (también *cada varios días* y
+    una que se da por fallida sola), sueltas, atrasadas, fallidas y lo hecho hoy de otros días, con tres
+    semanas de historial para el admin y casi un año para dpaolillo1 (el servicio arma como mucho 31 días
+    hacia atrás por vez, así que se arma por tramos).
 
 Siguen existiendo aunque ya haya panel: siguen siendo la única forma de operar desde la
 terminal, por ejemplo en un despliegue sin acceso todavía a la web.
@@ -877,8 +882,8 @@ y sin `tipo`, gasto), pero la pantalla siempre pide `gasto`.
 ### Widgets de Finanzas
 
 Cifras, curiosidades y avisos en tarjetas, en dos lugares: **dos carruseles** apilados en
-la columna lateral de `/finanzas` (texto arriba, gráficos abajo) y una **cuadrícula** de tarjetas chicas en `/inicio`. Los dos salen de la misma lista y del
-mismo pedido, `GET /api/finanzas/widgets`, que **no recibe parámetros**: el servidor mira el período
+la columna lateral de `/finanzas` (texto arriba, gráficos abajo). Salen del
+mismo pedido que el resumen de Finanzas de la pantalla de inicio (ver "Pantalla de inicio"), `GET /api/finanzas/widgets`, que **no recibe parámetros**: el servidor mira el período
 abierto o, si no hay, el más reciente (en la moneda base de la persona). Devuelve datos y no frases;
 el texto de cada widget lo escribe el cliente (`armar-widgets-de-finanzas.ts`, una función pura). Una
 tarjeta es un **aviso** (lleva la insignia "Aviso") o un **dato**; los avisos van primero, de los más
@@ -917,8 +922,7 @@ librería (a este tamaño no hacen falta ejes ni leyendas, y así no se carga un
 cada pantalla con widgets), con los mismos colores que los gráficos grandes del módulo (verde ingresos,
 rojo gastos). **Nunca son la única fuente de información**: el título, la cifra y el detalle dicen lo
 mismo con palabras, y los gráficos son decorativos para un lector de pantalla (salvo el ranking, cuyo
-texto sí es la información). En la pantalla de inicio la lista intercala las formas (cifra, gráfico, anillo...) para
-que las tarjetas contiguas no se parezcan; la columna lateral las separa por categoría.
+texto sí es la información). La columna lateral las separa por categoría.
 
 **Categorías.** Cada widget tiene una categoría, que decide en qué carrusel de la columna lateral va:
 
@@ -976,7 +980,7 @@ Dónde: API `apps/api/src/servicios/finanzas/widgets.ts` y la ruta en `rutas/fin
 `apps/web/src/componentes/widgets/` (tipos, tarjeta, carrusel, mini gráficos y la columna que los
 reparte, sin saber de ningún módulo) y `apps/web/src/componentes/finanzas/widgets/`. Tests:
 integración en `widgets.integracion.test.ts` (cálculo, límites del 80 %, ocultas, monedas, datos de
-los gráficos, aislamiento entre personas) y e2e en `widgets.spec.ts` (inicio, variedad de formas,
+los gráficos, aislamiento entre personas) y e2e en `widgets.spec.ts` (lo que dice cada widget, variedad de formas,
 los dos carruseles por categoría, que ningún widget se corta, flechas con hover, pausa con mouse y teclado, reducir movimiento, accesibilidad
 en los dos temas) y `columnas-plegables.spec.ts` (esconder y mostrar cada columna, que se recuerde
 sin destello, teclado, dónde hay pestañas y accesibilidad).
@@ -1332,7 +1336,8 @@ con `&` o `#` no puede alterar el enlace. No se muestra el mapa dentro de la apl
 
 Salen de `GET /api/contactos/widgets` (la API devuelve datos y la web los escribe, como en
 Finanzas) y se ven en dos carruseles de la columna lateral de `/contactos` (texto arriba,
-gráficos abajo; ver "Widgets de Finanzas", Categorías) y en la cuadrícula de `/inicio`. Los avisos
+gráficos abajo; ver "Widgets de Finanzas", Categorías). La pantalla de inicio tiene además un resumen de
+Contactos con lo más importante (ver "Pantalla de inicio"). Los avisos
 van primero:
 
 - **Avisos**: *Todavía sin contactos* (sin ninguno), *Recordatorio(s) de hoy* (con los
@@ -1726,7 +1731,8 @@ junto a lo que hay que corregir.
 - No hay prioridades, subtareas ni fechas límite aparte del día de la tarea. Las categorías todavía no
   sirven para filtrar la lista.
 - Una tarea repetitiva no se puede convertir en una de uso único (ni al revés): se crea otra.
-- Los widgets de tareas están solo en la columna lateral de su pantalla; todavía no en la de inicio.
+- Los widgets de tareas están solo en la columna lateral de su pantalla; la de inicio tiene un resumen de
+  Tareas con lo más importante (ver "Pantalla de inicio").
 - La lista de hoy no mira a futuro para las repetitivas ("Más adelante" solo muestra las de uso
   único): lo que viene de una regla se ve en la pestaña Repetitivas con su próxima fecha.
 
@@ -1776,12 +1782,14 @@ en pantallas más angostas pasa debajo.
   (de hoy o de un día pasado, suelta o armada por una repetitiva), (2) una **tarea marcada como fallida**
   (una atrasada que se dio por perdida) y (3) un **recordatorio de Contactos
   cuyo día ya pasó** (un recordatorio no se tilda: se considera completado cuando pasó su fecha; el de hoy
-  todavía no, y uno diario está completado en cada día anterior a hoy). En **"Más filtros"** está el filtro
-  **"Estado"**, con un botón por cada uno: **Pendientes, Atrasadas y Finalizadas** (son botones de
-  estado, como los de origen, con las palabras en plural; un estado apagado se ve tachado). **Por defecto están
-  prendidos Pendientes y Atrasadas**, así que lo finalizado no se ve hasta prender su botón. *Finalizadas*
-  junta las completadas y las fallidas. Pendientes incluye a Finanzas y a los eventos manuales, que no tienen
-  otro estado; "atrasada" es una tarea de un día anterior a hoy que no se hizo ni se dio por fallida. Con las
+  todavía no, y uno diario está completado en cada día anterior a hoy). En **"Más filtros"**, cada categoría
+  tiene su fila **"Estado"**, con sus propios botones: **Tareas** tiene **Pendientes, Atrasadas y Finalizadas**,
+  y **Contactos** tiene **Próximos y Pasados** (son botones de estado, como los de origen, con las palabras en
+  plural y el mismo ícono que la marca de la grilla; un estado apagado se ve tachado). Los de una categoría no
+  tocan a la otra: mostrar las tareas finalizadas no trae los recordatorios pasados. **Por defecto están
+  prendidos Pendientes, Atrasadas y Próximos**, así que lo finalizado y lo pasado no se ven hasta prender su
+  botón. *Finalizadas* junta las completadas y las fallidas; "atrasada" es una tarea de un día anterior a hoy
+  que no se hizo ni se dio por fallida. Finanzas y los eventos manuales no tienen estado y no se filtran por él. Con las
   finalizadas a la vista se distinguen de las pendientes: en la lista del día
   el título va **tachado y más apagado** y lleva la marca **"Completada"** o **"Fallida"** (con ícono, no
   solo estilo); en el mes, **el marcador de cada origen cambia con el estado**: **punto lleno** si hay algo
@@ -1937,6 +1945,81 @@ de otra persona responde 404).
 
 ---
 
+## Pantalla de inicio
+
+`/inicio` es para orientarse de un vistazo: un saludo con la fecha y un **carrusel con el resumen de cada
+módulo**, en este orden: Finanzas, Calendario, Tareas y Contactos. Se ve un resumen a la vez y pasa solo al
+siguiente cada **15 segundos**. La pantalla **entra entera en la ventana, sin desplazamiento vertical**.
+
+### Cada resumen
+
+Todos tienen la misma forma, para no tener que volver a aprender dónde está cada cosa: arriba el módulo
+(ícono en su color de origen y nombre) con el enlace **"Ir a …"**; a la izquierda **una cifra destacada**,
+a lo sumo **un aviso** (el más importante del módulo) y una **lista corta** de lo que viene (cuatro filas
+como mucho, con "y N más"); a la derecha **un gráfico** con sus números y etiquetas escritos, que se lee sin
+ejes ni leyendas. Pocos datos a propósito: el detalle está en cada módulo.
+
+| Resumen | Cifra destacada | Aviso (uno solo, el más grave) | Lista | Gráfico |
+|---|---|---|---|---|
+| **Finanzas** | Disponible (y lo que te deben y debés) | Cuenta en negativo › presupuesto superado › presupuesto por agotarse › moneda sin cotización › falta abrir un período / el último está cerrado | Donde más gastás: las tres categorías con su monto y su % del gasto | Lo que entró contra lo que salió en el período (con el balance en el título) y, en pantallas anchas, el gasto de los últimos períodos |
+| **Calendario** | Eventos de hoy (y cuántos más en los próximos 6 días) | — | Lo que viene: los próximos eventos de todos los módulos, con su ícono de origen, el día y la hora | Eventos de cada uno de los próximos 7 días |
+| **Tareas** | Hechas hoy ("3 de 5") con un anillo de avance, lo que falta y la racha | Tareas atrasadas (y cuál se da por fallida y cuándo) | Lo que falta hoy, con su hora | Hechas de las que había cada uno de los últimos 7 días |
+| **Contactos** | Próximo cumpleaños (quién, cuántos cumple, cuándo); sin cumpleaños, cuántos contactos hay | Recordatorios de hoy | Próximos recordatorios, con el contacto y cuándo | Recordatorios en cada una de las próximas 4 semanas |
+
+- El de Calendario cuenta **solo lo que falta**: sin tareas hechas o fallidas ni recordatorios pasados, y sin
+  aplicar el filtro guardado del calendario (eso es una forma de mirar el mes).
+- Cada resumen usa **el mismo pedido y la misma clave de caché** que su módulo (`/api/finanzas/widgets`,
+  `/api/calendario/eventos`, `/api/tareas/widgets`, `/api/contactos/widgets`): no hay endpoints nuevos.
+  Los cuatro se piden juntos al entrar, así pasar de uno a otro es instantáneo, y entrar después al módulo
+  no vuelve a pedir nada.
+- **Estados:** mientras carga, un esqueleto con la forma del resumen; si un módulo falla, su resumen lo dice
+  ("No pudimos cargar el resumen de …") y los demás siguen; sin datos, cada uno dice algo útil (abrir el
+  primer período, agregar el primer contacto, "No tenés tareas pendientes", etc.) y no muestra un gráfico vacío.
+
+### El carrusel
+
+- Arriba, **una pestaña por módulo** (ícono y nombre): dicen cuántos resúmenes hay y en cuál se está, y llevan
+  directo a cualquiera. Mientras avanza solo, la pestaña activa se va llenando con una **barra fina** del color
+  del módulo, así se ve cuándo va a cambiar. En pantallas angostas solo la activa muestra el nombre (las demás,
+  el ícono; el nombre accesible está siempre).
+- **Flechas** a los costados para el anterior y el siguiente (dan la vuelta), y en pantallas táctiles se
+  **desliza** con el dedo.
+- **Se detiene:** con el botón **Pausar** (queda quieto hasta tocar "Reanudar"), mientras el mouse está encima,
+  mientras el foco del teclado está adentro y con la pestaña del navegador oculta. Con **reducir movimiento** no
+  pasa solo (ni ofrece pausarlo) y los cambios no se deslizan. Cualquier cambio a mano vuelve a contar el
+  tiempo desde cero.
+- **Accesibilidad:** patrón de carrusel con pestañas de la WAI-ARIA (`tablist`/`tab`/`tabpanel`, una sola parada
+  de tabulación, flechas, Inicio y Fin); mientras avanza solo los cambios no se anuncian y, detenido, sí. Cada
+  gráfico es decorativo para un lector de pantalla y tiene su descripción en palabras.
+
+### Sin desplazamiento vertical
+
+La página marca su grilla con `data-pantalla-fija` (`EstructuraDeApp pantallaFija`): el marco de la aplicación
+(barra, contenido y pie) mide entonces el alto de la ventana y el carrusel ocupa lo que queda entre la barra y el
+pie. Para que entre en pantallas chicas: en las angostas se omite la lista (queda la cifra, el aviso y el gráfico)
+y en las bajas se esconden la fecha del saludo y la frase al pie del gráfico, y el gráfico se achica. En una
+ventana de menos de 560 px de alto no hay lugar para todo sin cortar algo: ahí la página vuelve a desplazarse
+como cualquier otra (un resumen cortado es peor que un desplazamiento).
+
+### Dónde está
+
+- Web: `apps/web/src/app/inicio/page.tsx` y `apps/web/src/componentes/inicio/` (`panel-de-inicio` arma el
+  carrusel y hace los pedidos, `carrusel-de-inicio`, `piezas-de-resumen` con las piezas comunes y el gráfico de
+  barras con etiquetas, y un `resumen-de-…` por módulo). El alto fijo, en `.marco-de-la-app` de `globals.css` y
+  `EstructuraDeApp`.
+- Tests: `apps/web/e2e/inicio.spec.ts` (que entra entera en siete tamaños de ventana —de 360x640 a 1920x1080— sin
+  cortarse, avance automático, pausa por botón, mouse, teclado y reducir movimiento, pestañas, flechas, teclado
+  y deslizar, lo que dice cada resumen con datos y vacío, un módulo que falla, y axe en los cuatro resúmenes en
+  modo claro y oscuro).
+
+### Límites conocidos
+
+- El orden de los resúmenes es fijo, y no se puede elegir cuáles ver ni cambiar el tiempo de cada uno.
+- La pausa no se recuerda: al volver a entrar, el carrusel avanza solo otra vez.
+- El resumen del Calendario mira siete días; para más, está el calendario.
+
+---
+
 ## Sistema visual
 
 Todos los colores, tamaños, radios y duraciones salen de `packages/ui-tokens`. Ningún
@@ -2059,8 +2142,8 @@ dónde está parada la persona:
 - **`/finanzas`** muestra los widgets de Finanzas en dos carruseles, uno de texto y otro de
   gráficos (ver "Widgets de Finanzas").
 - **`/contactos`** hace lo mismo con los widgets de Contactos (ver "Contactos", Widgets).
-- **`/inicio`** no tiene columna de widgets: sus widgets son el contenido principal y ocupan
-  el lugar de las dos columnas (ver `/inicio`).
+- **`/inicio`** no tiene columna de widgets: su carrusel de resúmenes es el contenido principal,
+  ocupa el lugar de las dos columnas y entra entero en la ventana (ver "Pantalla de inicio").
 - Una pantalla sin widgets (`/admin`) queda con dos columnas, sin una tercera vacía.
 
 Es una decisión explícita de estructura, tomada antes de empezar el primer módulo, para no

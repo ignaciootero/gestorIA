@@ -1,7 +1,7 @@
-// Siembra tareas realistas para una cuenta (la del admin): tareas repetitivas de todos los tipos
-// (diarias, semanales, mensuales y anuales, con y sin hora), tareas sueltas para hoy, mañana y los
-// próximos días, algunas atrasadas, y un historial de tres semanas con lo que se hizo y lo que
-// quedó sin hacer.
+// Siembra tareas realistas para una cuenta: tareas repetitivas de todos los tipos (diarias,
+// semanales, mensuales y anuales, con y sin hora), tareas sueltas para hoy, mañana y los próximos
+// días, algunas atrasadas, y un historial (tres semanas por defecto, hasta un año) con lo que se hizo
+// y lo que quedó sin hacer.
 //
 // También lo nuevo de las tareas: repetitivas "cada varios días", una que se da por fallida sola si
 // pasa el día, tareas fallidas (a mano y solas), una atrasada que está por darse por fallida, y lo
@@ -18,20 +18,31 @@
 // Es parte de la carga general de sembrar-datos-de-prueba.ts, que decide si corre (no pisa datos).
 
 import { type ClienteDb, esquema } from "@gestoria/db";
-import { type DatosDeTareaRepetitiva, diaDeHoy, instanteDelDia, sumarDias } from "@gestoria/shared";
+import {
+  type DatosDeTareaRepetitiva,
+  DIAS_DE_TAREAS_A_ARMAR,
+  diaDeHoy,
+  instanteDelDia,
+  sumarDias,
+} from "@gestoria/shared";
 import { eq } from "drizzle-orm";
 import { obtenerZonaHoraria } from "../servicios/finanzas/periodos.ts";
 import { listarCategoriasDeTareas } from "../servicios/tareas/categorias.ts";
 import { crearTareaRepetitiva, generarTareasRepetitivas } from "../servicios/tareas/repetitivas.ts";
 import { crearTarea } from "../servicios/tareas/tareas.ts";
 
-/** Cuántos días de historial se arman. */
-const DIAS_DE_HISTORIAL = 21;
+/** Cuántos días de historial se arman por defecto. */
+const DIAS_DE_HISTORIAL_POR_DEFECTO = 21;
+
+/** Un tratamiento dura unos días: el antibiótico no tiene más historial que esto, aunque haya un año. */
+const DIAS_DEL_ANTIBIOTICO = 10;
 
 type Contexto = {
   cliente: ClienteDb;
   userId: string;
   ahora: Date;
+  /** Cuántos días de historial armar (hasta DIAS_DE_HISTORIAL_DE_TAREAS, lo que se conserva). */
+  diasDeHistorial?: number;
 };
 
 export type ResumenDeSiembraDeTareas = {
@@ -170,14 +181,19 @@ export async function sembrarTareasDe(contexto: Contexto): Promise<ResumenDeSiem
     resumen.repetitivas += 1;
   }
 
-  // Las que se repiten cada día o cada semana empiezan hace tres semanas, para tener historial; las
-  // mensuales y anuales empiezan hoy (no tendrían nada que mostrar del pasado reciente).
+  // Las que se repiten empiezan en el pasado, para tener historial (el seguro anual empieza hoy: no
+  // tendría nada que mostrar). El antibiótico es un tratamiento: empieza hace unos días como mucho.
+  const diasDeHistorial = contexto.diasDeHistorial ?? DIAS_DE_HISTORIAL_POR_DEFECTO;
   const conHistorial = [...creadas.entries()].filter(
     ([, titulo]) => titulo !== "Pagar el seguro del auto",
   );
-  const desde = hace(DIAS_DE_HISTORIAL);
   const porIntervalo = new Set(["Lavar la ropa", "Fertilizar las plantas"]);
   for (const [id, titulo] of conHistorial) {
+    const desde = hace(
+      titulo === "Tomar el antibiótico"
+        ? Math.min(diasDeHistorial, DIAS_DEL_ANTIBIOTICO)
+        : diasDeHistorial,
+    );
     await cliente.db
       .update(esquema.tareasRepetitivas)
       .set({
@@ -191,6 +207,15 @@ export async function sembrarTareasDe(contexto: Contexto): Promise<ResumenDeSiem
   // Se quita lo que se armó al crearlas (solo hoy) para volver a armar todo desde el principio.
   for (const [id] of conHistorial) {
     await cliente.db.delete(esquema.tareas).where(eq(esquema.tareas.repetitivaId, id));
+  }
+  // El servicio arma como mucho DIAS_DE_TAREAS_A_ARMAR días hacia atrás por vez (lo que se acumula si
+  // la persona no entra): para un historial más largo se arma por tramos, como si entrara cada tanto.
+  for (
+    let tramo = sumarDias(hace(diasDeHistorial), DIAS_DE_TAREAS_A_ARMAR - 1);
+    tramo < hoy;
+    tramo = sumarDias(tramo, DIAS_DE_TAREAS_A_ARMAR - 1)
+  ) {
+    await generarTareasRepetitivas(cliente, userId, tramo);
   }
   await generarTareasRepetitivas(cliente, userId, hoy);
 

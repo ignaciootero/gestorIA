@@ -1,4 +1,4 @@
-// Siembra datos de finanzas realistas para una cuenta (la del admin), simulando
+// Siembra datos de finanzas realistas para una cuenta, simulando
 // varios meses de uso natural: cuentas, categorías, períodos que se abren y se
 // cierran, ingresos y gastos del día a día, transferencias, y también lo que la
 // gente hace de verdad: corregir un importe mal tipeado, borrar un movimiento
@@ -55,8 +55,8 @@ import {
 import { eliminarPresupuesto, fijarPresupuesto } from "../servicios/finanzas/presupuestos.ts";
 
 const DIA = 24 * 60 * 60 * 1000;
-/** Cuántos períodos reales se siembran (el último queda abierto). */
-const CANTIDAD_DE_PERIODOS = 6;
+/** Cuántos períodos reales se siembran por defecto (el último queda abierto). */
+const PERIODOS_POR_DEFECTO = 6;
 /** Día del mes en que arranca cada período: el "día de cobro". */
 const DIA_DE_COBRO = 5;
 /** 03:00 UTC es la medianoche de Montevideo (UTC-3): la fecha se ve bien en pantalla. */
@@ -146,6 +146,10 @@ type Contexto = {
   cliente: ClienteDb;
   userId: string;
   ahora: Date;
+  /** Cuántos períodos (meses) sembrar; por defecto, seis. Doce son un año de uso. */
+  periodos?: number;
+  /** La semilla del azar: con otra, los importes del día a día cambian (para otra cuenta). */
+  semilla?: number;
 };
 
 /** true si la cuenta ya tiene finanzas cargadas (alcanza con un período). */
@@ -167,7 +171,7 @@ function movimientosDelPeriodo(k: number, azar: ReturnType<typeof crearAzar>): E
     dia: 0,
     hora: 9.5,
     tipo: "ingreso",
-    pesos: k < 3 ? 63_500 : 67_000, // un ajuste salarial a mitad de recorrido
+    pesos: k < 3 ? 76_000 : 80_000, // un ajuste salarial a mitad de recorrido
     descripcion: "Sueldo",
     categoria: "Ingresos",
     cuenta: "BROU",
@@ -523,18 +527,20 @@ function movimientosDelPeriodo(k: number, azar: ReturnType<typeof crearAzar>): E
   }
 
   // --- La cuenta en dólares ---
-  // Se compran dólares con una cotización ligeramente mejor que la del mercado (la del banco):
-  // la persona indica cuánto entregó y cuánto recibió, y la cotización se deduce.
-  agregar({
-    dia: 6,
-    hora: 11,
-    tipo: "neutro",
-    pesos: k < 3 ? 8_000 : 10_000,
-    descripcion: "Compra de dólares",
-    cuenta: "BROU",
-    destino: "Ahorro en dólares",
-    cambio: { modo: "recibido", importe: k < 3 ? 203.5 : 254.5 },
-  });
+  // Cada tres meses se compran dólares con una cotización ligeramente mejor que la del mercado (la del
+  // banco): la persona indica cuánto entregó y cuánto recibió, y la cotización se deduce.
+  if (k % 3 === 0) {
+    agregar({
+      dia: 6,
+      hora: 11,
+      tipo: "neutro",
+      pesos: k < 3 ? 8_000 : 10_000,
+      descripcion: "Compra de dólares",
+      cuenta: "BROU",
+      destino: "Ahorro en dólares",
+      cambio: { modo: "recibido", importe: k < 3 ? 203.5 : 254.5 },
+    });
+  }
   agregar({
     dia: 4,
     hora: 20,
@@ -578,17 +584,6 @@ function movimientosDelPeriodo(k: number, azar: ReturnType<typeof crearAzar>): E
     cuenta: "BROU",
     destino: "Efectivo",
   });
-  if (k !== 2) {
-    agregar({
-      dia: 2,
-      hora: 13.5,
-      tipo: "neutro",
-      pesos: k < 3 ? 8_000 : 10_000,
-      descripcion: "Ahorro del mes",
-      cuenta: "BROU",
-      destino: "Ahorros",
-    });
-  }
   agregar({
     dia: azar.entre(9, 14),
     hora: 15,
@@ -598,15 +593,8 @@ function movimientosDelPeriodo(k: number, azar: ReturnType<typeof crearAzar>): E
     cuenta: "BROU",
     destino: "Mercado Pago",
   });
-  agregar({
-    dia: 20,
-    hora: 10,
-    tipo: "neutro",
-    pesos: redondear(azar.entre(15_000, 21_000), 100),
-    descripcion: "Pago de la tarjeta",
-    cuenta: "BROU",
-    destino: "Tarjeta",
-  });
+  // El pago de la tarjeta y el ahorro del mes dependen de cómo vino el mes: se cargan después, en
+  // `cerrarElMes`.
 
   return e;
 }
@@ -616,8 +604,9 @@ export type ResumenDeSiembra = { periodos: number; movimientos: number; cuentas:
 /** Siembra las finanzas y devuelve cuántas cosas quedaron, para mostrarlo al terminar. */
 export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSiembra> {
   const { cliente, userId, ahora } = contexto;
-  const azar = crearAzar(2026);
-  const inicios = iniciosDePeriodos(ahora, CANTIDAD_DE_PERIODOS);
+  const cantidadDePeriodos = contexto.periodos ?? PERIODOS_POR_DEFECTO;
+  const azar = crearAzar(contexto.semilla ?? 2026);
+  const inicios = iniciosDePeriodos(ahora, cantidadDePeriodos);
   const primerInicio = inicios[0] as Date;
 
   // ---------- Cuentas ----------
@@ -773,6 +762,53 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
     return movimiento;
   }
 
+  /**
+   * Lo que hace la persona a fin de mes con lo que quedó: paga la tarjeta entera y pasa a Ahorros lo
+   * que sobra en el BROU por encima de un colchón. Depende de los saldos y no de montos fijos, así las
+   * cuentas no se van al rojo aunque se siembren muchos meses. Si ese día todavía no llegó, no se hace.
+   */
+  async function cerrarElMes(k: number, inicio: Date, fin: Date): Promise<void> {
+    const saldo = async (nombre: string): Promise<number> => {
+      const cuenta = (await listarCuentasFinancieras(cliente, userId)).find(
+        (c) => c.id === cuentas.get(nombre),
+      );
+      return Math.round((cuenta?.saldoCentavos ?? 0) / 100);
+    };
+    const deLaTarjeta = -(await saldo("Tarjeta"));
+    if (deLaTarjeta > 0) {
+      await cargar(
+        {
+          dia: 26,
+          hora: 10,
+          tipo: "neutro",
+          pesos: deLaTarjeta,
+          descripcion: "Pago de la tarjeta",
+          cuenta: "BROU",
+          destino: "Tarjeta",
+        },
+        inicio,
+        fin,
+      );
+    }
+    // El colchón que deja en el banco para el mes que viene; el primer mes ahorra un poco menos.
+    const sobrante = redondear((await saldo("BROU")) - (k === 0 ? 35_000 : 30_000), 500);
+    if (sobrante >= 1_000) {
+      await cargar(
+        {
+          dia: 27,
+          hora: 18,
+          tipo: "neutro",
+          pesos: sobrante,
+          descripcion: "Ahorro del mes",
+          cuenta: "BROU",
+          destino: "Ahorros",
+        },
+        inicio,
+        fin,
+      );
+    }
+  }
+
   // Un período de "pruebas" de cuando la persona recién probaba la aplicación; al final se elimina.
   const inicioDePruebas = new Date(primerInicio.getTime() - 25 * DIA);
   const finDePruebas = new Date(primerInicio.getTime() - 10 * DIA);
@@ -804,6 +840,7 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
       (a, b) => a.dia * 24 + a.hora - (b.dia * 24 + b.hora),
     );
     for (const entrada of entradas) await cargar(entrada, inicio, fin);
+    await cerrarElMes(k, inicio, fin);
 
     // La cuenta vieja se usó un par de meses y después se dejó de usar.
     if (k === 0) {
@@ -952,7 +989,7 @@ export async function sembrarFinanzasDe(contexto: Contexto): Promise<ResumenDeSi
   }
 
   // 5. Se duplica el gimnasio del período actual para cargar una clase extra, y se ajusta.
-  const gimnasioActual = porClave.get(`gimnasio-${CANTIDAD_DE_PERIODOS - 1}`);
+  const gimnasioActual = porClave.get(`gimnasio-${cantidadDePeriodos - 1}`);
   if (gimnasioActual) {
     const copia = await duplicarMovimiento(cliente, userId, gimnasioActual.id);
     if (copia) {
