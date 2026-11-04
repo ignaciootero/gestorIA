@@ -20,7 +20,9 @@ import {
   describirDiaCompleto,
   diaIsoDeLaSemana,
   type EventoDeCalendario,
+  estadoDeEvento,
   type MesDeCalendario,
+  marcadorDeEventos,
   mesDe,
   mismoDiaEnOtroMes,
   NOMBRES_DE_ORIGEN,
@@ -34,7 +36,7 @@ import { CURVA_SALIDA, DURACION_MS, RESORTE } from "@gestoria/ui-tokens";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
 import { type KeyboardEvent, useEffect, useRef } from "react";
 import { cn } from "@/lib/clases";
-import { ESTILOS_DE_ORIGEN, ORDEN_DE_ORIGENES } from "./origenes";
+import { ESTILOS_DE_ORIGEN, ICONOS_DE_MARCADOR, ORDEN_DE_ORIGENES } from "./origenes";
 
 const NOMBRES_DE_COLUMNA = [
   { corto: "L", medio: "lun", completo: "lunes" },
@@ -181,6 +183,7 @@ export function VistaDeMes({
                       mes={mes}
                       elegido={otroDia === dia}
                       esHoy={otroDia === hoy}
+                      hoy={hoy}
                       eventos={eventosPorDia.get(otroDia) ?? []}
                       clavePastilla={clave}
                       alElegir={alElegir}
@@ -201,6 +204,7 @@ function CeldaDeDia({
   mes,
   elegido,
   esHoy,
+  hoy,
   eventos,
   clavePastilla,
   alElegir,
@@ -209,6 +213,8 @@ function CeldaDeDia({
   mes: MesDeCalendario;
   elegido: boolean;
   esHoy: boolean;
+  /** Para saber qué tareas están atrasadas. */
+  hoy: string;
   /** Los eventos del día (ya filtrados). Se marcan con un punto por origen y se dicen en el nombre accesible. */
   eventos: readonly EventoDeCalendario[];
   /** Distinta por mes: la pastilla se desliza dentro de un mes, no entre dos grillas que se cruzan. */
@@ -224,19 +230,27 @@ function CeldaDeDia({
     eventos.some((evento) => evento.origen === origen),
   );
   const cantidad = eventos.length;
-  const completados = eventos.filter((evento) => evento.completado).length;
+  const completados = eventos.filter(
+    (evento) => evento.completado && evento.origen !== "contactos",
+  ).length;
+  const pasados = eventos.filter(
+    (evento) => evento.completado && evento.origen === "contactos",
+  ).length;
   const fallidos = eventos.filter((evento) => evento.fallido).length;
-  // El punto de un origen queda vacío si todo lo de ese día ya está cerrado (completado o fallido).
-  const hechoPorCompleto = (origen: OrigenDeEvento) =>
-    eventos
-      .filter((evento) => evento.origen === origen)
-      .every((evento) => evento.completado || evento.fallido);
+  const atrasados = eventos.filter((evento) => estadoDeEvento(evento, hoy) === "atrasada").length;
+  // Lo que marca el punto de un origen: un punto lleno si falta algo, o un ícono según lo más urgente que
+  // haya (ver marcadorDeEventos).
+  const marcadorDe = (origen: OrigenDeEvento) =>
+    marcadorDeEventos(
+      eventos.filter((evento) => evento.origen === origen),
+      hoy,
+    );
 
   return (
     // El borde casi invisible separa las casillas sin recargar la grilla.
     <td
       className={cn(
-        "relative h-11 rounded-xl border border-borde/50 p-0 sm:h-14",
+        "relative h-12 rounded-xl border border-borde/50 p-0 sm:h-14",
         // Los días de otro mes llevan además un fondo grisáceo: se ve de un golpe cuáles son del mes.
         !delMes && "bg-borde/60",
       )}
@@ -251,8 +265,10 @@ function CeldaDeDia({
             ? `, ${cantidad} ${cantidad === 1 ? "evento" : "eventos"}: ${origenes
                 .map((origen) => NOMBRES_DE_ORIGEN[origen])
                 .join(", ")}${completados > 0 ? ` (${completados} completados)` : ""}${
+                pasados > 0 ? ` (${pasados} ${pasados === 1 ? "pasado" : "pasados"})` : ""
+              }${
                 fallidos > 0 ? ` (${fallidos} ${fallidos === 1 ? "fallido" : "fallidos"})` : ""
-              }`
+              }${atrasados > 0 ? ` (${atrasados} ${atrasados === 1 ? "atrasado" : "atrasados"})` : ""}`
             : ""
         }`}
         aria-pressed={elegido}
@@ -318,27 +334,43 @@ function CeldaDeDia({
             aria-hidden="true"
             data-eventos={cantidad}
             className={cn(
-              "absolute inset-x-0 bottom-1 flex justify-center gap-0.5 sm:gap-1",
+              "absolute inset-x-0 bottom-1.5 flex items-center justify-center gap-0.5 sm:gap-1",
               !delMes && !elegido && "opacity-50",
             )}
           >
-            {origenes.map((origen) => (
-              <span
-                key={origen}
-                data-origen={origen}
-                // "completado" acá es que todo lo de ese origen en el día está cerrado (hecho o fallido).
-                data-completado={hechoPorCompleto(origen)}
-                className={cn(
-                  "size-2 rounded-full ring-1 sm:size-2.5",
-                  // Vacío (solo el contorno) si ya está todo hecho; lleno si falta algo.
-                  hechoPorCompleto(origen)
-                    ? cn("border-2 bg-transparent", ESTILOS_DE_ORIGEN[origen].borde)
-                    : ESTILOS_DE_ORIGEN[origen].punto,
-                  // El anillo separa el punto del fondo (la pastilla del día elegido, o la superficie).
-                  elegido ? "ring-acento-texto" : "ring-superficie",
-                )}
-              />
-            ))}
+            {origenes.map((origen) => {
+              const estado = marcadorDe(origen);
+              const Icono =
+                estado === "pendiente" || estado === "pasado" ? null : ICONOS_DE_MARCADOR[estado];
+              return (
+                <span
+                  key={origen}
+                  data-origen={origen}
+                  data-estado={estado}
+                  // "completado" acá es que todo lo de ese origen en el día está cerrado (hecho, fallido o pasado).
+                  data-completado={estado !== "pendiente" && estado !== "atrasada"}
+                  className={cn(
+                    // Un círculo pleno del color del origen; el pendiente es solo el círculo y los demás llevan
+                    // adentro una marca blanca (tick, cruz, barra o exclamación), que se distingue mejor que un contorno.
+                    "grid size-3 place-items-center rounded-full ring-1 sm:size-3.5",
+                    // Un recordatorio ya pasado es el círculo vacío: solo el borde.
+                    estado === "pasado"
+                      ? cn("border-2 bg-transparent", ESTILOS_DE_ORIGEN[origen].borde)
+                      : ESTILOS_DE_ORIGEN[origen].punto,
+                    // El anillo separa la marca del fondo (la pastilla del día elegido, o la superficie).
+                    elegido ? "ring-acento-texto" : "ring-superficie",
+                  )}
+                >
+                  {Icono ? (
+                    <Icono
+                      aria-hidden="true"
+                      strokeWidth={4}
+                      className="size-2 text-superficie sm:size-2.5"
+                    />
+                  ) : null}
+                </span>
+              );
+            })}
           </span>
         ) : null}
       </button>

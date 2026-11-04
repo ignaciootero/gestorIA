@@ -1776,14 +1776,27 @@ en pantallas más angostas pasa debajo.
   (de hoy o de un día pasado, suelta o armada por una repetitiva), (2) una **tarea marcada como fallida**
   (una atrasada que se dio por perdida) y (3) un **recordatorio de Contactos
   cuyo día ya pasó** (un recordatorio no se tilda: se considera completado cuando pasó su fecha; el de hoy
-  todavía no, y uno diario está completado en cada día anterior a hoy). En **"Más filtros"** está el botón
-  **"Mostrar completados y fallidos"**. Con él prendido se distinguen de las pendientes: en la lista del día
+  todavía no, y uno diario está completado en cada día anterior a hoy). En **"Más filtros"** está el filtro
+  **"Estado"**, con un botón por cada uno: **Pendientes, Atrasadas y Finalizadas** (son botones de
+  estado, como los de origen, con las palabras en plural; un estado apagado se ve tachado). **Por defecto están
+  prendidos Pendientes y Atrasadas**, así que lo finalizado no se ve hasta prender su botón. *Finalizadas*
+  junta las completadas y las fallidas. Pendientes incluye a Finanzas y a los eventos manuales, que no tienen
+  otro estado; "atrasada" es una tarea de un día anterior a hoy que no se hizo ni se dio por fallida. Con las
+  finalizadas a la vista se distinguen de las pendientes: en la lista del día
   el título va **tachado y más apagado** y lleva la marca **"Completada"** o **"Fallida"** (con ícono, no
-  solo estilo); en el mes, el punto del origen queda **vacío** (solo el contorno) cuando todo lo de ese día
-  ya está cerrado, y lleno si falta algo; y el nombre accesible de la casilla dice cuántos están completados
-  y cuántos fallidos. Se recuerda en este navegador, y "Mostrar todo" no lo cambia.
-  Con "Tareas" y "Contactos" apagados el botón queda deshabilitado. Finanzas y los manuales no tienen
-  estado completado.
+  solo estilo); en el mes, **el marcador de cada origen cambia con el estado**: **punto lleno** si hay algo
+  pendiente; si no, un **signo de exclamación** si hay al menos una **tarea atrasada** (de un día anterior a hoy, sin hacer
+  ni fallar; también aparece con la marca "Atrasada" en la lista del día); y si todo está finalizado, **✓**
+  si todo se completó, **✗** si todo falló y **–** si hubo de
+  las dos. La prioridad es pendiente > atrasada > finalizada: una sola pendiente alcanza para que el día
+  muestre el punto lleno. Los cinco marcadores miden lo mismo y quedan en la misma línea; son círculos llenos del color del origen (el pendiente liso) y los demás llevan adentro una marca blanca —un !, ✓, ✗ o una barra— que se distingue mejor que un contorno; van sobre un anillo que los separa del fondo (también sobre el día elegido). **Estas marcas son de las tareas.**
+  Los **recordatorios de Contactos** solo son próximos o pasados: el próximo es el **círculo lleno** y el pasado
+  el **círculo vacío** (solo el borde, del color del origen); si el día tiene uno próximo, manda el lleno. En
+  la lista del día un recordatorio pasado lleva la marca "Pasado" (no "Completada"), y el nombre accesible de
+  la casilla dice cuántos son pasados. Finanzas y los eventos manuales siempre son el círculo lleno.
+  El nombre accesible de la casilla dice cuántos
+  están completados, fallidos y atrasados. Los estados que se ocultan se recuerdan en este navegador, y "Mostrar todo" no los
+  cambia. El botón "Más filtros" se marca (borde de acento) cuando los estados no son los de por defecto.
 - **Filtros avanzados por repetición.** El botón **"Más filtros"** abre un panel donde, para **Tareas** y
   **Contactos**, se elige qué tipos de repetición mostrar: *Una sola vez* (las tareas sueltas y los
   recordatorios que no se repiten), *Diarias*, *Semanales*, *Mensuales* y *Anuales*. Por ejemplo, se pueden

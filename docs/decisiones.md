@@ -87,7 +87,7 @@ acepta tareas de un día anterior a hoy (409 con las de hoy o futuras: todavía 
 fallida la pasa a completada; deshacer la fallida la devuelve a atrasada. En la lista de hoy hay una sección
 plegada "Fallidas hoy" (como "Hechas hoy") para poder deshacer un error; el historial muestra las fallidas y
 cuenta "2 de 4 hechas, 1 fallida". En el calendario una fallida figura como `fallido` y se oculta por defecto
-igual que lo completado ("Mostrar completados y fallidos").
+igual que lo completado (filtro por estado).
 
 **Fallar sola (opcional por repetitiva).** Un checkbox al crear/editar una repetitiva, desmarcado por defecto,
 hace que sus tareas pasen a fallidas cuando termina su día. Se guarda en la regla y **cada tarea armada lo copia**
@@ -151,7 +151,16 @@ pedir "mostrar completadas" es instantáneo y no hace otro viaje, a cambio de un
 falta; opt-in, guardado en este navegador, y a diferencia de lo demás se guarda como "mostrar" porque lo que
 se cambia es el valor por defecto. Lo completado se distingue con **tachado + marca "Completada" + ícono** en
 la lista del día y con un **punto vacío** en el mes (lleno si algo del día sigue pendiente); nunca solo con
-color. "Mostrar todo" no toca esta opción: es un modo de ver, no una restricción de qué hay. Los recordatorios
+color. "Mostrar todo" no toca esta opción: es un modo de ver, no una restricción de qué hay.
+(Después el interruptor único pasó a un **filtro por estado**: Pendientes, Atrasadas y Finalizadas (completadas
+y fallidas juntas), con solo Pendientes y Atrasadas prendidos por defecto. El estado se calcula en
+`packages/shared` con `estadoDeEvento(evento, hoy)`. Se guardan los estados **ocultos** en
+`gestoria:calendario:estados-ocultos`; una lista, aunque esté vacía, es una elección, y cualquier otra cosa
+vuelve a los de por defecto. Lo guardado cuando "completada" y "fallida" eran dos estados se lee como
+"finalizadas ocultas". La clave vieja `mostrar-completados` ya no se lee. El marcador del mes se resuelve con
+`marcadorDeEventos`: pendiente > atrasada > finalizada, y con todo finalizado, completada / fallida / mixta
+(los recordatorios de Contactos solo tienen "próximo" —círculo lleno— y "pasado" —círculo vacío—)
+según cómo terminó, así un día con una sola tarea pendiente nunca parece cerrado.) Los recordatorios
 de Contactos no se tildan, así que se consideran completados cuando **su día ya pasó** (antes de hoy en la
 zona de la persona; el de hoy no): una regla simple que no inventa un estado nuevo para guardar. Los
 vencimientos de deudas siguen sin completarse hasta que se saldan.

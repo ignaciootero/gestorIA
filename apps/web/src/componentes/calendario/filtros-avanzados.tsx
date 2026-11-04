@@ -9,14 +9,18 @@
 // panel esté cerrado. Los botones de adentro son de "estado" (`aria-pressed`), como los de origen.
 // Si un origen está oculto del todo, sus repeticiones quedan deshabilitadas: no hay nada para elegir.
 //
-// También se elige si se ven los eventos ya cerrados: por defecto no, para que lo hecho no tape lo que
-// falta. Son las tareas tildadas o marcadas como fallidas y los recordatorios de Contactos cuyo día ya pasó
-// (un recordatorio no se tilda: está completado cuando pasó su fecha).
+// También se elige por **estado**: pendiente, atrasada y finalizada (ver `estadoDeEvento`). Por defecto se
+// ven las pendientes y las atrasadas, para que lo hecho no tape lo que falta. Finalizadas son las tareas
+// tildadas, las que se dieron por fallidas y los recordatorios de Contactos cuyo día ya pasó (un
+// recordatorio no se tilda: está completado cuando pasó su fecha).
 
 "use client";
 
 import {
   cantidadDeRestriccionesPorRepeticion,
+  ESTADOS_DE_EVENTO,
+  type EstadoDeEvento,
+  estadosPorDefecto,
   type FiltroDeEventos,
   hayRestricciones,
   NOMBRES_DE_ORIGEN,
@@ -26,22 +30,24 @@ import {
   type RepeticionDeEvento,
   repeticionesDeEvento,
 } from "@gestoria/shared";
-import { Check, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { Check, Circle, CircleAlert, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { cn } from "@/lib/clases";
-import { ESTILOS_DE_ORIGEN } from "./origenes";
+import { ESTILOS_DE_ORIGEN, NOMBRES_DE_ESTADO } from "./origenes";
+
+const ICONOS_DEL_FILTRO = { pendiente: Circle, atrasada: CircleAlert, finalizada: Check } as const;
 
 type PropsFiltrosAvanzados = {
   filtro: FiltroDeEventos;
   alAlternarRepeticion: (origen: OrigenConRepeticion, repeticion: RepeticionDeEvento) => void;
-  alAlternarCompletados: () => void;
+  alAlternarEstado: (estado: EstadoDeEvento) => void;
   alMostrarTodo: () => void;
 };
 
 export function FiltrosAvanzados({
   filtro,
   alAlternarRepeticion,
-  alAlternarCompletados,
+  alAlternarEstado,
   alMostrarTodo,
 }: PropsFiltrosAvanzados) {
   const [abierto, setAbierto] = useState(false);
@@ -74,7 +80,7 @@ export function FiltrosAvanzados({
             "hover:bg-superficie-suave",
             "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
             "active:scale-(--anim-escala-presion) motion-reduce:active:scale-100",
-            (restricciones > 0 || filtro.mostrarCompletados) && "border-acento",
+            (restricciones > 0 || !estadosPorDefecto(filtro)) && "border-acento",
           )}
         >
           <SlidersHorizontal aria-hidden="true" className="size-3.5" />
@@ -181,35 +187,55 @@ export function FiltrosAvanzados({
           <p className="text-xs text-texto-secundario">
             “Una sola vez” son las tareas sueltas y los recordatorios que no se repiten.
           </p>
-          <div className="flex flex-col gap-1.5 border-t border-borde pt-3">
-            <button
-              type="button"
-              aria-pressed={filtro.mostrarCompletados}
-              data-completados={filtro.mostrarCompletados}
-              disabled={ORIGENES_CON_REPETICION.every((origen) =>
-                filtro.origenesOcultos.has(origen),
-              )}
-              onClick={alAlternarCompletados}
-              className={cn(
-                "inline-flex h-7 w-fit items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium",
-                "transition-colors duration-(--duracion-rapida) ease-salida",
-                "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
-                "active:scale-(--anim-escala-presion) motion-reduce:active:scale-100",
-                "disabled:pointer-events-none disabled:opacity-50",
-                filtro.mostrarCompletados
-                  ? cn(ESTILOS_DE_ORIGEN.tareas.suave, "border-transparent")
-                  : "border-borde-fuerte bg-superficie text-texto-secundario hover:bg-superficie-suave",
-              )}
-            >
-              <Check aria-hidden="true" className="size-3.5" />
-              Mostrar completados y fallidos
-            </button>
+          <fieldset
+            data-filtro="estado"
+            className="flex min-w-0 flex-col gap-1.5 border-0 border-t border-borde p-0 pt-3"
+          >
+            <legend className="mb-1.5 text-xs font-medium text-texto">
+              Estado{" "}
+              <span className="font-normal text-texto-secundario">
+                Qué tareas y recordatorios ver
+              </span>
+            </legend>
+            <div className="flex flex-wrap gap-1.5">
+              {ESTADOS_DE_EVENTO.map((estado) => {
+                const visible = !filtro.estadosOcultos.has(estado);
+                const Icono = ICONOS_DEL_FILTRO[estado];
+                return (
+                  <button
+                    key={estado}
+                    type="button"
+                    aria-pressed={visible}
+                    data-estado={estado}
+                    onClick={() => alAlternarEstado(estado)}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium",
+                      "transition-colors duration-(--duracion-rapida) ease-salida",
+                      "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
+                      "active:scale-(--anim-escala-presion) motion-reduce:active:scale-100",
+                      visible
+                        ? cn(ESTILOS_DE_ORIGEN.tareas.suave, "border-transparent")
+                        : "border-borde-fuerte bg-superficie text-texto-secundario hover:bg-superficie-suave",
+                    )}
+                  >
+                    <Icono
+                      aria-hidden="true"
+                      strokeWidth={estado === "pendiente" ? 2 : 3}
+                      className={cn("size-3", estado === "pendiente" && "fill-current")}
+                    />
+                    <span className={cn(!visible && "line-through")}>
+                      {NOMBRES_DE_ESTADO[estado]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
             <p className="text-xs text-texto-secundario">
-              Se ocultan por defecto las tareas que ya hiciste o diste por fallidas y los
-              recordatorios cuya fecha ya pasó. Si los mostrás, se ven tachados y con la marca
-              “Completada” o “Fallida”.
+              Atrasadas son las tareas de un día anterior a hoy que no hiciste ni diste por
+              fallidas. Finalizadas son las tareas completadas y las fallidas, y los recordatorios
+              que ya pasaron: se ven tachadas y con su marca.
             </p>
-          </div>
+          </fieldset>
         </div>
       ) : null}
     </fieldset>

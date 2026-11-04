@@ -187,6 +187,7 @@ export function PanelDelDia({
 
       <EventosDelDia
         dia={dia}
+        hoy={hoy}
         eventos={eventos}
         ocultosPorElFiltro={ocultosPorElFiltro}
         cargando={cargandoEventos}

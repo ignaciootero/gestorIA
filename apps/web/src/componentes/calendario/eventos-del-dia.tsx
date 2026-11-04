@@ -15,12 +15,14 @@
 
 "use client";
 
-import { type EventoDeCalendario, NOMBRES_DE_ORIGEN } from "@gestoria/shared";
+import { type EventoDeCalendario, estadoDeEvento, NOMBRES_DE_ORIGEN } from "@gestoria/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
   CalendarOff,
   CalendarPlus,
+  Circle,
+  CircleAlert,
   CircleCheck,
   CircleX,
   EyeOff,
@@ -52,6 +54,8 @@ type Dialogos =
 
 type PropsEventosDelDia = {
   dia: string;
+  /** Hoy, para saber qué tareas están atrasadas. */
+  hoy: string;
   /** Los eventos de un rango que incluye el día, ya filtrados por origen; acá se muestran solo los de `dia`. */
   eventos: EventoDeCalendario[] | undefined;
   /** Cuántos eventos de este día se ocultaron con el filtro de orígenes. */
@@ -64,6 +68,7 @@ type PropsEventosDelDia = {
 
 export function EventosDelDia({
   dia,
+  hoy,
   eventos,
   ocultosPorElFiltro,
   cargando,
@@ -165,6 +170,7 @@ export function EventosDelDia({
             <FilaDeEvento
               key={evento.id}
               evento={evento}
+              hoy={hoy}
               alEditar={() =>
                 setDialogo({
                   tipo: "formulario",
@@ -246,15 +252,18 @@ export function EventosDelDia({
 
 function FilaDeEvento({
   evento,
+  hoy,
   alEditar,
   alEliminar,
 }: {
   evento: EventoDeCalendario;
+  hoy: string;
   alEditar: () => void;
   alEliminar: () => void;
 }) {
   const { icono: Icono, ruta, borde, suave } = ESTILOS_DE_ORIGEN[evento.origen];
   const origen = NOMBRES_DE_ORIGEN[evento.origen];
+  const estado = estadoDeEvento(evento, hoy);
 
   return (
     <li
@@ -302,16 +311,26 @@ function FilaDeEvento({
               <Icono aria-hidden="true" className="size-3 shrink-0" />
               {origen}
             </span>
-            {evento.completado || evento.fallido ? (
+            {estado === "pendiente" ? null : (
               <span className="inline-flex w-fit items-center gap-1 rounded-full border border-borde-fuerte px-2 py-0.5 text-xs font-medium text-texto-secundario">
                 {evento.fallido ? (
                   <CircleX aria-hidden="true" className="size-3 shrink-0" />
+                ) : estado === "atrasada" ? (
+                  <CircleAlert aria-hidden="true" className="size-3 shrink-0" />
+                ) : evento.origen === "contactos" ? (
+                  <Circle aria-hidden="true" className="size-3 shrink-0" />
                 ) : (
                   <CircleCheck aria-hidden="true" className="size-3 shrink-0" />
                 )}
-                {evento.fallido ? "Fallida" : "Completada"}
+                {evento.fallido
+                  ? "Fallida"
+                  : estado === "atrasada"
+                    ? "Atrasada"
+                    : evento.origen === "contactos"
+                      ? "Pasado"
+                      : "Completada"}
               </span>
-            ) : null}
+            )}
           </div>
         </div>
 

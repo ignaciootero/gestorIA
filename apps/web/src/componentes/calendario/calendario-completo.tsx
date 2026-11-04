@@ -102,18 +102,12 @@ export function CalendarioCompleto() {
 
   // El filtro (por origen y, para Tareas y Contactos, por repetición) se aplica acá, sobre lo que ya llegó:
   // cambiarlo es instantáneo y no vuelve a pedir nada. Se recuerda en este navegador.
-  const {
-    filtro,
-    alternarOrigen,
-    alternarRepeticion,
-    alternarCompletados,
-    mostrarOrigen,
-    mostrarTodo,
-  } = useFiltroDeEventos();
+  const { filtro, alternarOrigen, alternarRepeticion, alternarEstado, mostrarOrigen, mostrarTodo } =
+    useFiltroDeEventos();
 
   const visibles = useMemo(
-    () => eventos.data?.filter((evento) => pasaElFiltro(evento, filtro)),
-    [eventos.data, filtro],
+    () => eventos.data?.filter((evento) => pasaElFiltro(evento, filtro, hoy ?? "")),
+    [eventos.data, filtro, hoy],
   );
   const eventosPorDia = useMemo(() => {
     const porDia = new Map<string, EventoDeCalendario[]>();
@@ -125,7 +119,8 @@ export function CalendarioCompleto() {
   const ocultosDelDia =
     dia === null
       ? 0
-      : (eventos.data ?? []).filter((e) => e.dia === dia && !pasaElFiltro(e, filtro)).length;
+      : (eventos.data ?? []).filter((e) => e.dia === dia && !pasaElFiltro(e, filtro, hoy ?? ""))
+          .length;
 
   // Recién montado se sabe qué día es hoy; desde ahí se vuelve a mirar cada minuto.
   useEffect(() => {
@@ -271,7 +266,7 @@ export function CalendarioCompleto() {
         <FiltrosAvanzados
           filtro={filtro}
           alAlternarRepeticion={alternarRepeticion}
-          alAlternarCompletados={alternarCompletados}
+          alAlternarEstado={alternarEstado}
           alMostrarTodo={mostrarTodo}
         />
         {vista === "mes" ? <LeyendaDePuntos /> : null}
@@ -345,8 +340,9 @@ export function CalendarioCompleto() {
 function LeyendaDePuntos() {
   return (
     <p aria-hidden="true" className="-mt-1 text-xs text-texto-secundario">
-      Un punto por cada origen que tiene algo ese día (vacío si ya está todo completado o fallido);
-      el número, cuántos eventos hay.
+      Un punto por cada origen que tiene algo ese día: lleno si falta algo, ✓ si está todo
+      completado, ✗ si quedó algo fallido y un ! si hay tareas atrasadas; el número, cuántos eventos
+      hay.
     </p>
   );
 }

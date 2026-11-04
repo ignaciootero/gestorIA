@@ -2,12 +2,14 @@
 // ocultan y, para Tareas y Contactos, qué repeticiones (diarias, semanales…). No es un dato que valga la
 // pena guardar en el servidor, así que vive en `localStorage` (mismo criterio que preferencias-finanzas.ts).
 //
-// Además se guarda si se muestran las tareas ya completadas (por defecto no).
+// Además se guarda qué estados se ocultan (pendiente, atrasada, finalizada); por defecto, los finalizados.
 //
 // Se guardan los **ocultos** y no los visibles: si algún día se suma un origen o una repetición nuevos,
 // aparecen visibles para todos sin tener que migrar nada.
 
 import {
+  ESTADOS_DE_EVENTO,
+  type EstadoDeEvento,
   type FiltroDeEventos,
   filtroSinRestricciones,
   ORIGENES_CON_REPETICION,
@@ -17,7 +19,7 @@ import {
 
 const CLAVE_DE_ORIGENES = "gestoria:calendario:origenes-ocultos";
 const CLAVE_DE_REPETICIONES = "gestoria:calendario:repeticiones-ocultas";
-const CLAVE_DE_COMPLETADOS = "gestoria:calendario:mostrar-completados";
+const CLAVE_DE_ESTADOS = "gestoria:calendario:estados-ocultos";
 
 function leerJson(clave: string): unknown {
   try {
@@ -34,17 +36,28 @@ function soloLosValidos<T extends string>(valor: unknown, validos: readonly T[])
   return new Set(validos.filter((candidato) => valor.includes(candidato)));
 }
 
+/**
+ * Los estados ocultos guardados. Antes "finalizada" eran dos estados, "completada" y "fallida": si estaba
+ * oculto alguno, se oculta "finalizada".
+ */
+function estadosGuardados(guardados: unknown[]): Set<EstadoDeEvento> {
+  const estados = soloLosValidos(guardados, ESTADOS_DE_EVENTO);
+  if (guardados.includes("completada") || guardados.includes("fallida")) estados.add("finalizada");
+  return estados;
+}
+
 /** El filtro guardado en este navegador; sin restricciones si no hay nada o lo guardado no sirve. */
 export function leerFiltroDeEventos(): FiltroDeEventos {
   const filtro = filtroSinRestricciones();
   const repeticiones = leerJson(CLAVE_DE_REPETICIONES);
+  const estados = leerJson(CLAVE_DE_ESTADOS);
   const guardadas =
     typeof repeticiones === "object" && repeticiones !== null
       ? (repeticiones as Record<string, unknown>)
       : {};
   return {
-    // Solo un `true` explícito lo prende: cualquier otra cosa es el valor por defecto (no mostrarlos).
-    mostrarCompletados: leerJson(CLAVE_DE_COMPLETADOS) === true,
+    // Una lista (aunque esté vacía) es una elección; cualquier otra cosa, los estados por defecto.
+    estadosOcultos: Array.isArray(estados) ? estadosGuardados(estados) : filtro.estadosOcultos,
     origenesOcultos: soloLosValidos(leerJson(CLAVE_DE_ORIGENES), ORIGENES_DE_EVENTO),
     repeticionesOcultas: {
       ...filtro.repeticionesOcultas,
@@ -60,7 +73,7 @@ export function leerFiltroDeEventos(): FiltroDeEventos {
 
 export function guardarFiltroDeEventos(filtro: FiltroDeEventos): void {
   try {
-    localStorage.setItem(CLAVE_DE_COMPLETADOS, JSON.stringify(filtro.mostrarCompletados));
+    localStorage.setItem(CLAVE_DE_ESTADOS, JSON.stringify([...filtro.estadosOcultos]));
     localStorage.setItem(CLAVE_DE_ORIGENES, JSON.stringify([...filtro.origenesOcultos]));
     localStorage.setItem(
       CLAVE_DE_REPETICIONES,

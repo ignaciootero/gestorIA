@@ -1153,12 +1153,18 @@ test.describe("agregar, editar y eliminar a mano", () => {
 });
 
 test.describe("tareas completadas", () => {
-  const botonCompletadas = (pagina: Page): Locator =>
-    pagina.getByRole("button", { name: "Mostrar completados" });
+  type Estado = "pendiente" | "atrasada" | "finalizada";
+  const chipDeEstado = (pagina: Page, estado: Estado): Locator =>
+    pagina.locator(`[data-filtro='estado'] [data-estado='${estado}']`);
 
   async function abrirFiltros(pagina: Page): Promise<void> {
     await pagina.getByRole("button", { name: /Más filtros/ }).click();
-    await expect(botonCompletadas(pagina)).toBeVisible();
+    await expect(chipDeEstado(pagina, "finalizada")).toBeVisible();
+  }
+
+  /** Muestra las finalizadas (completadas y fallidas), que por defecto están ocultas. */
+  async function mostrarCerradas(pagina: Page): Promise<void> {
+    await chipDeEstado(pagina, "finalizada").click();
   }
 
   /** Cierra el panel de filtros (en pantallas anchas flota sobre la grilla). */
@@ -1196,8 +1202,8 @@ test.describe("tareas completadas", () => {
     await sembrarCompletadas(page);
     await abrirCalendario(page);
     await abrirFiltros(page);
-    await botonCompletadas(page).click();
-    await expect(botonCompletadas(page)).toHaveAttribute("aria-pressed", "true");
+    await mostrarCerradas(page);
+    await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "true");
 
     await expect(filas(page)).toHaveCount(2);
     const hecha = filas(page).filter({ hasText: "Hecha" });
@@ -1234,7 +1240,7 @@ test.describe("tareas completadas", () => {
     );
 
     await abrirFiltros(page);
-    await botonCompletadas(page).click();
+    await mostrarCerradas(page);
     await expect(casilla(page, manana).locator("[data-origen='tareas']")).toHaveAttribute(
       "data-completado",
       "true",
@@ -1266,7 +1272,7 @@ test.describe("tareas completadas", () => {
     );
 
     await abrirFiltros(page);
-    await botonCompletadas(page).click();
+    await mostrarCerradas(page);
     await masFiltrosCerrar(page);
     await expect(casilla(page, ayer).locator("[data-origen='contactos']")).toHaveAttribute(
       "data-completado",
@@ -1275,8 +1281,19 @@ test.describe("tareas completadas", () => {
     await casilla(page, ayer).click();
     const fila = filas(page).filter({ hasText: "Tomar la pastilla" });
     await expect(fila).toHaveAttribute("data-completado", "true");
-    await expect(fila).toContainText("Completada");
+    await expect(fila).toContainText("Pasado");
+    await expect(fila).not.toContainText("Completada");
     await expect(fila.locator("p.line-through")).toHaveText("Tomar la pastilla");
+    // En la grilla: próximo es el círculo lleno y pasado, el círculo vacío (solo el borde).
+    await expect(casilla(page, ayer).locator("[data-origen='contactos']")).toHaveAttribute(
+      "data-estado",
+      "pasado",
+    );
+    await expect(casilla(page, ayer).locator("[data-origen='contactos'] svg")).toHaveCount(0);
+    await expect(casilla(page, hoy()).locator("[data-origen='contactos']")).toHaveAttribute(
+      "data-estado",
+      "pendiente",
+    );
 
     // El de hoy sigue pendiente: todavía no pasó el día.
     await casilla(page, hoy()).click();
@@ -1310,8 +1327,8 @@ test.describe("tareas completadas", () => {
     await expect(eventosDelDia(page)).toContainText("1 evento oculto por el filtro");
 
     await abrirFiltros(page);
-    await botonCompletadas(page).click();
-    await expect(botonCompletadas(page)).toContainText("fallidos");
+    await mostrarCerradas(page);
+    await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "true");
     await masFiltrosCerrar(page);
     await expect(filas(page)).toHaveCount(2);
     const fallida = filas(page).filter({ hasText: "Fallida de ayer" });
@@ -1338,7 +1355,7 @@ test.describe("tareas completadas", () => {
     await expect(casilla(page, ayer).locator("[data-origen='tareas']")).toHaveCount(0);
 
     await abrirFiltros(page);
-    await botonCompletadas(page).click();
+    await mostrarCerradas(page);
     await masFiltrosCerrar(page);
     await expect(casilla(page, ayer).locator("[data-origen='tareas']")).toHaveAttribute(
       "data-completado",
@@ -1347,18 +1364,75 @@ test.describe("tareas completadas", () => {
     await expect(casilla(page, ayer)).toHaveAccessibleName(/1 fallido/);
   });
 
+  test("el punto de la grilla cambia según el estado: lleno, tick, cruz o exclamación", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    const ayer = sumarDias(hoy(), -1);
+    const anteayer = sumarDias(hoy(), -2);
+    const manana = sumarDias(hoy(), 1);
+    const hace3 = sumarDias(hoy(), -3);
+    const hace4 = sumarDias(hoy(), -4);
+    await sembrarTareasDePrueba(
+      cuenta.email,
+      [
+        { titulo: "Atrasada de ayer", dia: ayer },
+        { titulo: "Fallida de anteayer", dia: anteayer, fallida: true },
+        { titulo: "Fallida de hace tres días", dia: hace3, fallida: true },
+        { titulo: "Atrasada de hace cuatro días", dia: hace4 },
+        { titulo: "Hecha de hace tres días", dia: hace3, hecha: true },
+        { titulo: "Hecha de hace cuatro días", dia: hace4, hecha: true },
+      ],
+      hoy(),
+    );
+    await entrar(page, cuenta);
+    const base = { notas: "", hora: "" };
+    await pedirApi(page, "POST", "/api/tareas", { ...base, titulo: "Para mañana", fecha: manana });
+    const hecha = await pedirApi<{ id: string }>(page, "POST", "/api/tareas", {
+      ...base,
+      titulo: "Hecha hoy",
+      fecha: hoy(),
+    });
+    await pedirApi(page, "PATCH", `/api/tareas/${hecha.id}/completada`, { completada: true });
+    await abrirCalendario(page);
+    await abrirFiltros(page);
+    await mostrarCerradas(page);
+    await masFiltrosCerrar(page);
+
+    const marca = (dia: string) => casilla(page, dia).locator("[data-origen='tareas']");
+    // Un día con una completada y una fallida es "mixto"; uno con una atrasada y una completada, atrasado.
+    await expect(marca(hace3)).toHaveAttribute("data-estado", "mixta");
+    await expect(marca(hace3).locator("svg")).toHaveCount(1);
+    // Con una atrasada, manda ella aunque haya algo completado.
+    await expect(marca(hace4)).toHaveAttribute("data-estado", "atrasada");
+    await expect(marca(manana)).toHaveAttribute("data-estado", "pendiente");
+    await expect(marca(hoy())).toHaveAttribute("data-estado", "completada");
+    await expect(marca(ayer)).toHaveAttribute("data-estado", "atrasada");
+    await expect(marca(anteayer)).toHaveAttribute("data-estado", "fallida");
+    // Solo el punto pendiente es lleno: los otros llevan un ícono.
+    await expect(marca(manana).locator("svg")).toHaveCount(0);
+    for (const dia of [hoy(), ayer, anteayer]) {
+      await expect(marca(dia).locator("svg")).toHaveCount(1);
+    }
+    await expect(casilla(page, ayer)).toHaveAccessibleName(/1 atrasado/);
+
+    // La fila del día dice lo mismo con palabras.
+    await casilla(page, ayer).click();
+    await expect(filas(page).filter({ hasText: "Atrasada de ayer" })).toContainText("Atrasada");
+  });
+
   test("se recuerda al recargar, y 'Mostrar todo' no lo cambia", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await sembrarCompletadas(page);
     await abrirCalendario(page);
     await abrirFiltros(page);
-    await botonCompletadas(page).click();
+    await mostrarCerradas(page);
     await expect(filas(page)).toHaveCount(2);
 
     await page.reload();
     await expect(filas(page)).toHaveCount(2);
     await abrirFiltros(page);
-    await expect(botonCompletadas(page)).toHaveAttribute("aria-pressed", "true");
+    await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "true");
 
     // Se oculta una repetición para que aparezca 'Mostrar todo' y se lo usa.
     await page
@@ -1366,34 +1440,126 @@ test.describe("tareas completadas", () => {
       .getByRole("button", { name: "Diarias" })
       .click();
     await page.getByRole("button", { name: "Mostrar todo" }).click();
-    await expect(botonCompletadas(page)).toHaveAttribute("aria-pressed", "true");
+    await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "true");
     await expect(filas(page)).toHaveCount(2);
+  });
+
+  test("lo guardado cuando completadas y fallidas eran dos estados oculta las finalizadas", async ({
+    page,
+  }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await sembrarCompletadas(page);
+    await page.evaluate(() =>
+      localStorage.setItem("gestoria:calendario:estados-ocultos", '["completada"]'),
+    );
+    await abrirCalendario(page);
+    await expect(filas(page)).toHaveCount(1);
+    await abrirFiltros(page);
+    await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "false");
+    await expect(chipDeEstado(page, "pendiente")).toHaveAttribute("aria-pressed", "true");
   });
 
   test("un valor guardado dañado vuelve a ocultar las completadas", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await sembrarCompletadas(page);
     await page.evaluate(() =>
-      localStorage.setItem("gestoria:calendario:mostrar-completados", '"quizás"'),
+      localStorage.setItem("gestoria:calendario:estados-ocultos", '"quizás"'),
     );
     await abrirCalendario(page);
     await expect(filas(page)).toHaveCount(1);
   });
 
-  test("solo queda deshabilitado si Tareas y Contactos están apagados", async ({ page }) => {
+  test("una lista guardada vacía muestra todos los estados", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await sembrarCompletadas(page);
+    await page.evaluate(() => localStorage.setItem("gestoria:calendario:estados-ocultos", "[]"));
+    await abrirCalendario(page);
+    await expect(filas(page)).toHaveCount(2);
+    await abrirFiltros(page);
+    for (const estado of ["pendiente", "atrasada", "finalizada"] as const) {
+      await expect(chipDeEstado(page, estado)).toHaveAttribute("aria-pressed", "true");
+    }
+  });
+
+  test("por defecto están marcadas pendiente y atrasada, y no finalizada", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
     await abrirCalendario(page);
     await abrirFiltros(page);
-    const origen = (nombre: string) =>
-      page
-        .getByRole("group", { name: "Mostrar en el calendario" })
-        .getByRole("button", { name: nombre });
-    await origen("Tareas").click();
-    // Con Contactos a la vista todavía hay recordatorios que pueden estar completados.
-    await expect(botonCompletadas(page)).toBeEnabled();
-    await origen("Contactos").click();
-    await expect(botonCompletadas(page)).toBeDisabled();
+    for (const [estado, marcado] of [
+      ["pendiente", "true"],
+      ["atrasada", "true"],
+      ["finalizada", "false"],
+    ] as const) {
+      await expect(chipDeEstado(page, estado)).toHaveAttribute("aria-pressed", marcado);
+    }
+    // Los tres tienen texto, no solo color ni ícono.
+    await expect(page.locator("[data-filtro='estado']")).toContainText(
+      /Pendientes.*Atrasadas.*Finalizadas/,
+    );
+  });
+
+  test("cada estado se muestra u oculta por su cuenta", async ({ page }) => {
+    const cuenta = await crearCuentaAprobada();
+    const ayer = sumarDias(hoy(), -1);
+    await sembrarTareasDePrueba(
+      cuenta.email,
+      [
+        { titulo: "Atrasada de ayer", dia: ayer },
+        { titulo: "Fallida de ayer", dia: ayer, fallida: true },
+      ],
+      hoy(),
+    );
+    await entrar(page, cuenta);
+    await sembrarCompletadas(page);
+    await abrirCalendario(page);
+
+    // Hoy: por defecto solo la pendiente.
+    await expect(filas(page)).toHaveCount(1);
+    await expect(filas(page).first()).toContainText("Pendiente");
+    await abrirFiltros(page);
+    await chipDeEstado(page, "pendiente").click();
+    await expect(filas(page)).toHaveCount(0);
+    await chipDeEstado(page, "finalizada").click();
+    await expect(filas(page)).toHaveCount(1);
+    await expect(filas(page).first()).toContainText("Hecha");
+    await chipDeEstado(page, "pendiente").click();
+    await expect(filas(page)).toHaveCount(2);
+
+    // Ayer: "Finalizada" ya está prendida, así que la atrasada y la fallida se ven juntas; se sacan por separado.
+    await masFiltrosCerrar(page);
+    await casilla(page, ayer).click();
+    await expect(filas(page)).toHaveCount(2);
+    await abrirFiltros(page);
+    await chipDeEstado(page, "atrasada").click();
+    await expect(filas(page)).toHaveCount(1);
+    await expect(filas(page).first()).toContainText("Fallida de ayer");
+    await expect(eventosDelDia(page)).toContainText("1 evento oculto por el filtro");
+    await chipDeEstado(page, "finalizada").click();
+    await expect(filas(page)).toHaveCount(0);
+    await expect(eventosDelDia(page)).toContainText("Hay 2 eventos ocultos por el filtro");
+  });
+
+  test("ocultar los estados cambia los puntos del mes y 'Mostrar todo' no los toca", async ({
+    page,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    const ayer = sumarDias(hoy(), -1);
+    await sembrarTareasDePrueba(cuenta.email, [{ titulo: "Atrasada de ayer", dia: ayer }], hoy());
+    await entrar(page, cuenta);
+    await abrirCalendario(page);
+    await expect(casilla(page, ayer).locator("[data-origen='tareas']")).toHaveCount(1);
+
+    await abrirFiltros(page);
+    await chipDeEstado(page, "atrasada").click();
+    await expect(casilla(page, ayer).locator("[data-origen='tareas']")).toHaveCount(0);
+    // Se oculta una repetición para que aparezca 'Mostrar todo'; no devuelve las atrasadas.
+    await page
+      .locator("fieldset[data-origen='tareas']")
+      .getByRole("button", { name: "Diarias" })
+      .click();
+    await page.getByRole("button", { name: "Mostrar todo" }).click();
+    await expect(chipDeEstado(page, "atrasada")).toHaveAttribute("aria-pressed", "false");
+    await expect(casilla(page, ayer).locator("[data-origen='tareas']")).toHaveCount(0);
   });
 
   for (const esquema of ["light", "dark"] as const) {
@@ -1405,7 +1571,7 @@ test.describe("tareas completadas", () => {
       await sembrarCompletadas(page);
       await abrirCalendario(page);
       await abrirFiltros(page);
-      await botonCompletadas(page).click();
+      await mostrarCerradas(page);
       await expect(filas(page)).toHaveCount(2);
       await page.waitForTimeout(TRANSICION_MS);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
