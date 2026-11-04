@@ -111,11 +111,13 @@ function Linea({
 function Barras({
   valores,
   resaltada = valores.length - 1,
+  colorDeLaResaltada,
   etiquetas,
   grande,
 }: {
   valores: readonly number[];
   resaltada?: number | undefined;
+  colorDeLaResaltada?: string | undefined;
   etiquetas?: readonly string[] | undefined;
   grande: boolean;
 }) {
@@ -134,7 +136,13 @@ function Barras({
             "min-h-0.5 flex-1 rounded-sm",
             posicion === resaltada ? "bg-acento" : "bg-acento/35",
           )}
-          style={{ height: `${Math.max(2, (valor / maximo) * 100)}%` }}
+          style={{
+            height: `${Math.max(2, (valor / maximo) * 100)}%`,
+            // El color propio pisa al de acento solo en la resaltada.
+            ...(posicion === resaltada && colorDeLaResaltada
+              ? { backgroundColor: colorDeLaResaltada }
+              : {}),
+          }}
         />
       ))}
     </div>
@@ -339,6 +347,7 @@ export function VisualDelWidget({
         <Barras
           valores={visual.valores}
           resaltada={visual.resaltada}
+          colorDeLaResaltada={visual.colorDeLaResaltada}
           etiquetas={visual.etiquetas}
           grande={grande}
         />

@@ -1348,13 +1348,15 @@ sus pestañas (ver `docs/decisiones.md`, 2026-11-04):
   vence antes, si vence en 7 días o menos o ya venció) y *Sin forma de comunicarse* (contactos sin
   teléfono ni correo).
 - **Texto**: *Próximo cumpleaños* (el más cercano entre las fechas de nacimiento), *Próximo
-  recordatorio* (el primero de mañana en adelante: los de hoy ya tienen su aviso), *Tus contactos te
-  deben* y *Les debés* (lo pendiente por moneda, sin mezclarlas, con los tres contactos de montos más
-  altos; solo deudas con contactos, no las de un nombre escrito a mano) y *Próximo vencimiento* cuando
-  falta más de una semana, y *Recordatorios de la semana* (la lista de los próximos 7 días, hoy
-  incluido: título, contacto y cuándo, con la hora si la tiene; hasta ocho, y la cifra cuenta todos).
+  recordatorio* (el primero de mañana en adelante: los de hoy ya tienen su aviso), *Recordatorios de
+  la semana* (lo que cayó en los últimos 7 días, del historial: título, contacto y "Ayer" o "Hace N
+  días", el más reciente primero, hasta ocho; sin cifra), *Les debés* (lo pendiente por moneda, sin
+  mezclarlas, con los tres contactos de montos más altos) y *Próximo vencimiento* cuando falta más de
+  una semana. Las deudas cuentan solo las que son con contactos, no las de un nombre escrito a mano.
 - **Gráficos**: *Cumpleaños por mes* (barras de enero a diciembre con el número del mes debajo de
-  cada una, el mes actual resaltado y el mes con más cumpleaños).
+  cada una, el mes actual en el color del módulo de Contactos y el mes con más cumpleaños) y *Tus
+  contactos te deben* (ranking de los que más deben, con barras que se comparan solo dentro de la
+  misma moneda; el total va en el texto).
 
 El resumen de Contactos de la pantalla de inicio sale del mismo pedido y no cambió.
 

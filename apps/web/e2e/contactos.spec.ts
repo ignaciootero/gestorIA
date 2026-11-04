@@ -1467,16 +1467,25 @@ test.describe("widgets", () => {
     await expect(columna.getByText("Sin forma de comunicarse")).toBeVisible();
   });
 
-  test("muestra el próximo recordatorio, los de la semana y los cumpleaños por mes", async ({
+  test("muestra el próximo recordatorio, los de la semana pasada y los cumpleaños por mes", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await entrar(page, await crearCuentaAprobada());
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
     const ana = await crearPersona(page, {
       nombre: "Ana",
       apellido: "Pérez",
       fechaNacimiento: nacimientoEn(40),
     });
+    // Uno diario que arrancó hace 3 días: deja tres entradas en el historial (la última, ayer).
+    await sembrarRecordatorioDiarioAntiguoDePrueba(
+      cuenta.email,
+      ana,
+      "Tomar la pastilla",
+      3,
+      diaDeCalendario(),
+    );
     await pedirApi(page, "POST", `/api/contactos/${ana}/recordatorios`, {
       titulo: "Cita médica",
       repeticion: "unica",
@@ -1508,12 +1517,11 @@ test.describe("widgets", () => {
     await expect(proximo).toContainText("Cita médica (Ana Pérez)");
     await expect(proximo).toContainText("a las 10:30");
 
-    // La semana es una lista: qué es, de quién y cuándo.
+    // La semana pasada es una lista de lo que ya cayó, sin cifra: qué fue, de quién y cuándo.
     const semana = await mostrarWidget(texto, "Recordatorios de la semana");
-    await expect(semana.getByText("2", { exact: true })).toBeVisible();
-    await expect(semana).toContainText("Cita médica · Ana Pérez");
-    await expect(semana).toContainText("En 2 días, 10:30");
-    await expect(semana).toContainText("Devolver el libro · Ana Pérez");
+    await expect(semana).toContainText("Tomar la pastilla · Ana Pérez");
+    await expect(semana).toContainText("Ayer");
+    await expect(semana).not.toContainText("Cita médica");
 
     // Cumpleaños por mes: una barra por mes, con su número debajo (del 1 al 12).
     const graficos = columna.getByRole("region", { name: /Widgets de contactos: gráficos/ });
@@ -1522,6 +1530,10 @@ test.describe("widgets", () => {
     await expect(porMes.locator("div.flex-1.rounded-sm")).toHaveCount(12);
     const meses = Array.from({ length: 12 }, (_, mes) => String(mes + 1));
     await expect(porMes.locator("span.text-center")).toHaveText(meses);
+    // La barra del mes actual tiene otro color que las demás.
+    const barras = porMes.locator("div.flex-1.rounded-sm");
+    const actual = barras.nth(new Date().getMonth());
+    await expect(actual).toHaveCSS("background-color", "rgb(124, 58, 237)");
 
     // Los widgets que se sacaron ya no están en ninguno de los dos carruseles.
     const sacados = ["Tus contactos", "Tus etiquetas", "Favoritos", "Historial de la semana"];

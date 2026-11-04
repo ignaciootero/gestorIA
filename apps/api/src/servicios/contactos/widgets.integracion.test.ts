@@ -64,8 +64,8 @@ describe("sin contactos", () => {
         proximos30: 0,
         porSemana: [0, 0, 0, 0],
         proximos: [],
-        deLaSemana: [],
       },
+      semanaPasada: [],
       proximoCumpleanos: null,
       cumpleanosPorMes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       deudas: { teDeben: sinDeudas, debes: sinDeudas, proximoVencimiento: null },
@@ -214,11 +214,6 @@ describe("recordatorios", () => {
     expect(recordatorios.proximos30).toBe(5);
     // Los de 29 y 30 días caen en la quinta semana: el gráfico solo muestra cuatro.
     expect(recordatorios.porSemana).toEqual([2, 1, 1, 0]);
-    // La lista de la semana: hoy y "en 6 días"; "en 7 días" ya no entra.
-    expect(recordatorios.deLaSemana.map((recordatorio) => recordatorio.titulo)).toEqual([
-      "Hoy",
-      "En 6 días",
-    ]);
   });
 
   it("lista los cinco más cercanos con su contacto", async () => {
@@ -242,20 +237,6 @@ describe("recordatorios", () => {
       fecha: "2026-10-21",
       contacto: { nombre: "Beto", apellido: "Ruiz", tipo: "persona" },
     });
-  });
-
-  it("lista hasta ocho de la semana, aunque caigan más", async () => {
-    const id = await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "Beto" }));
-    for (let dia = 20; dia <= 26; dia += 1) {
-      await recordar(id, `Día ${dia}`, `2026-10-${dia}`);
-      await recordar(id, `Otro del ${dia}`, `2026-10-${dia}`, "20:00");
-    }
-
-    const { recordatorios } = await widgets();
-    expect(recordatorios.proximos7).toBe(14);
-    expect(recordatorios.deLaSemana).toHaveLength(8);
-    expect(recordatorios.deLaSemana[0]).toMatchObject({ dias: 0, fecha: "2026-10-20" });
-    expect(recordatorios.deLaSemana.every((recordatorio) => recordatorio.dias < 7)).toBe(true);
   });
 
   it("trae la hora de los recordatorios que la tienen", async () => {
@@ -308,11 +289,75 @@ describe("la ruta", () => {
       "hoy",
       "proximoCumpleanos",
       "recordatorios",
+      "semanaPasada",
       "totales",
     ]);
   });
 
   it("pide sesión", async () => {
     expect((await pedir(app, null, "/api/contactos/widgets")).status).toBe(401);
+  });
+});
+
+describe("la semana pasada", () => {
+  const MS_POR_DIA = 86_400_000;
+  const hace10 = new Date(AHORA.getTime() - 10 * MS_POR_DIA);
+
+  it("lista lo que cayó en los últimos 7 días, el más reciente primero, hasta ocho", async () => {
+    const contacto = await crearContactoPorApi(
+      app,
+      ana.cookies,
+      personaValida({ nombre: "Beto", apellido: "Ruiz" }),
+    );
+    // Uno diario creado hace 10 días: una entrada por día, del 10 al 19 (ayer).
+    await crearRecordatorio(
+      cliente,
+      ana.userId,
+      contacto,
+      { titulo: "Pastilla", repeticion: "diaria", hora: "08:00" },
+      hace10,
+    );
+    // Dos de una sola vez que cayeron hace 3 y 4 días.
+    for (const [titulo, fecha] of [
+      ["Cita", "2026-10-17"],
+      ["Llamar", "2026-10-16"],
+    ] as const) {
+      await crearRecordatorio(
+        cliente,
+        ana.userId,
+        contacto,
+        { titulo, repeticion: "unica", fecha, hora: "" },
+        hace10,
+      );
+    }
+
+    const { semanaPasada } = await widgets();
+    // En los últimos 7 días hay nueve (siete de la pastilla y las dos citas): se listan ocho.
+    expect(semanaPasada).toHaveLength(8);
+    expect(semanaPasada[0]).toMatchObject({
+      titulo: "Pastilla",
+      dia: "2026-10-19",
+      hora: "08:00",
+      diasAtras: 1,
+      contacto: { tipo: "persona", nombre: "Beto", apellido: "Ruiz" },
+    });
+    expect(semanaPasada.every((entrada) => entrada.diasAtras >= 1 && entrada.diasAtras <= 7)).toBe(
+      true,
+    );
+    expect(semanaPasada.map((entrada) => entrada.titulo)).toContain("Cita");
+  });
+
+  it("no muestra lo de otra persona", async () => {
+    const contacto = await crearContactoPorApi(app, ana.cookies, personaValida());
+    await crearRecordatorio(
+      cliente,
+      ana.userId,
+      contacto,
+      { titulo: "Mío", repeticion: "unica", fecha: "2026-10-15", hora: "" },
+      hace10,
+    );
+    const otra = await entrarComoPersona(app, cliente);
+    expect((await obtenerWidgetsDeContactos(cliente, otra.userId, AHORA)).semanaPasada).toEqual([]);
+    expect((await widgets()).semanaPasada).toHaveLength(1);
   });
 });

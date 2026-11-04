@@ -21,9 +21,9 @@ import {
   Bell,
   Cake,
   CalendarClock,
-  CalendarDays,
   ChartColumn,
   HandCoins,
+  History,
   UserPlus,
   UserRoundX,
 } from "lucide-react";
@@ -152,28 +152,67 @@ function armarAvisos(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null
   return avisos;
 }
 
-/** "Te deben" o "Les debés": por moneda, con los contactos de montos más altos. */
-function armarDeuda(
-  id: string,
-  titulo: string,
-  Icono: DatoDeWidget["Icono"],
-  deudas: DeudasConContactos,
-): DatoDeWidget | null {
-  if (deudas.totales.length === 0) return null;
+/** Lo pendiente por moneda en una línea, y cuántas deudas y con cuántos contactos. */
+function resumenDeDeuda(deudas: DeudasConContactos): { valor: string; detalle: string } {
   const cantidad = deudas.totales.reduce((suma, total) => suma + total.deudas, 0);
   return {
-    id,
+    valor: totalesEnPalabras(deudas.totales),
+    detalle: `${cantidad} ${plural(cantidad, "deuda pendiente", "deudas pendientes")} con ${deudas.contactos} ${plural(deudas.contactos, "contacto", "contactos")}.`,
+  };
+}
+
+/** "Les debés": texto, con los contactos de montos más altos como datos de apoyo. */
+function armarLoQueDebes(deudas: DeudasConContactos): DatoDeWidget | null {
+  if (deudas.totales.length === 0) return null;
+  return {
+    id: "debes",
     categoria: "texto",
     tipo: "dato",
     tono: "neutro",
-    Icono,
-    titulo,
-    valor: totalesEnPalabras(deudas.totales),
-    detalle: `${cantidad} ${plural(cantidad, "deuda pendiente", "deudas pendientes")} con ${deudas.contactos} ${plural(deudas.contactos, "contacto", "contactos")}.`,
+    Icono: ArrowUpRight,
+    titulo: "Les debés",
+    ...resumenDeDeuda(deudas),
     extras: deudas.mayores.map((contacto) => ({
       etiqueta: nombreCompletoDeContacto(contacto),
       valor: formatearMonto(contacto.centavos, contacto.moneda),
     })),
+  };
+}
+
+/**
+ * "Tus contactos te deben": un ranking con quién debe más. Las barras se comparan solo dentro
+ * de la misma moneda (un peso y un dólar no se miden con la misma regla).
+ */
+function armarLoQueTeDeben(deudas: DeudasConContactos): DatoDeWidget | null {
+  if (deudas.totales.length === 0) return null;
+  const variasMonedas = new Set(deudas.mayores.map((contacto) => contacto.moneda)).size > 1;
+  const mayorDe = (moneda: string) =>
+    Math.max(
+      1,
+      ...deudas.mayores
+        .filter((contacto) => contacto.moneda === moneda)
+        .map((contacto) => contacto.centavos),
+    );
+  const { valor, detalle } = resumenDeDeuda(deudas);
+  return {
+    id: "te-deben",
+    categoria: "grafico",
+    tipo: "dato",
+    tono: "neutro",
+    Icono: ArrowDownLeft,
+    titulo: "Tus contactos te deben",
+    // El ranking reemplaza a la cifra grande: el total va en el detalle.
+    detalle: `En total, ${valor}: ${detalle.charAt(0).toLocaleLowerCase("es")}${detalle.slice(1)}`,
+    visual: {
+      tipo: "ranking",
+      filas: deudas.mayores.map((contacto) => ({
+        // Con varias monedas, un mismo contacto puede aparecer dos veces: la moneda los distingue.
+        etiqueta: `${nombreCompletoDeContacto(contacto)}${variasMonedas ? ` (${contacto.moneda})` : ""}`,
+        texto: formatearMonto(contacto.centavos, contacto.moneda),
+        proporcion: contacto.centavos / mayorDe(contacto.moneda),
+        color: "var(--color-exito)",
+      })),
+    },
   };
 }
 
@@ -220,23 +259,22 @@ function armarCifras(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null
       }
     : null;
 
-  // La semana que viene como lista: qué es, de quién y cuándo, los más cercanos primero.
-  const { deLaSemana } = recordatorios;
-  const sinListar = recordatorios.proximos7 - deLaSemana.length;
+  // Lo que cayó en la última semana, como lista: qué fue, de quién y cuándo. Sin cifra: la
+  // lista es el dato.
+  const hace = (dias: number) => (dias === 1 ? "Ayer" : `Hace ${dias} días`);
   const semana: DatoDeWidget | null =
-    recordatorios.proximos7 > 0
+    datos.semanaPasada.length > 0
       ? {
           id: "recordatorios-de-la-semana",
           categoria: "texto",
           tipo: "dato",
           tono: "neutro",
-          Icono: CalendarDays,
+          Icono: History,
           titulo: "Recordatorios de la semana",
-          valor: String(recordatorios.proximos7),
-          detalle: `${recordatorios.proximos7 === 1 ? "Cae" : "Caen"} en los próximos 7 días${sinListar > 0 ? `; acá van los ${deLaSemana.length} más cercanos` : ""}.`,
-          extras: deLaSemana.map((recordatorio) => ({
-            etiqueta: `${recordatorio.titulo} · ${nombreCompletoDeContacto(recordatorio.contacto)}`,
-            valor: `${conMayuscula(describirDiasRestantes(recordatorio.dias))}${recordatorio.hora ? `, ${recordatorio.hora}` : ""}`,
+          detalle: "Los que cayeron en los últimos 7 días, el más reciente primero.",
+          extras: datos.semanaPasada.map((entrada) => ({
+            etiqueta: `${entrada.titulo} · ${nombreCompletoDeContacto(entrada.contacto)}`,
+            valor: hace(entrada.diasAtras),
           })),
         }
       : null;
@@ -257,23 +295,20 @@ function armarCifras(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null
           Icono: ChartColumn,
           titulo: "Cumpleaños por mes",
           valor: String(totalDeCumpleanos),
-          detalle: `${conMayuscula(NOMBRES_DE_MES[mesConMas] ?? "")} es el mes con más (${mayor}). Este mes ${esteMes === 1 ? "hay uno" : `hay ${esteMes}`}. La barra resaltada es este mes.`,
+          detalle: `${conMayuscula(NOMBRES_DE_MES[mesConMas] ?? "")} es el mes con más (${mayor}). Este mes ${esteMes === 1 ? "hay uno" : `hay ${esteMes}`}. La barra de otro color es este mes.`,
           visual: {
             tipo: "barras",
             valores: datos.cumpleanosPorMes,
             resaltada: mesActual,
+            // El color del módulo de Contactos, para que el mes actual se distinga a simple vista.
+            colorDeLaResaltada: "var(--color-origen-contactos)",
             etiquetas: NUMEROS_DE_MES,
           },
         }
       : null;
 
-  const teDeben = armarDeuda(
-    "te-deben",
-    "Tus contactos te deben",
-    ArrowDownLeft,
-    datos.deudas.teDeben,
-  );
-  const debes = armarDeuda("debes", "Les debés", ArrowUpRight, datos.deudas.debes);
+  const teDeben = armarLoQueTeDeben(datos.deudas.teDeben);
+  const debes = armarLoQueDebes(datos.deudas.debes);
 
   // La columna lateral separa por categoría (texto arriba, gráficos abajo); la pantalla de inicio
   // los muestra todos juntos, por eso van intercalados.

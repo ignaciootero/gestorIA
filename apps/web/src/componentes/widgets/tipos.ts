@@ -26,13 +26,15 @@ export type VisualDeWidget =
     }
   /**
    * Barras verticales chicas; una va resaltada y el resto, más tenues. Por defecto la última
-   * ("hoy" al final); `resaltada` elige otra (por ejemplo, el mes actual en un año). Con
+   * ("hoy" al final); `resaltada` elige otra (por ejemplo, el mes actual en un año) y
+   * `colorDeLaResaltada` le da otro color (un color CSS; por defecto, el de acento). Con
    * `etiquetas`, cada barra lleva la suya debajo (cortas: "1", "Lu").
    */
   | {
       tipo: "barras";
       valores: readonly number[];
       resaltada?: number;
+      colorDeLaResaltada?: string;
       etiquetas?: readonly string[];
     }
   /** Barras horizontales una debajo de la otra, a la misma escala (por ejemplo, ingresos y gastos). */

@@ -3,16 +3,17 @@
 // Devuelve datos, no frases: la web decide cómo escribirlos (mismo criterio que los
 // widgets de Finanzas). Todo filtra por la persona de la sesión.
 //
-// Solo lo que le sirve a la persona en el día a día: el próximo cumpleaños, los recordatorios
-// que vienen (el próximo y los de la semana), los cumpleaños por mes, las deudas con sus
-// contactos y los contactos sin forma de comunicarse. Lo demás (etiquetas, rubros, favoritos,
-// el historial) ya está en sus pestañas.
+// Solo lo que le sirve a la persona en el día a día: el próximo cumpleaños, el próximo
+// recordatorio, lo que cayó en la última semana, los cumpleaños por mes, las deudas con sus
+// contactos y los contactos sin forma de comunicarse. Lo demás (etiquetas, rubros, favoritos)
+// ya está en sus pestañas.
 
 import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
 import { diasEntre, proximaOcurrencia, type TipoDeContacto } from "@gestoria/shared";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { type Deuda, deudasPendientesConContactos } from "../finanzas/deudas.ts";
+import { listarHistorial } from "./historial-de-recordatorios.ts";
 import {
   hoyDeLaPersona,
   listarRecordatorios,
@@ -24,8 +25,8 @@ const SEMANAS_DEL_GRAFICO = 4;
 const DIAS_DE_LA_SEMANA = 7;
 /** Cuántos recordatorios que vienen se mandan con su detalle. */
 const RECORDATORIOS_PROXIMOS = 5;
-/** Hasta cuántos de los próximos 7 días se listan (el resto se cuenta). */
-const RECORDATORIOS_DE_LA_SEMANA = 8;
+/** Hasta cuántos de los que cayeron en los últimos 7 días se listan. */
+const RECORDATORIOS_DE_LA_SEMANA_PASADA = 8;
 /** Cuántos contactos se nombran en cada widget de deudas. */
 const CONTACTOS_POR_DEUDA = 3;
 const MESES = 12;
@@ -70,9 +71,21 @@ export type WidgetsDeContactos = {
     porSemana: number[];
     /** Los que vienen, los más cercanos primero (hoy incluido). */
     proximos: RecordatorioQueViene[];
-    /** Los de los próximos 7 días (hoy incluido), los más cercanos primero; hasta ocho. */
-    deLaSemana: RecordatorioQueViene[];
   };
+  /**
+   * Los recordatorios que cayeron en los últimos 7 días (de ayer para atrás: hoy todavía no
+   * terminó), del historial, el más reciente primero; hasta ocho.
+   */
+  semanaPasada: {
+    titulo: string;
+    /** El día en que cayó, "AAAA-MM-DD". */
+    dia: string;
+    /** "HH:MM"; null es "todo el día". */
+    hora: string | null;
+    /** 1 es ayer. */
+    diasAtras: number;
+    contacto: ContactoBreve;
+  }[];
   /** El próximo cumpleaños de una persona con fecha de nacimiento; null si no hay ninguna. */
   proximoCumpleanos: {
     nombre: string;
@@ -169,7 +182,7 @@ export async function obtenerWidgetsDeContactos(
   const { contactos } = esquema;
   const activos = and(eq(contactos.userId, userId), isNull(contactos.eliminadoEn));
 
-  const [hoy, filas, sinDatos, { recordatorios }, deudas] = await Promise.all([
+  const [hoy, filas, sinDatos, { recordatorios }, deudas, historial] = await Promise.all([
     hoyDeLaPersona(cliente, userId, ahora),
     cliente.db
       .select({
@@ -192,6 +205,7 @@ export async function obtenerWidgetsDeContactos(
       ),
     listarRecordatorios(cliente, userId, { ahora, limit: 500 }),
     deudasPendientesConContactos(cliente, userId),
+    listarHistorial(cliente, userId, { ahora, limit: 100 }),
   ]);
 
   const personas = filas.filter((fila) => fila.tipo === "persona");
@@ -228,10 +242,6 @@ export async function obtenerWidgetsDeContactos(
     }
   }
 
-  // La lista ya viene ordenada por cercanía.
-  const deLaSemana = recordatorios.filter(
-    (recordatorio) => recordatorio.diasRestantes < DIAS_DE_LA_SEMANA,
-  );
   const porSemana = Array.from({ length: SEMANAS_DEL_GRAFICO }, () => 0);
   for (const recordatorio of recordatorios) {
     const semana = Math.floor(recordatorio.diasRestantes / DIAS_DE_LA_SEMANA);
@@ -268,12 +278,28 @@ export async function obtenerWidgetsDeContactos(
     },
     recordatorios: {
       hoy: recordatorios.filter((recordatorio) => recordatorio.diasRestantes === 0).length,
-      proximos7: deLaSemana.length,
+      proximos7: recordatorios.filter(
+        (recordatorio) => recordatorio.diasRestantes < DIAS_DE_LA_SEMANA,
+      ).length,
       proximos30: recordatorios.filter((recordatorio) => recordatorio.diasRestantes < 30).length,
       porSemana,
       proximos: recordatorios.slice(0, RECORDATORIOS_PROXIMOS).map(queViene),
-      deLaSemana: deLaSemana.slice(0, RECORDATORIOS_DE_LA_SEMANA).map(queViene),
     },
+    // El historial viene del más reciente al más viejo.
+    semanaPasada: historial.entradas
+      .filter((entrada) => entrada.diasAtras >= 1 && entrada.diasAtras <= DIAS_DE_LA_SEMANA)
+      .slice(0, RECORDATORIOS_DE_LA_SEMANA_PASADA)
+      .map((entrada) => ({
+        titulo: entrada.titulo,
+        dia: entrada.dia,
+        hora: entrada.hora,
+        diasAtras: entrada.diasAtras,
+        contacto: {
+          tipo: entrada.contacto.tipo,
+          nombre: entrada.contacto.nombre,
+          apellido: entrada.contacto.apellido,
+        },
+      })),
     proximoCumpleanos,
     cumpleanosPorMes,
     deudas: {

@@ -8,13 +8,15 @@ Las más nuevas arriba.
 ## 2026-11-04 — Widgets de Contactos: solo lo que sirve en el día a día
 
 **Decisión.** Los widgets de la columna de Contactos quedan en: próximo cumpleaños, próximo
-recordatorio, recordatorios de la semana (una lista: título, contacto y cuándo), cumpleaños por mes
-(barras de enero a diciembre, con el número de cada mes debajo), deudas con contactos (*Tus contactos te deben*, *Les debés* y el próximo vencimiento) y
+recordatorio, recordatorios de la semana (la lista de lo que cayó en los últimos 7 días, sin cifra),
+cumpleaños por mes (barras de enero a diciembre, con el número de cada mes debajo y el mes actual en
+otro color), deudas con contactos (*Tus contactos te deben*, *Les debés* y el próximo vencimiento) y
 el aviso de contactos sin teléfono ni correo, más los avisos de "sin contactos" y "recordatorios de
 hoy". Se sacaron *Tus contactos*, *Favoritos*, *Tus etiquetas*, *Empresas por rubro*, *Con quién más
-gastaste*, *Lo que pasó esta semana*, *Historial de la semana* y *Recordatorios por repetición*, y sus
-datos de `GET /api/contactos/widgets`. El gráfico de barras acepta `resaltada` para elegir qué barra
-destacar (por defecto, la última) y `etiquetas` para escribir una debajo de cada barra.
+gastaste*, *Historial de la semana* y *Recordatorios por repetición*, y sus datos de
+`GET /api/contactos/widgets`. *Tus contactos te deben* es un ranking, para que haya más de un gráfico. El gráfico de barras acepta `resaltada` para elegir qué barra
+destacar (por defecto, la última), `colorDeLaResaltada` para pintarla de otro color y `etiquetas`
+para escribir una debajo de cada barra.
 
 **Por qué.** Los que se sacaron describían la agenda (cuántos hay, cómo se reparten) pero no
 ayudaban a hacer nada; lo que importa es qué viene (cumpleaños, recordatorios, vencimientos) y qué

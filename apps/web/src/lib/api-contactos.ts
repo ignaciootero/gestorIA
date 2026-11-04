@@ -285,9 +285,16 @@ export type WidgetsDeContactos = {
     proximos30: number;
     porSemana: number[];
     proximos: RecordatorioQueViene[];
-    /** Los de los próximos 7 días (hoy incluido), los más cercanos primero; hasta ocho. */
-    deLaSemana: RecordatorioQueViene[];
   };
+  /** Los que cayeron en los últimos 7 días (1 es ayer), el más reciente primero; hasta ocho. */
+  semanaPasada: {
+    titulo: string;
+    dia: string;
+    /** "HH:MM"; null es "todo el día". */
+    hora: string | null;
+    diasAtras: number;
+    contacto: ContactoBreve;
+  }[];
   proximoCumpleanos: {
     nombre: string;
     apellido: string | null;

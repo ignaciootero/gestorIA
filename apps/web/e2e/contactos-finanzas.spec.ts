@@ -1091,12 +1091,20 @@ test.describe("widgets con plata", () => {
     await expect(vencimiento).toContainText("Vence hoy");
     await expect(vencimiento).toContainText(/Taller Sur te tiene que pagar/);
 
-    const teDeben = await mostrar("Tus contactos te deben");
-    await expect(teDeben).toContainText(dinero("$ 750,00"));
-    await expect(teDeben).toContainText("1 deuda pendiente con 1 contacto.");
-
     const debes = await mostrar("Les debés");
     await expect(debes).toContainText(dinero("US$ 70,00"));
+
+    // Lo que te deben es un ranking, en el carrusel de gráficos.
+    const graficos = page.getByRole("region", { name: "Widgets de contactos: gráficos" });
+    const teDeben = graficos.locator(
+      "xpath=.//div[@data-visual='ranking'][.//p[normalize-space()='Tus contactos te deben']]",
+    );
+    for (let vuelta = 0; vuelta < 10 && (await teDeben.count()) === 0; vuelta++) {
+      await graficos.getByRole("button", { name: "Widget siguiente" }).click();
+    }
+    await expect(teDeben.getByText("Taller Sur")).toBeVisible();
+    await expect(teDeben).toContainText(dinero("$ 750,00"));
+    await expect(teDeben).toContainText("1 deuda pendiente con 1 contacto.");
   });
 });
 
