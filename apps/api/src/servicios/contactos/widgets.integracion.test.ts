@@ -62,9 +62,9 @@ describe("sin contactos", () => {
         hoy: 0,
         proximos7: 0,
         proximos30: 0,
-        porDia: [0, 0, 0, 0, 0, 0, 0],
         porSemana: [0, 0, 0, 0],
         proximos: [],
+        deLaSemana: [],
       },
       proximoCumpleanos: null,
       cumpleanosPorMes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -214,8 +214,11 @@ describe("recordatorios", () => {
     expect(recordatorios.proximos30).toBe(5);
     // Los de 29 y 30 días caen en la quinta semana: el gráfico solo muestra cuatro.
     expect(recordatorios.porSemana).toEqual([2, 1, 1, 0]);
-    // Día por día en la semana: hoy es el primero y "en 6 días" el último; "en 7 días" ya no entra.
-    expect(recordatorios.porDia).toEqual([1, 0, 0, 0, 0, 0, 1]);
+    // La lista de la semana: hoy y "en 6 días"; "en 7 días" ya no entra.
+    expect(recordatorios.deLaSemana.map((recordatorio) => recordatorio.titulo)).toEqual([
+      "Hoy",
+      "En 6 días",
+    ]);
   });
 
   it("lista los cinco más cercanos con su contacto", async () => {
@@ -239,6 +242,20 @@ describe("recordatorios", () => {
       fecha: "2026-10-21",
       contacto: { nombre: "Beto", apellido: "Ruiz", tipo: "persona" },
     });
+  });
+
+  it("lista hasta ocho de la semana, aunque caigan más", async () => {
+    const id = await crearContactoPorApi(app, ana.cookies, personaValida({ nombre: "Beto" }));
+    for (let dia = 20; dia <= 26; dia += 1) {
+      await recordar(id, `Día ${dia}`, `2026-10-${dia}`);
+      await recordar(id, `Otro del ${dia}`, `2026-10-${dia}`, "20:00");
+    }
+
+    const { recordatorios } = await widgets();
+    expect(recordatorios.proximos7).toBe(14);
+    expect(recordatorios.deLaSemana).toHaveLength(8);
+    expect(recordatorios.deLaSemana[0]).toMatchObject({ dias: 0, fecha: "2026-10-20" });
+    expect(recordatorios.deLaSemana.every((recordatorio) => recordatorio.dias < 7)).toBe(true);
   });
 
   it("trae la hora de los recordatorios que la tienen", async () => {

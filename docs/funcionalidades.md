@@ -1351,10 +1351,10 @@ sus pestañas (ver `docs/decisiones.md`, 2026-11-04):
   recordatorio* (el primero de mañana en adelante: los de hoy ya tienen su aviso), *Tus contactos te
   deben* y *Les debés* (lo pendiente por moneda, sin mezclarlas, con los tres contactos de montos más
   altos; solo deudas con contactos, no las de un nombre escrito a mano) y *Próximo vencimiento* cuando
-  falta más de una semana.
-- **Gráficos**: *Recordatorios de la semana* (barras con cada uno de los próximos 7 días, la primera
-  —resaltada— es hoy, y los primeros de la lista) y *Cumpleaños por mes* (barras de enero a diciembre
-  con el mes actual resaltado y el mes con más cumpleaños).
+  falta más de una semana, y *Recordatorios de la semana* (la lista de los próximos 7 días, hoy
+  incluido: título, contacto y cuándo, con la hora si la tiene; hasta ocho, y la cifra cuenta todos).
+- **Gráficos**: *Cumpleaños por mes* (barras de enero a diciembre con el número del mes debajo de
+  cada una, el mes actual resaltado y el mes con más cumpleaños).
 
 El resumen de Contactos de la pantalla de inicio sale del mismo pedido y no cambió.
 

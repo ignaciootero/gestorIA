@@ -255,6 +255,16 @@ export function eliminarRecordatorio(contactoId: string, id: string): Promise<{ 
 
 type ContactoBreve = { tipo: TipoDeContacto; nombre: string; apellido: string | null };
 
+export type RecordatorioQueViene = {
+  titulo: string;
+  repeticion: string;
+  fecha: string;
+  /** "HH:MM"; null es "todo el día". */
+  hora: string | null;
+  dias: number;
+  contacto: ContactoBreve;
+};
+
 /** Deudas pendientes con contactos en un sentido (te deben o debés). */
 export type DeudasConContactos = {
   /** Lo que falta, por moneda: las monedas nunca se mezclan. */
@@ -273,18 +283,10 @@ export type WidgetsDeContactos = {
     hoy: number;
     proximos7: number;
     proximos30: number;
-    /** Cuántos caen en cada uno de los próximos 7 días (el primero es hoy). */
-    porDia: number[];
     porSemana: number[];
-    proximos: {
-      titulo: string;
-      repeticion: string;
-      fecha: string;
-      /** "HH:MM"; null es "todo el día". */
-      hora: string | null;
-      dias: number;
-      contacto: ContactoBreve;
-    }[];
+    proximos: RecordatorioQueViene[];
+    /** Los de los próximos 7 días (hoy incluido), los más cercanos primero; hasta ocho. */
+    deLaSemana: RecordatorioQueViene[];
   };
   proximoCumpleanos: {
     nombre: string;

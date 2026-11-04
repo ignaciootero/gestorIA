@@ -1508,12 +1508,20 @@ test.describe("widgets", () => {
     await expect(proximo).toContainText("Cita médica (Ana Pérez)");
     await expect(proximo).toContainText("a las 10:30");
 
-    const graficos = columna.getByRole("region", { name: /Widgets de contactos: gráficos/ });
-    const semana = await mostrarWidget(graficos, "Recordatorios de la semana");
+    // La semana es una lista: qué es, de quién y cuándo.
+    const semana = await mostrarWidget(texto, "Recordatorios de la semana");
     await expect(semana.getByText("2", { exact: true })).toBeVisible();
+    await expect(semana).toContainText("Cita médica · Ana Pérez");
+    await expect(semana).toContainText("En 2 días, 10:30");
     await expect(semana).toContainText("Devolver el libro · Ana Pérez");
+
+    // Cumpleaños por mes: una barra por mes, con su número debajo (del 1 al 12).
+    const graficos = columna.getByRole("region", { name: /Widgets de contactos: gráficos/ });
     const porMes = await mostrarWidget(graficos, "Cumpleaños por mes");
     await expect(porMes).toContainText("es el mes con más (1)");
+    await expect(porMes.locator("div.flex-1.rounded-sm")).toHaveCount(12);
+    const meses = Array.from({ length: 12 }, (_, mes) => String(mes + 1));
+    await expect(porMes.locator("span.text-center")).toHaveText(meses);
 
     // Los widgets que se sacaron ya no están en ninguno de los dos carruseles.
     const sacados = ["Tus contactos", "Tus etiquetas", "Favoritos", "Historial de la semana"];

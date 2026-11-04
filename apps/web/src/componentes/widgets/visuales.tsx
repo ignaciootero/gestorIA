@@ -111,15 +111,17 @@ function Linea({
 function Barras({
   valores,
   resaltada = valores.length - 1,
+  etiquetas,
   grande,
 }: {
   valores: readonly number[];
   resaltada?: number | undefined;
+  etiquetas?: readonly string[] | undefined;
   grande: boolean;
 }) {
   const maximo = Math.max(1, ...valores);
 
-  return (
+  const barras = (
     <div
       aria-hidden="true"
       className={cn("flex items-end gap-1", grande ? "min-h-16 flex-1" : "h-10")}
@@ -135,6 +137,30 @@ function Barras({
           style={{ height: `${Math.max(2, (valor / maximo) * 100)}%` }}
         />
       ))}
+    </div>
+  );
+
+  if (!etiquetas) return barras;
+
+  // Las etiquetas van en una fila aparte, con el mismo reparto que las barras: cada una queda
+  // centrada debajo de la suya. La de la barra resaltada, también resaltada.
+  return (
+    <div className={cn("flex flex-col gap-1", grande && "min-h-16 flex-1")}>
+      {barras}
+      <div aria-hidden="true" className="flex gap-1">
+        {valores.map((_, posicion) => (
+          <span
+            // Misma identidad que la barra de arriba.
+            key={posicion}
+            className={cn(
+              "numeros-tabulares flex-1 text-center text-[10px] leading-none",
+              posicion === resaltada ? "font-semibold text-texto" : "text-texto-secundario",
+            )}
+          >
+            {etiquetas[posicion] ?? ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -309,7 +335,14 @@ export function VisualDelWidget({
     case "linea":
       return <Linea series={visual.series} grande={grande} />;
     case "barras":
-      return <Barras valores={visual.valores} resaltada={visual.resaltada} grande={grande} />;
+      return (
+        <Barras
+          valores={visual.valores}
+          resaltada={visual.resaltada}
+          etiquetas={visual.etiquetas}
+          grande={grande}
+        />
+      );
     case "comparacion":
       return <Comparacion filas={visual.filas} grande={grande} />;
     case "progreso":

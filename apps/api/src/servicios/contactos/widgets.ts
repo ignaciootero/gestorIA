@@ -13,18 +13,34 @@ import { esquema } from "@gestoria/db";
 import { diasEntre, proximaOcurrencia, type TipoDeContacto } from "@gestoria/shared";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { type Deuda, deudasPendientesConContactos } from "../finanzas/deudas.ts";
-import { hoyDeLaPersona, listarRecordatorios } from "./recordatorios.ts";
+import {
+  hoyDeLaPersona,
+  listarRecordatorios,
+  type RecordatorioConContacto,
+} from "./recordatorios.ts";
 
 /** Cuántas semanas hacia adelante cuenta el gráfico de recordatorios (lo usa el inicio). */
 const SEMANAS_DEL_GRAFICO = 4;
 const DIAS_DE_LA_SEMANA = 7;
 /** Cuántos recordatorios que vienen se mandan con su detalle. */
 const RECORDATORIOS_PROXIMOS = 5;
+/** Hasta cuántos de los próximos 7 días se listan (el resto se cuenta). */
+const RECORDATORIOS_DE_LA_SEMANA = 8;
 /** Cuántos contactos se nombran en cada widget de deudas. */
 const CONTACTOS_POR_DEUDA = 3;
 const MESES = 12;
 
 type ContactoBreve = { tipo: TipoDeContacto; nombre: string; apellido: string | null };
+
+type RecordatorioQueViene = {
+  titulo: string;
+  repeticion: string;
+  fecha: string;
+  /** "HH:MM"; null es "todo el día". */
+  hora: string | null;
+  dias: number;
+  contacto: ContactoBreve;
+};
 
 /** Lo que falta cobrar o pagar, por moneda: las monedas nunca se mezclan. */
 export type TotalDeDeudas = { moneda: string; centavos: number; deudas: number };
@@ -50,20 +66,12 @@ export type WidgetsDeContactos = {
     hoy: number;
     proximos7: number;
     proximos30: number;
-    /** Cuántos caen en cada uno de los próximos 7 días (el primero es hoy). */
-    porDia: number[];
     /** Cuántos caen en cada una de las próximas cuatro semanas (la primera arranca hoy). */
     porSemana: number[];
     /** Los que vienen, los más cercanos primero (hoy incluido). */
-    proximos: {
-      titulo: string;
-      repeticion: string;
-      fecha: string;
-      /** "HH:MM"; null es "todo el día". */
-      hora: string | null;
-      dias: number;
-      contacto: ContactoBreve;
-    }[];
+    proximos: RecordatorioQueViene[];
+    /** Los de los próximos 7 días (hoy incluido), los más cercanos primero; hasta ocho. */
+    deLaSemana: RecordatorioQueViene[];
   };
   /** El próximo cumpleaños de una persona con fecha de nacimiento; null si no hay ninguna. */
   proximoCumpleanos: {
@@ -96,6 +104,21 @@ export type WidgetsDeContactos = {
     } | null;
   };
 };
+
+function queViene(recordatorio: RecordatorioConContacto): RecordatorioQueViene {
+  return {
+    titulo: recordatorio.titulo,
+    repeticion: recordatorio.repeticion,
+    fecha: recordatorio.proximaFecha,
+    hora: recordatorio.hora,
+    dias: recordatorio.diasRestantes,
+    contacto: {
+      tipo: recordatorio.contacto.tipo,
+      nombre: recordatorio.contacto.nombre,
+      apellido: recordatorio.contacto.apellido,
+    },
+  };
+}
 
 /** Suma las deudas de un sentido por moneda y arma el ranking de contactos. */
 function resumirDeudas(lista: Deuda[]): DeudasConContactos {
@@ -205,11 +228,12 @@ export async function obtenerWidgetsDeContactos(
     }
   }
 
-  const porDia = Array.from({ length: DIAS_DE_LA_SEMANA }, () => 0);
+  // La lista ya viene ordenada por cercanía.
+  const deLaSemana = recordatorios.filter(
+    (recordatorio) => recordatorio.diasRestantes < DIAS_DE_LA_SEMANA,
+  );
   const porSemana = Array.from({ length: SEMANAS_DEL_GRAFICO }, () => 0);
   for (const recordatorio of recordatorios) {
-    const dia = recordatorio.diasRestantes;
-    if (porDia[dia] !== undefined) porDia[dia] += 1;
     const semana = Math.floor(recordatorio.diasRestantes / DIAS_DE_LA_SEMANA);
     if (semana < SEMANAS_DEL_GRAFICO && porSemana[semana] !== undefined) porSemana[semana] += 1;
   }
@@ -243,23 +267,12 @@ export async function obtenerWidgetsDeContactos(
       sinDatosDeContacto: sinDatos[0]?.total ?? 0,
     },
     recordatorios: {
-      hoy: porDia[0] ?? 0,
-      proximos7: recordatorios.filter((recordatorio) => recordatorio.diasRestantes < 7).length,
+      hoy: recordatorios.filter((recordatorio) => recordatorio.diasRestantes === 0).length,
+      proximos7: deLaSemana.length,
       proximos30: recordatorios.filter((recordatorio) => recordatorio.diasRestantes < 30).length,
-      porDia,
       porSemana,
-      proximos: recordatorios.slice(0, RECORDATORIOS_PROXIMOS).map((recordatorio) => ({
-        titulo: recordatorio.titulo,
-        repeticion: recordatorio.repeticion,
-        fecha: recordatorio.proximaFecha,
-        hora: recordatorio.hora,
-        dias: recordatorio.diasRestantes,
-        contacto: {
-          tipo: recordatorio.contacto.tipo,
-          nombre: recordatorio.contacto.nombre,
-          apellido: recordatorio.contacto.apellido,
-        },
-      })),
+      proximos: recordatorios.slice(0, RECORDATORIOS_PROXIMOS).map(queViene),
+      deLaSemana: deLaSemana.slice(0, RECORDATORIOS_DE_LA_SEMANA).map(queViene),
     },
     proximoCumpleanos,
     cumpleanosPorMes,

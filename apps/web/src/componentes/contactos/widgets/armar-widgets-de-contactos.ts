@@ -31,6 +31,9 @@ import type { DatoDeWidget } from "@/componentes/widgets/tipos";
 import type { DeudasConContactos, WidgetsDeContactos } from "@/lib/api-contactos";
 import { totalesEnPalabras } from "@/lib/api-deudas";
 
+/** Debajo de cada barra de "Cumpleaños por mes": 1 es enero y 12, diciembre. */
+const NUMEROS_DE_MES = Array.from({ length: 12 }, (_, mes) => String(mes + 1));
+
 /** Cuántos días antes de la fecha límite una deuda pasa a ser un aviso. */
 const DIAS_DE_AVISO_DE_VENCIMIENTO = 7;
 
@@ -217,23 +220,23 @@ function armarCifras(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null
       }
     : null;
 
-  // La semana que viene, día por día: la primera barra (resaltada) es hoy.
-  const deLaSemana = recordatorios.proximos.filter((recordatorio) => recordatorio.dias < 7);
+  // La semana que viene como lista: qué es, de quién y cuándo, los más cercanos primero.
+  const { deLaSemana } = recordatorios;
+  const sinListar = recordatorios.proximos7 - deLaSemana.length;
   const semana: DatoDeWidget | null =
     recordatorios.proximos7 > 0
       ? {
           id: "recordatorios-de-la-semana",
-          categoria: "grafico",
+          categoria: "texto",
           tipo: "dato",
           tono: "neutro",
           Icono: CalendarDays,
           titulo: "Recordatorios de la semana",
           valor: String(recordatorios.proximos7),
-          detalle: `${recordatorios.proximos7 === 1 ? "Cae" : "Caen"} en los próximos 7 días. La primera barra es hoy.`,
-          visual: { tipo: "barras", valores: recordatorios.porDia, resaltada: 0 },
-          extras: deLaSemana.slice(0, 3).map((recordatorio) => ({
+          detalle: `${recordatorios.proximos7 === 1 ? "Cae" : "Caen"} en los próximos 7 días${sinListar > 0 ? `; acá van los ${deLaSemana.length} más cercanos` : ""}.`,
+          extras: deLaSemana.map((recordatorio) => ({
             etiqueta: `${recordatorio.titulo} · ${nombreCompletoDeContacto(recordatorio.contacto)}`,
-            valor: conMayuscula(describirDiasRestantes(recordatorio.dias)),
+            valor: `${conMayuscula(describirDiasRestantes(recordatorio.dias))}${recordatorio.hora ? `, ${recordatorio.hora}` : ""}`,
           })),
         }
       : null;
@@ -255,7 +258,12 @@ function armarCifras(datos: WidgetsDeContactos, vencimiento: DatoDeWidget | null
           titulo: "Cumpleaños por mes",
           valor: String(totalDeCumpleanos),
           detalle: `${conMayuscula(NOMBRES_DE_MES[mesConMas] ?? "")} es el mes con más (${mayor}). Este mes ${esteMes === 1 ? "hay uno" : `hay ${esteMes}`}. La barra resaltada es este mes.`,
-          visual: { tipo: "barras", valores: datos.cumpleanosPorMes, resaltada: mesActual },
+          visual: {
+            tipo: "barras",
+            valores: datos.cumpleanosPorMes,
+            resaltada: mesActual,
+            etiquetas: NUMEROS_DE_MES,
+          },
         }
       : null;
 
