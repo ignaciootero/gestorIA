@@ -296,8 +296,9 @@ function armarNovedades(datos: WidgetsDeTareas): DatoDeWidget[] {
       detalle: `${total} ${plural(total, "tarea repetitiva", "tareas repetitivas")}${fallanSolas > 0 ? `; ${fallanSolas} se ${plural(fallanSolas, "da", "dan")} por fallida${fallanSolas === 1 ? "" : "s"} sola${fallanSolas === 1 ? "" : "s"} si pasa el día` : ""}.`,
       visual: {
         tipo: "ranking",
-        filas: periodicidades
-          .toSorted((a, b) => b.total - a.total)
+        // Copia y sort, no toSorted(): es de ES2023 y en navegadores un poco viejos rompe la pantalla.
+        filas: [...periodicidades]
+          .sort((a, b) => b.total - a.total)
           .map((periodicidad) => ({
             etiqueta: NOMBRES_DE_REPETICION_DE_TAREA[periodicidad.repeticion],
             texto: String(periodicidad.total),
