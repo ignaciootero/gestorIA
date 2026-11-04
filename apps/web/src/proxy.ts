@@ -20,13 +20,19 @@ const RUTA_INICIO = "/inicio";
 /** Rutas que se pueden ver sin sesión. */
 const PUBLICAS = new Set([RUTA_INGRESO, "/correo-confirmado", "/guia-de-estilo"]);
 
+/**
+ * Con https (producción, ambiente de prueba) Better Auth le antepone "__Secure-" al nombre de sus
+ * cookies: es lo que exige el navegador para una cookie marcada como segura.
+ */
+const PREFIJO_SEGURO = "__Secure-";
+
 function pareceTenerSesion(peticion: NextRequest): boolean {
-  return peticion.cookies
-    .getAll()
-    .some(
-      (cookie) =>
-        cookie.name.startsWith(`${PREFIJO_COOKIE}.session_token`) && cookie.value.length > 0,
-    );
+  return peticion.cookies.getAll().some((cookie) => {
+    const nombre = cookie.name.startsWith(PREFIJO_SEGURO)
+      ? cookie.name.slice(PREFIJO_SEGURO.length)
+      : cookie.name;
+    return nombre.startsWith(`${PREFIJO_COOKIE}.session_token`) && cookie.value.length > 0;
+  });
 }
 
 export function proxy(peticion: NextRequest): NextResponse {
@@ -51,6 +57,10 @@ export function proxy(peticion: NextRequest): NextResponse {
 
 export const config = {
   // Se excluyen los archivos internos de Next y los estáticos: no tiene sentido
-  // correr esto para cada imagen o cada archivo de JavaScript.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // correr esto para cada imagen o cada archivo de JavaScript. Y `/api/`: cuando la web le
+  // reenvía los pedidos a la API (ver next.config.ts), los atiende la API, que responde 401
+  // sin sesión; redirigirlos a /ingresar rompería el propio ingreso.
+  matcher: [
+    "/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

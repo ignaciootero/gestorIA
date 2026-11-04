@@ -1,0 +1,50 @@
+# Ambiente de prueba en Render, en el plan gratuito (ver docs/despliegue-render.md).
+#
+# Un solo servicio web con la web y la API juntas, más una base PostgreSQL gratuita. Van juntas
+# porque los subdominios de onrender.com no comparten cookies entre sí: la web le reenvía `/api/...`
+# a la API, que escucha solo adentro, y la sesión queda en el dominio de la web.
+#
+# No es la producción (que va en un VPS con Coolify): es para probar y mostrar.
+
+services:
+  - type: web
+    name: gestoria
+    runtime: node
+    plan: free
+    region: virginia
+    # Corepack instala la versión de pnpm que fija package.json (packageManager).
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && node scripts/ambiente-de-prueba/construir.ts
+    # Aplica las migraciones y levanta la API y la web.
+    startCommand: node scripts/ambiente-de-prueba/iniciar.ts
+    healthCheckPath: /ingresar
+    # Cada push a la rama del servicio vuelve a desplegar.
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # NODE_ENV no va acá: también regiría al compilar, y pnpm no instalaría las dependencias de
+      # desarrollo (TypeScript, Turbo). Render lo pone en production al arrancar.
+      - key: LOG_LEVEL
+        value: info
+      # Firma y cifra las sesiones: Render la genera al crear el servicio.
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      # Las URLs (de la web, de la API, de Better Auth y los orígenes de CORS) salen de
+      # RENDER_EXTERNAL_URL, que Render define solo; ver scripts/ambiente-de-prueba/comun.ts.
+      # Sin SMTP: los enlaces de verificación de correo se escriben en el log del servicio.
+      # La base, como cadena de conexión: el arranque la reparte en las POSTGRES_* que lee la
+      # aplicación (ver scripts/ambiente-de-prueba/comun.ts). Es la dirección interna de Render.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gestoria-db
+          property: connectionString
+      # Adentro de Render la conexión va por la red privada, sin TLS.
+      - key: POSTGRES_SSL
+        value: "false"
+
+databases:
+  - name: gestoria-db
+    plan: free
+    region: virginia
+    databaseName: gestion
+    postgresMajorVersion: "17"

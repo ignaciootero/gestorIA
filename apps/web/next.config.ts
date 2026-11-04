@@ -14,6 +14,16 @@ const config: NextConfig = {
   // es el modo recomendado cuando quien consume sí transpila (Turbopack).
   transpilePackages: ["@gestoria/shared", "@gestoria/ui-tokens"],
 
+  // Reenvío de la API por la propia web, solo si se define URL_API_INTERNA (el ambiente de prueba en
+  // Render, ver docs/despliegue-render.md). Ahí la web y la API comparten un servicio y la API escucha
+  // solo adentro: el navegador le habla a la web (`/api/...`) y la web le pasa el pedido. Así las
+  // cookies de sesión quedan en el dominio de la web, que es lo que mira proxy.ts. En desarrollo no se
+  // define y la web le habla a la API directo, como siempre. Se resuelve al compilar.
+  async rewrites() {
+    const interna = process.env["URL_API_INTERNA"];
+    return interna ? [{ source: "/api/:ruta*", destination: `${interna}/api/:ruta*` }] : [];
+  },
+
   // Cabeceras de seguridad de la web. La CSP permite 'unsafe-inline' en estilos
   // porque Tailwind y Next inyectan estilos en línea; los scripts no lo llevan.
   async headers() {

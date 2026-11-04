@@ -73,12 +73,23 @@
   },
   "overrides": [
     {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUndeclaredEnvVars": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "**/*.config.ts",
         "packages/db/src/migrar.ts",
         "packages/db/src/crear-bases.ts",
         "apps/api/src/scripts/**",
-        "apps/api/src/index.ts"
+        "apps/api/src/index.ts",
+        "scripts/**"
       ],
       "linter": {
         "rules": {

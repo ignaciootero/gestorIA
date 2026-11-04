@@ -9,6 +9,7 @@ build/
 *.tsbuildinfo
 .next/
 .next-e2e/
+.next-prueba/
 out/
 .expo/
 
