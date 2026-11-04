@@ -5,6 +5,25 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-04 — Widgets de Contactos: solo lo que sirve en el día a día
+
+**Decisión.** Los widgets de la columna de Contactos quedan en: próximo cumpleaños, próximo
+recordatorio, recordatorios de la semana (barras por día), cumpleaños por mes (barras de enero a
+diciembre), deudas con contactos (*Tus contactos te deben*, *Les debés* y el próximo vencimiento) y
+el aviso de contactos sin teléfono ni correo, más los avisos de "sin contactos" y "recordatorios de
+hoy". Se sacaron *Tus contactos*, *Favoritos*, *Tus etiquetas*, *Empresas por rubro*, *Con quién más
+gastaste*, *Lo que pasó esta semana*, *Historial de la semana* y *Recordatorios por repetición*, y sus
+datos de `GET /api/contactos/widgets`. El gráfico de barras acepta `resaltada` para elegir qué barra
+destacar (por defecto, la última).
+
+**Por qué.** Los que se sacaron describían la agenda (cuántos hay, cómo se reparten) pero no
+ayudaban a hacer nada; lo que importa es qué viene (cumpleaños, recordatorios, vencimientos) y qué
+falta arreglar (deudas, contactos sin datos). Las deudas solo cuentan las que son con un contacto:
+las de un nombre escrito a mano ya están en Finanzas. Una deuda pasa a ser aviso a 7 días de su
+fecha límite o si ya venció. Los montos nunca se suman entre monedas.
+
+---
+
 ## 2026-11-03 — Datos de prueba: tres cuentas fijas en vez de escenarios
 
 **Decisión.** `pnpm usuario:sembrar` carga siempre lo mismo: `iotero` (admin, con el panel lleno),

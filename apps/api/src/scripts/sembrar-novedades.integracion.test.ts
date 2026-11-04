@@ -8,7 +8,6 @@ import { entrarComoPersona, type PersonaDePrueba } from "../pruebas/contactos-de
 import { appDePrueba, clienteDePrueba } from "../pruebas/entorno-de-prueba.ts";
 import { listarHistorial } from "../servicios/contactos/historial-de-recordatorios.ts";
 import { listarRecordatorios } from "../servicios/contactos/recordatorios.ts";
-import { obtenerWidgetsDeContactos } from "../servicios/contactos/widgets.ts";
 import { listarTareasDeHoy } from "../servicios/tareas/tareas.ts";
 import { obtenerWidgetsDeTareas } from "../servicios/tareas/widgets.ts";
 import { sembrarContactosDe } from "./sembrar-contactos.ts";
@@ -71,12 +70,11 @@ describe("la carga de datos de ejemplo", () => {
     // Cuatro anuales que cayeron hace poco y tres de una sola vez que ya pasaron.
     expect(resumen.historial).toBe(7);
 
-    const widgets = await obtenerWidgetsDeContactos(cliente, ana.userId, AHORA);
-    expect(widgets.historial.total).toBe(resumen.historial);
-    expect(widgets.historial.ultimos7).toBeGreaterThan(0);
-    expect(widgets.historial.porDia).toHaveLength(7);
-    expect(widgets.historial.ultimas).toHaveLength(3);
-    expect(widgets.porRepeticion.length).toBeGreaterThan(1);
+    const historial = await listarHistorial(cliente, ana.userId, { ahora: AHORA, limit: 500 });
+    expect(historial.total).toBe(resumen.historial);
+    // Hay recordatorios vigentes de más de una repetición.
+    const vigentes = await listarRecordatorios(cliente, ana.userId, { ahora: AHORA, limit: 500 });
+    expect(new Set(vigentes.recordatorios.map((r) => r.repeticion)).size).toBeGreaterThan(1);
 
     // Valentina pidió el recordatorio de su cumpleaños; Tomás no.
     const deValentina = await listarRecordatorios(cliente, ana.userId, {

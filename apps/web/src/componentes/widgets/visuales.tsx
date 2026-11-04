@@ -108,7 +108,15 @@ function Linea({
 
 // --- Barras ---
 
-function Barras({ valores, grande }: { valores: readonly number[]; grande: boolean }) {
+function Barras({
+  valores,
+  resaltada = valores.length - 1,
+  grande,
+}: {
+  valores: readonly number[];
+  resaltada?: number | undefined;
+  grande: boolean;
+}) {
   const maximo = Math.max(1, ...valores);
 
   return (
@@ -122,7 +130,7 @@ function Barras({ valores, grande }: { valores: readonly number[]; grande: boole
           key={posicion}
           className={cn(
             "min-h-0.5 flex-1 rounded-sm",
-            posicion === valores.length - 1 ? "bg-acento" : "bg-acento/35",
+            posicion === resaltada ? "bg-acento" : "bg-acento/35",
           )}
           style={{ height: `${Math.max(2, (valor / maximo) * 100)}%` }}
         />
@@ -301,7 +309,7 @@ export function VisualDelWidget({
     case "linea":
       return <Linea series={visual.series} grande={grande} />;
     case "barras":
-      return <Barras valores={visual.valores} grande={grande} />;
+      return <Barras valores={visual.valores} resaltada={visual.resaltada} grande={grande} />;
     case "comparacion":
       return <Comparacion filas={visual.filas} grande={grande} />;
     case "progreso":

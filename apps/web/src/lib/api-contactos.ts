@@ -253,15 +253,28 @@ export function eliminarRecordatorio(contactoId: string, id: string): Promise<{ 
 
 // --- Widgets ---
 
+type ContactoBreve = { tipo: TipoDeContacto; nombre: string; apellido: string | null };
+
+/** Deudas pendientes con contactos en un sentido (te deben o debés). */
+export type DeudasConContactos = {
+  /** Lo que falta, por moneda: las monedas nunca se mezclan. */
+  totales: { moneda: string; centavos: number; deudas: number }[];
+  /** Cuántos contactos distintos. */
+  contactos: number;
+  /** Los contactos con más plata pendiente (por moneda), hasta tres. */
+  mayores: (ContactoBreve & { moneda: string; centavos: number })[];
+};
+
 export type WidgetsDeContactos = {
-  totales: { personas: number; empresas: number; favoritos: number; sinDatosDeContacto: number };
-  etiquetas: { nombre: string; color: string; contactos: number }[];
-  rubros: { rubro: string; empresas: number }[];
-  favoritos: { nombre: string; apellido: string | null }[];
+  /** El día de hoy para la persona ("AAAA-MM-DD"), en su zona horaria. */
+  hoy: string;
+  totales: { personas: number; empresas: number; sinDatosDeContacto: number };
   recordatorios: {
     hoy: number;
     proximos7: number;
     proximos30: number;
+    /** Cuántos caen en cada uno de los próximos 7 días (el primero es hoy). */
+    porDia: number[];
     porSemana: number[];
     proximos: {
       titulo: string;
@@ -270,33 +283,9 @@ export type WidgetsDeContactos = {
       /** "HH:MM"; null es "todo el día". */
       hora: string | null;
       dias: number;
-      contacto: { tipo: TipoDeContacto; nombre: string; apellido: string | null };
+      contacto: ContactoBreve;
     }[];
   };
-  /** Los recordatorios vigentes por cómo se repiten, de más a menos. */
-  porRepeticion: { repeticion: Repeticion; total: number }[];
-  /** Lo que ya pasó de los recordatorios. */
-  historial: {
-    total: number;
-    /** Cuántas entradas en los últimos 7 días (ayer incluido). */
-    ultimos7: number;
-    /** Cuántas cayeron cada uno de los últimos 7 días; el último es ayer. */
-    porDia: number[];
-    ultimas: {
-      titulo: string;
-      repeticion: Repeticion;
-      diasAtras: number;
-      contacto: { tipo: TipoDeContacto; nombre: string; apellido: string | null };
-    }[];
-  };
-  /** Con quién más se gastó en los últimos 90 días, en la moneda base (hasta tres). */
-  masGastado: {
-    nombre: string;
-    apellido: string | null;
-    gastoCentavos: number;
-    movimientos: number;
-  }[];
-  monedaBase: string;
   proximoCumpleanos: {
     nombre: string;
     apellido: string | null;
@@ -304,6 +293,22 @@ export type WidgetsDeContactos = {
     dias: number;
     nacimiento: string;
   } | null;
+  /** Cuántos cumpleaños caen en cada mes, de enero a diciembre. */
+  cumpleanosPorMes: number[];
+  deudas: {
+    teDeben: DeudasConContactos;
+    debes: DeudasConContactos;
+    /** La deuda con fecha límite que vence antes; `dias` es negativo si ya venció. */
+    proximoVencimiento: {
+      concepto: string;
+      sentido: "me_deben" | "debo";
+      contacto: ContactoBreve;
+      moneda: string;
+      centavos: number;
+      fechaLimite: string;
+      dias: number;
+    } | null;
+  };
 };
 
 export function obtenerWidgetsDeContactos(): Promise<WidgetsDeContactos> {

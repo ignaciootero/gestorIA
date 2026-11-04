@@ -298,6 +298,24 @@ export async function deudasPendientesConLimiteEnRango(
   return filas.map(aDeuda);
 }
 
+/**
+ * Todas las deudas pendientes con un contacto que no está en la papelera, sin paginar. Es lo que
+ * usan los widgets de Contactos: no cuenta las deudas con un nombre escrito a mano, que no son de
+ * ningún contacto.
+ */
+export async function deudasPendientesConContactos(
+  cliente: ClienteDb,
+  userId: string,
+): Promise<Deuda[]> {
+  const filas = await cliente.db
+    .select(COLUMNAS)
+    .from(deudas)
+    .innerJoin(contactos, eq(contactos.id, deudas.contactoId))
+    .where(and(condicionesDe(userId, { estado: "pendientes" }), isNull(contactos.eliminadoEn)))
+    .orderBy(deudas.fecha, deudas.id);
+  return filas.map(aDeuda);
+}
+
 /** Una deuda con sus pagos, o null si no existe, es de otra persona o está eliminada. */
 export async function obtenerDeuda(
   cliente: ClienteDb,

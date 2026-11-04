@@ -24,8 +24,11 @@ export type VisualDeWidget =
       tipo: "linea";
       series: { valores: readonly (number | null)[]; referencia?: boolean }[];
     }
-  /** Barras verticales chicas; la última va resaltada y el resto, más tenues. */
-  | { tipo: "barras"; valores: readonly number[] }
+  /**
+   * Barras verticales chicas; una va resaltada y el resto, más tenues. Por defecto la última
+   * ("hoy" al final); `resaltada` elige otra (por ejemplo, el mes actual en un año).
+   */
+  | { tipo: "barras"; valores: readonly number[]; resaltada?: number }
   /** Barras horizontales una debajo de la otra, a la misma escala (por ejemplo, ingresos y gastos). */
   | {
       tipo: "comparacion";
