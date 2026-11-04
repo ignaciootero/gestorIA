@@ -32,6 +32,21 @@ if (migracion.status !== 0) {
   process.exit(1);
 }
 
+// Con SEMBRAR_AL_INICIAR=true (render.yaml), una base recién creada se carga sola con los datos de
+// prueba: la gratuita vence a los 30 días y así no hay que volver a cargarla a mano. Si ya tiene
+// cuentas no se toca. Si la carga falla se arranca igual: la aplicación anda sin esos datos, y el
+// error queda en el log.
+if (process.env["SEMBRAR_AL_INICIAR"] === "true") {
+  const carga = spawnSync(
+    process.execPath,
+    [path.join(RAIZ, "apps/api/src/scripts/sembrar-datos-de-prueba.ts"), "--si-esta-vacia"],
+    { stdio: "inherit", cwd: path.join(RAIZ, "apps", "api"), env: process.env },
+  );
+  if (carga.status !== 0) {
+    console.error("No se cargaron los datos de prueba; se arranca igual.");
+  }
+}
+
 const procesos: ChildProcess[] = [];
 let terminando = false;
 

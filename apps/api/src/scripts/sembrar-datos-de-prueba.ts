@@ -20,6 +20,9 @@
 //   pnpm usuario:sembrar --borrar-todo    antes, borra todas las cuentas y sus datos (pide confirmar)
 //   pnpm usuario:sembrar --test           contra gestion_test en vez de gestion
 //   --forzar                              no pide confirmación (para correrlo sin terminal)
+//   --si-esta-vacia                       solo carga si la base no tiene ninguna cuenta (lo usa el
+//                                         arranque del ambiente de prueba en Render, ver
+//                                         scripts/ambiente-de-prueba/iniciar.ts)
 
 import { createInterface } from "node:readline/promises";
 import {
@@ -29,7 +32,7 @@ import {
   esquema,
   leerConfigBaseDatos,
 } from "@gestoria/db";
-import { sql } from "drizzle-orm";
+import { count, sql } from "drizzle-orm";
 import { crearAuth } from "../auth/crear-auth.ts";
 import { leerEntornoApi } from "../config/entorno.ts";
 import {
@@ -70,6 +73,17 @@ async function principal(): Promise<void> {
   console.log(`Base: ${describirConexion(configBase)}`);
 
   try {
+    // Con una sola cuenta ya se considera cargada: así no se vuelve a sembrar en cada arranque ni se
+    // mezclan los datos de prueba con cuentas que alguien haya creado a mano.
+    if (process.argv.includes("--si-esta-vacia")) {
+      const [fila] = await cliente.db.select({ cantidad: count() }).from(esquema.usuarios);
+      if ((fila?.cantidad ?? 0) > 0) {
+        console.log("La base ya tiene cuentas: no se carga nada.");
+        return;
+      }
+      console.log("La base no tiene cuentas: se cargan los datos de prueba.");
+    }
+
     if (process.argv.includes("--borrar-todo")) {
       const sigue = await confirmar(
         `Esto borra TODAS las cuentas de "${describirConexion(configBase)}", con todos sus datos.`,

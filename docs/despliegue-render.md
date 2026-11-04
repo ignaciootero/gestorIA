@@ -18,6 +18,10 @@ Todo está descrito en `render.yaml` (un "Blueprint" de Render): un servicio web
   de la API, la de Better Auth y los orígenes de CORS son la misma (`scripts/ambiente-de-prueba/comun.ts`).
 - **Las migraciones corren al arrancar** (`scripts/ambiente-de-prueba/iniciar.ts`): el plan gratuito no tiene
   "pre-deploy command" ni consola. Si fallan, no arranca nada.
+- **Los datos de prueba se cargan solos** si la base no tiene ninguna cuenta (`SEMBRAR_AL_INICIAR=true` en
+  `render.yaml`): después de las migraciones, el arranque corre `usuario:sembrar --si-esta-vacia`. Así una base
+  recién creada (por ejemplo, cuando vence la gratuita) queda lista sin hacer nada. Si ya hay cuentas no se
+  toca; si la carga falla, se arranca igual y el error queda en el log.
 - **Si la web o la API se caen, se baja todo** y Render vuelve a levantar el servicio entero.
 - **Sin correo.** No hay SMTP configurado: los correos de verificación no salen, se escriben en el log del
   servicio (ver "Cuentas nuevas", más abajo).
@@ -46,11 +50,15 @@ Según la documentación de Render (noviembre de 2026):
 3. **Esperar la primera compilación** (unos minutos; se sigue en *Events* y *Logs* del servicio). Cuando dice
    *Live*, la aplicación está en `https://gestoria.onrender.com` (o el nombre que haya quedado, se ve arriba
    en la página del servicio).
-4. **Cargar los datos de prueba desde tu máquina** (ver abajo): crea el admin `iotero` y las demás cuentas. Hasta entonces nadie puede aprobar cuentas.
+4. **Los datos de prueba se cargan solos** en el primer arranque (el admin `iotero` y las demás cuentas; se ve
+   en el log como "La base no tiene cuentas: se cargan los datos de prueba").
 
 Después, **cada push a esa rama vuelve a desplegar** solo (`autoDeployTrigger: commit`).
 
 ## Cargar los datos de prueba (desde tu máquina)
+
+Normalmente no hace falta: se cargan solos cuando la base está vacía. Esto sirve para volver a empezar de cero
+o para correr otros scripts (`usuario:admin`, `usuario:aprobar`).
 
 Sin consola en Render, los scripts se corren en tu máquina contra la base de Render. En la página de la base
 (`gestoria-db`) → *Connect* → copiar la **External Database URL** (tiene la contraseña: no la guardes en ningún

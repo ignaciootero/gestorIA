@@ -26,6 +26,10 @@ services:
       # desarrollo (TypeScript, Turbo). Render lo pone en production al arrancar.
       - key: LOG_LEVEL
         value: info
+      # Al arrancar con la base sin cuentas (recién creada), carga los datos de prueba solo; ver
+      # scripts/ambiente-de-prueba/iniciar.ts. Nunca va en producción: las contraseñas son conocidas.
+      - key: SEMBRAR_AL_INICIAR
+        value: "true"
       # Firma y cifra las sesiones: Render la genera al crear el servicio.
       - key: BETTER_AUTH_SECRET
         generateValue: true
