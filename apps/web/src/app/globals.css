@@ -79,9 +79,19 @@
     /* Sin esto, el fondo del navegador parpadea en blanco al cargar en oscuro. */
     color-scheme: light;
     -webkit-text-size-adjust: 100%;
-    /* Reserva siempre el lugar de la barra de scroll: sin esto, al pasar de una pantalla corta a
-       una larga (por ejemplo cambiando de pestaña) el contenido se corre unos píxeles. */
-    scrollbar-gutter: stable;
+    /* En pantallas angostas la barra de scroll es fina y no se le reserva lugar: ahí cada píxel de
+       ancho cuenta, y en el celular la barra flota encima del contenido igual. */
+    scrollbar-width: thin;
+  }
+
+  /* En pantallas anchas con mouse se reserva siempre el lugar de la barra de scroll: sin esto, al
+     pasar de una pantalla corta a una larga (por ejemplo cambiando de pestaña) el contenido se corre
+     unos píxeles. Ahí la barra vuelve a su ancho normal, que es más fácil de agarrar con el mouse. */
+  @media (min-width: 64rem) and (pointer: fine) {
+    html {
+      scrollbar-gutter: stable;
+      scrollbar-width: auto;
+    }
   }
 
   html[data-theme="dark"] {
@@ -203,9 +213,11 @@
    * en CSS porque lo decide algo que está mucho más abajo (`:has`), sin que el marco sepa de pantallas.
    *
    * En una ventana muy baja no hay lugar para todo sin cortar algo: ahí vuelve a desplazarse como
-   * cualquier otra pantalla, porque un contenido cortado es peor que un desplazamiento.
+   * cualquier otra pantalla, porque un contenido cortado es peor que un desplazamiento. Lo mismo en
+   * una angosta (celular, tablet): el contenido va en una sola columna, mucho más alta que la
+   * pantalla, y meterlo en el alto de la ventana lo apretaría hasta superponerse.
    */
-  @media (min-height: 560px) {
+  @media (min-height: 560px) and (min-width: 64rem) {
     .marco-de-la-app:has([data-pantalla-fija]) {
       height: 100dvh;
     }

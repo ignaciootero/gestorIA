@@ -2175,15 +2175,24 @@ que acordarse de agregarlas al crear una página.
 
 La **barra superior** es `sticky`: acompaña el scroll sin tapar contenido. A la
 izquierda el nombre del sistema, que lleva al inicio; a la derecha el selector de tema
-y, solo si hay sesión, con qué cuenta se entró y el botón de salir. Hay un ícono por
-cada módulo del menú de navegación (por ahora, Finanzas, y Admin si la cuenta lo es)
-—solo en pantallas angostas, donde no entra el menú de navegación de la izquierda (ver
-más abajo); de `md` en adelante esos mismos enlaces ya están ahí. Este patrón de "un
-ícono por módulo" funciona con dos, pero no escala: el tercer módulo va a necesitar un
-menú propio para pantallas angostas en vez de seguir sumando íconos
-(`docs/decisiones.md`, 2026-09-30). Mientras la sesión se está resolviendo no se
-muestra nada de esa parte: es preferible un hueco breve a que "Salir" aparezca y
-desaparezca.
+y, solo si hay sesión, con qué cuenta se entró, el color de la app y el botón de salir
+(en el celular, solo su ícono). Mientras la sesión se está resolviendo no se muestra
+nada de esa parte: es preferible un hueco breve a que "Salir" aparezca y desaparezca.
+
+**Pantallas angostas (menos de `lg`, 1024 px: celular y tablet).** El menú de la
+izquierda y los widgets se ocultan y el contenido ocupa todo el ancho. La navegación
+pasa a una **barra abajo** (`navegacion-inferior.tsx`), fija, con los mismos destinos
+que el menú (Inicio, Finanzas, Contactos, Tareas y Calendario): ícono y nombre corto, el
+actual resaltado con la misma pastilla que el menú. Abajo porque es lo que más se toca y
+queda al alcance del pulgar; respeta la zona segura del celular y deja un espacio de su
+alto al final del marco para no tapar el pie. Administración no entra ahí (sería un
+sexto destino, solo para admins): queda como ícono en la barra de arriba. En pantallas
+angostas la barra de scroll es fina y no se le reserva lugar (desde `lg` con mouse sí,
+para que el contenido no se corra al cambiar de pantalla), y la pantalla de inicio deja
+de entrar fija en el alto de la ventana: se desplaza como las demás. Las pestañas
+(`SelectorDeSegmentos`) nunca son más anchas que su contenedor: si no entran, se
+desplazan de costado. `e2e/pantallas-chicas.spec.ts` recorre todas las pantallas a 360
+y 390 px y lista cualquier elemento que asome por los costados.
 
 El **pie** es deliberadamente escueto —es un sistema privado, no un sitio público— con
 el nombre y el año. En desarrollo suma un enlace a la guía de estilo.
@@ -2241,7 +2250,7 @@ izquierda, la de los widgets a la derecha), que está siempre, con la columna ab
 La elección es **por dispositivo** (`localStorage`, como el tema) y se recuerda al recargar y al cambiar
 de pantalla; un script que corre antes del primer pintado pone el estado en `<html>`, así que quien dejó
 una columna escondida nunca la ve abierta un instante. Solo hay pestaña donde la columna existe: la del
-menú desde `md`, la de los widgets desde `lg` y únicamente en pantallas que tienen widgets (no en
+menú y la de los widgets desde `lg`, y la de los widgets únicamente en pantallas que los tienen (no en
 `/inicio` ni `/admin`). Dónde: `pestana-de-columna.tsx`, `lib/columnas-plegables.ts`.
 
 Las columnas laterales son `sticky`, con el tope pegado a la barra superior

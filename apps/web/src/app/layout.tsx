@@ -12,6 +12,7 @@ import { FondoAnimado } from "@/componentes/layout/fondo-animado";
 import { GuardiaDeCambioPassword } from "@/componentes/layout/guardia-cambio-password";
 import { GuardiaDeAdmin } from "@/componentes/layout/guardia-de-admin";
 import { Navbar } from "@/componentes/layout/navbar";
+import { NavegacionInferior } from "@/componentes/layout/navegacion-inferior";
 import { PieDePagina } from "@/componentes/layout/pie-de-pagina";
 import { Proveedores } from "@/componentes/proveedores";
 import { SCRIPT_TEMA_INICIAL } from "@/componentes/tema";
@@ -78,6 +79,8 @@ export default function LayoutRaiz({ children }: { children: ReactNode }) {
             <Navbar />
             <div className="contenido-de-la-app flex flex-1 flex-col">{children}</div>
             <PieDePagina />
+            {/* Solo en pantallas angostas y con sesión: reemplaza al menú de la izquierda. */}
+            <NavegacionInferior />
           </div>
         </Proveedores>
       </body>

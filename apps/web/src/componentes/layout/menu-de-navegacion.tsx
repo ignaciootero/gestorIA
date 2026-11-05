@@ -1,7 +1,8 @@
-// Menú de navegación: columna izquierda del marco de la aplicación.
+// Menú de navegación: columna izquierda del marco de la aplicación (desde `lg`).
 //
 // Inicio, los módulos (Finanzas, Contactos, Tareas y Calendario) y, para quien es admin, el panel
-// de admin. Cada módulo nuevo suma acá su propio enlace.
+// de admin. Cada módulo nuevo suma acá su propio enlace (en ENLACES): la barra de navegación de
+// abajo de las pantallas angostas (NavegacionInferior) usa la misma lista.
 //
 // El ancho lo pone el contenido más largo (`w-fit` en el `<nav>` + que los
 // hijos se estiren a ese ancho por default de flex): todos los ítems miden lo
@@ -26,7 +27,7 @@ import { useSession } from "@/lib/auth-cliente";
 import { cn } from "@/lib/clases";
 import { usarCerrarSesion } from "@/lib/usar-cerrar-sesion";
 
-type EnlaceDeMenu = {
+export type EnlaceDeMenu = {
   href: string;
   etiqueta: string;
   Icono: LucideIcon;
@@ -34,7 +35,7 @@ type EnlaceDeMenu = {
   incluirSubrutas?: boolean;
 };
 
-const ENLACES: EnlaceDeMenu[] = [
+export const ENLACES: EnlaceDeMenu[] = [
   { href: "/inicio", etiqueta: "Inicio", Icono: Home },
   { href: "/finanzas", etiqueta: "Finanzas", Icono: Wallet, incluirSubrutas: true },
   { href: "/contactos", etiqueta: "Contactos", Icono: BookUser, incluirSubrutas: true },
@@ -47,9 +48,15 @@ const CLASE_FILA = cn(
   "transition-colors duration-(--duracion-rapida) ease-salida",
 );
 
-function FilaDeEnlace({ href, etiqueta, Icono, incluirSubrutas }: EnlaceDeMenu) {
+/** Si un enlace corresponde a la pantalla en la que se está. */
+export function estaActivo(pathname: string, { href, incluirSubrutas }: EnlaceDeMenu): boolean {
+  return incluirSubrutas ? pathname.startsWith(href) : pathname === href;
+}
+
+function FilaDeEnlace(enlace: EnlaceDeMenu) {
+  const { href, etiqueta, Icono } = enlace;
   const pathname = usePathname();
-  const activo = incluirSubrutas ? pathname.startsWith(href) : pathname === href;
+  const activo = estaActivo(pathname, enlace);
 
   return (
     <Link

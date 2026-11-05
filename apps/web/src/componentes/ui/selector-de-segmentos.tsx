@@ -37,9 +37,14 @@ type PropsSelectorDeSegmentos<T extends string> = {
   className?: string;
 };
 
-const CLASE_GRUPO = "grid gap-1 rounded-control bg-superficie-suave p-1";
+// En una pantalla angosta las pestañas pueden no entrar (Finanzas tiene varias, y cada nombre va
+// en una línea). En vez de empujar la pantalla hacia afuera, el grupo nunca es más ancho que su
+// contenedor y se desplaza de costado, sin barra visible (se ve que sigue porque la última queda
+// cortada). Con lugar de sobra, las pestañas se reparten el ancho por igual, como siempre.
+const CLASE_GRUPO =
+  "grid max-w-full gap-1 overflow-x-auto rounded-control bg-superficie-suave p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 const CLASE_BOTON =
-  "relative h-9 rounded-md px-4 text-sm font-medium transition-colors duration-(--duracion-normal) ease-salida";
+  "relative h-9 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors duration-(--duracion-normal) ease-salida sm:px-4";
 
 function Pastilla({
   id,
@@ -75,7 +80,9 @@ export function SelectorDeSegmentos<T extends string>({
   className,
 }: PropsSelectorDeSegmentos<T>) {
   const reducirMovimiento = useReducedMotion();
-  const columnas = { gridTemplateColumns: `repeat(${segmentos.length}, 1fr)` };
+  // Cada pestaña mide al menos lo que su nombre (`max-content`) y, si sobra lugar, se reparte por
+  // igual (`1fr`). Con `1fr` a secas el grupo no se desplazaba: crecía y empujaba la pantalla.
+  const columnas = { gridTemplateColumns: `repeat(${segmentos.length}, minmax(max-content, 1fr))` };
 
   if (modo === "filtro") {
     return (

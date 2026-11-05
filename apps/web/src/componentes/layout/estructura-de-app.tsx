@@ -48,10 +48,11 @@
 // el alto de la ventana (ver `.marco-de-la-app` en globals.css) y la fila de la grilla y el contenido
 // pueden achicarse hasta lo que queda entre la barra y el pie.
 //
-// En pantallas angostas no entran las tres columnas: los widgets se ocultan
-// primero (son lo menos esencial) y, si todavía no entra, también el menú,
-// dejando solo el contenido central (docs/guias/usabilidad.md, pantallas
-// chicas y grandes).
+// En pantallas angostas no entran las tres columnas. Debajo de `lg` (celular y tablet) se ocultan
+// juntos el menú y los widgets y queda solo el contenido: el menú pasa a la barra de abajo
+// (NavegacionInferior), que en un celular gasta alto y no ancho, que es lo que falta. Los widgets
+// no tienen reemplazo: son lo menos esencial (docs/guias/usabilidad.md, pantallas chicas y
+// grandes).
 
 import type { ReactNode } from "react";
 import { MenuDeNavegacion } from "@/componentes/layout/menu-de-navegacion";
@@ -74,13 +75,13 @@ const ESCONDIDA_WIDGETS =
   "[html[data-widgets=cerrado]_&]:invisible [html[data-widgets=cerrado]_&]:translate-x-6 [html[data-widgets=cerrado]_&]:opacity-0";
 
 /** Menú y contenido; el contenido ocupa todo el resto (inicio y calendario). */
-const COLUMNAS_FUSIONADAS = "md:grid-cols-[220px_minmax(0,1fr)]";
+const COLUMNAS_FUSIONADAS = "lg:grid-cols-[220px_minmax(0,1fr)]";
 /** Contenido centrado en la pantalla desde `xl`, con la pista derecha vacía. */
 const COLUMNAS_SIN_WIDGETS =
-  "md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[minmax(220px,1fr)_minmax(0,56rem)_minmax(220px,1fr)]";
+  "lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[minmax(220px,1fr)_minmax(0,56rem)_minmax(220px,1fr)]";
 /** Contenido centrado en la pantalla desde `xl`, con los costados iguales (el ancho de los widgets). */
 const COLUMNAS_CON_WIDGETS =
-  "md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[220px_minmax(0,1fr)_288px] xl:grid-cols-[minmax(336px,1fr)_minmax(0,56rem)_minmax(336px,1fr)]";
+  "lg:grid-cols-[220px_minmax(0,1fr)_288px] xl:grid-cols-[minmax(336px,1fr)_minmax(0,56rem)_minmax(336px,1fr)]";
 
 export function EstructuraDeApp({
   children,
@@ -103,7 +104,7 @@ export function EstructuraDeApp({
     <div
       data-pantalla-fija={pantallaFija || undefined}
       className={cn(
-        "grid w-full flex-1 grid-cols-1 gap-6 px-4 sm:px-8",
+        "grid w-full flex-1 grid-cols-1 gap-6 px-3 sm:px-8",
         pantallaFija && "min-h-0 grid-rows-[minmax(0,1fr)]",
         widgets ? COLUMNAS_CON_WIDGETS : fusionada ? COLUMNAS_FUSIONADAS : COLUMNAS_SIN_WIDGETS,
       )}
@@ -113,13 +114,13 @@ export function EstructuraDeApp({
         lado="izquierda"
         etiqueta="el menú"
         controla="columna-menu"
-        desde="md"
+        desde="lg"
       />
       <aside
         id="columna-menu"
         aria-label="Navegación"
         className={cn(
-          "hidden md:block xl:w-55 xl:justify-self-start",
+          "hidden lg:block xl:w-55 xl:justify-self-start",
           ENTRADA_Y_SALIDA,
           ESCONDIDA_MENU,
           CLASE_COLUMNA_LATERAL,
@@ -130,7 +131,9 @@ export function EstructuraDeApp({
         </div>
       </aside>
 
-      <main className={cn("flex min-w-0 flex-col gap-6 py-6", pantallaFija && "min-h-0")}>
+      <main
+        className={cn("flex min-w-0 flex-col gap-6 py-4 sm:py-6", pantallaFija && "min-h-0")}
+      >
         {children}
       </main>
 

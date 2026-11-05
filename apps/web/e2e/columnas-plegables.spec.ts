@@ -362,15 +362,15 @@ test.describe("dónde hay pestañas", () => {
     ).toHaveCount(0);
   });
 
-  test("entre 768 y 1024 px hay pestaña del menú pero todavía no de los widgets", async ({
-    page,
-  }) => {
+  test("entre 768 y 1024 px tampoco: el menú pasó a la barra de abajo", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 900 });
     await entrar(page, await crearCuentaAprobada());
     await page.goto("/finanzas");
 
-    await expect(botonDelMenu(page, "Ocultar el menú")).toBeVisible();
+    await expect(page.getByRole("button", { name: /el menú$/ })).toBeHidden();
     await expect(page.getByRole("button", { name: /los widgets$/ })).toBeHidden();
+    await expect(page.getByRole("complementary", { name: "Navegación" })).toBeHidden();
+    await expect(page.getByRole("navigation", { name: "Navegación principal" })).toBeVisible();
   });
 });
 

@@ -12,7 +12,7 @@
 
 "use client";
 
-import { LogOut, ShieldCheck, Wallet } from "lucide-react";
+import { LogOut, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { SelectorDeColor } from "@/componentes/color-de-acento";
 import { Logotipo } from "@/componentes/marca/logotipo";
@@ -41,7 +41,7 @@ export function Navbar() {
     >
       <nav
         aria-label="Barra principal"
-        className="flex h-(--alto-navbar) w-full items-center justify-between gap-4 px-4 sm:px-8"
+        className="flex h-(--alto-navbar) w-full items-center justify-between gap-2 px-3 sm:gap-4 sm:px-8"
       >
         <Link
           href={usuario ? "/inicio" : "/ingresar"}
@@ -54,7 +54,7 @@ export function Navbar() {
           <Logotipo />
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/*
             Mientras se resuelve la sesión no se muestra nada de la parte de
             usuario: es preferible un hueco breve a que aparezca "Salir" y
@@ -66,30 +66,16 @@ export function Navbar() {
                 {usuario.displayUsername ?? usuario.username ?? usuario.email}
               </span>
               {/*
-                Estos accesos solo hacen falta en pantallas angostas: desde
-                `md` en adelante ya están en el menú de navegación de la
-                izquierda (EstructuraDeApp), que ahí se oculta. Un ícono por
-                enlace funciona con uno o dos módulos; si se suman más
-                conviene un menú propio en vez de seguir agregando íconos acá
-                (ver docs/decisiones.md).
+                Administración, solo en pantallas angostas: los módulos están en la barra de
+                abajo (NavegacionInferior), pero administración no entra ahí (sería un sexto
+                destino, y solo para admins). Desde `lg` está en el menú de la izquierda.
               */}
-              <Link
-                href="/finanzas"
-                aria-label="Finanzas"
-                className={cn(
-                  "flex size-9 items-center justify-center rounded-control text-texto-secundario md:hidden",
-                  "transition-colors duration-(--duracion-rapida) ease-salida",
-                  "hover:bg-superficie-suave hover:text-texto",
-                )}
-              >
-                <Wallet aria-hidden="true" className="size-4" />
-              </Link>
               {usuario.role === "admin" ? (
                 <Link
                   href="/admin"
                   aria-label="Panel de admin"
                   className={cn(
-                    "flex size-9 items-center justify-center rounded-control text-texto-secundario md:hidden",
+                    "flex size-9 items-center justify-center rounded-control text-texto-secundario lg:hidden",
                     "transition-colors duration-(--duracion-rapida) ease-salida",
                     "hover:bg-superficie-suave hover:text-texto",
                   )}
@@ -97,15 +83,17 @@ export function Navbar() {
                   <ShieldCheck aria-hidden="true" className="size-4" />
                 </Link>
               ) : null}
+              {/* En el celular, solo el ícono: el texto no entra junto a todo lo demás. */}
               <Boton
                 variante="secundario"
                 tamano="chico"
+                aria-label="Salir"
                 onClick={salir}
                 cargando={saliendo}
                 textoCargando="Saliendo"
               >
                 <LogOut aria-hidden="true" className="size-4" />
-                Salir
+                <span className="hidden sm:inline">Salir</span>
               </Boton>
             </>
           ) : null}

@@ -5,6 +5,21 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-05 — Navegación de abajo en pantallas angostas
+
+**Decisión.** Debajo de `lg` (1024 px) no hay menú a la izquierda: la navegación es una barra fija
+abajo con los cinco destinos (ícono y nombre corto). Reemplaza a los íconos sueltos de la barra de
+arriba (2026-09-30), que solo cubrían Finanzas y dejaban sin acceso a Contactos, Tareas y
+Calendario desde el celular. Administración queda como ícono arriba. El menú lateral pasa de
+aparecer en `md` a aparecer en `lg`.
+
+**Por qué.** En un celular sobra alto y falta ancho: una barra abajo gasta 64 px de alto y ninguno
+de ancho, mientras el menú lateral se llevaba 220 de 375. Abajo y no en un menú desplegable porque
+se ve siempre dónde se está y queda al alcance del pulgar. Entre 768 y 1024 px (tablet, celular
+horizontal) el menú lateral dejaba al contenido demasiado angosto: ahí también va la barra.
+
+---
+
 ## 2026-11-05 — Ajustes del fondo animado elegidos por la persona
 
 **Decisión.** En el diálogo del color, debajo del tono, cada persona ajusta el fondo de cada modo:
