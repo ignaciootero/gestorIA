@@ -51,16 +51,18 @@ test.describe("color de acento", () => {
     await page.getByRole("button", { name: "Color de la app" }).click();
     const dialogo = page.getByRole("dialog", { name: "Color de la app" });
     await expect(dialogo).toBeVisible();
-    await expect(dialogo.getByRole("button", { name: "Volver al color original" })).toBeDisabled();
+    // Solo el tono del modo que se está viendo, y todavía el original.
+    await expect(dialogo).toContainText("Seleccioná el tono para el modo claro.");
+    await expect(dialogo.getByLabel("Tono del modo oscuro")).toHaveCount(0);
+    await expect(dialogo.getByText("Original", { exact: true })).toBeVisible();
 
     // Un violeta que ya se lee bien con texto blanco: se usa tal cual, al instante.
     const guardado = esperarGuardado(page);
-    await dialogo.getByLabel("Color de acento del modo claro").fill("#7c3aed");
+    await dialogo.getByLabel("Tono del modo claro").fill("#7c3aed");
     await expect.poll(() => acento(page)).toBe("#7c3aed");
     await guardado;
 
-    // El del modo oscuro no cambió: sigue con el original.
-    await expect(dialogo.getByText("El de la app")).toHaveCount(1);
+    await expect(dialogo.getByText(/^#7c3aed$/i)).toBeVisible();
 
     const accesibilidad = await new AxeBuilder({ page }).include("dialog").analyze();
     expect(accesibilidad.violations).toEqual([]);
@@ -70,9 +72,13 @@ test.describe("color de acento", () => {
     await page.reload();
     expect(await acento(page)).toBe("#7c3aed");
 
-    // Y en modo oscuro va el de ese modo, que sigue siendo el de la app.
+    // Y en modo oscuro va el de ese modo, que sigue siendo el de la app: el selector muestra ese.
     await page.getByRole("radio", { name: "Tema oscuro" }).click();
     await expect.poll(() => acento(page)).toBe(ORIGINAL.oscuro);
+    await page.getByRole("button", { name: "Color de la app" }).click();
+    await expect(dialogo).toContainText("Seleccioná el tono para el modo oscuro.");
+    await expect(dialogo.getByText("Original", { exact: true })).toBeVisible();
+    await dialogo.getByRole("button", { name: "Listo" }).click();
 
     // Otro navegador (sin copia): lo trae de la cuenta.
     const otra = await page.context().browser()?.newPage();
@@ -82,12 +88,13 @@ test.describe("color de acento", () => {
     await expect.poll(() => acento(otra)).toBe("#7c3aed");
     await otra.close();
 
-    // Volver al original borra los dos.
+    // Restablecer vuelve al original.
     await page.getByRole("radio", { name: "Tema claro" }).click();
     await page.getByRole("button", { name: "Color de la app" }).click();
     const reinicio = esperarGuardado(page);
-    await dialogo.getByRole("button", { name: "Volver al color original" }).click();
+    await dialogo.getByRole("button", { name: "Restablecer" }).click();
     await reinicio;
+    await expect(dialogo.getByText("Original", { exact: true })).toBeVisible();
     await expect.poll(() => acento(page)).toBe(ORIGINAL.claro);
     await page.reload();
     expect(await acento(page)).toBe(ORIGINAL.claro);
@@ -101,7 +108,7 @@ test.describe("color de acento", () => {
     await page.getByRole("button", { name: "Color de la app" }).click();
     const dialogo = page.getByRole("dialog", { name: "Color de la app" });
 
-    await dialogo.getByLabel("Color de acento del modo claro").fill("#fde047");
+    await dialogo.getByLabel("Tono del modo claro").fill("#fde047");
     await expect.poll(() => acento(page)).not.toBe(ORIGINAL.claro);
     const usado = await acento(page);
     expect(usado).not.toBe("#fde047");
@@ -116,7 +123,7 @@ test.describe("color de acento", () => {
     await entrar(page, await crearCuentaAprobada());
     await page.getByRole("button", { name: "Color de la app" }).click();
     const guardado = esperarGuardado(page);
-    await page.getByLabel("Color de acento del modo claro").fill("#7c3aed");
+    await page.getByLabel("Tono del modo claro").fill("#7c3aed");
     await guardado;
     await page.getByRole("button", { name: "Listo" }).click();
 

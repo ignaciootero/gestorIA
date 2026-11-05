@@ -2076,9 +2076,9 @@ componente escribe un valor suelto.
   su navegador. Un script inline aplica el tema antes del primer pintado, para que no
   haya un destello blanco al entrar en oscuro.
 - **Color de acento elegido por la persona:** al lado del selector de tema, con sesión, un
-  botón "Color de la app" abre un diálogo con un selector de color para el modo claro y otro
-  para el oscuro, una vista previa de cada uno (botón, seleccionado y enlace) y "Volver al
-  color original". El acento son cuatro tonos (`acento`, `acento-texto`, `acento-suave`,
+  botón "Color de la app" abre un diálogo con el tono del modo que se está viendo (el del
+  otro modo se elige estando en ese modo), su código y "Restablecer" para volver al original;
+  el resultado se ve directo en la app, sin vista previa aparte. El acento son cuatro tonos (`acento`, `acento-texto`, `acento-suave`,
   `acento-suave-texto`): `derivarAcento` (`packages/ui-tokens/src/acento-personalizado.ts`)
   los arma a partir del color elegido trabajando en OKLCH. El acento es el color tal cual si
   el texto encima y los enlaces sobre la superficie llegan a 4,5:1; si no, se le cambia solo

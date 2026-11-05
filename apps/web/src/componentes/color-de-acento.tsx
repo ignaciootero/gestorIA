@@ -2,8 +2,8 @@
 //
 // El proveedor lee los colores de la sesión (se guardan en la cuenta), deriva sus cuatro tonos
 // (packages/ui-tokens, acento-personalizado.ts) y los aplica como variables CSS. El selector es
-// un diálogo con un color por modo, una vista previa de cómo queda cada uno y un botón para
-// volver al verde agua de la app.
+// un diálogo con el tono del modo que se está viendo y un botón para volver al verde agua; el
+// resultado se ve directo en la app, detrás del diálogo.
 //
 // Mientras se elige, el color se ve al instante (vista previa) y se guarda en la cuenta un rato
 // después de soltar el selector, para no mandar un pedido por cada movimiento del mouse.
@@ -12,7 +12,7 @@
 
 import type { ColoresDeAcento } from "@gestoria/shared";
 import { type ModoDeColor, TEMA_CLARO, TEMA_OSCURO } from "@gestoria/ui-tokens";
-import { Moon, Palette, RotateCcw, Sun } from "lucide-react";
+import { Palette, RotateCcw } from "lucide-react";
 import {
   createContext,
   type ReactNode,
@@ -30,9 +30,6 @@ import { useSession } from "@/lib/auth-cliente";
 import { cn } from "@/lib/clases";
 import { aplicarTonos, guardarCopia, tonosDe } from "@/lib/color-de-acento";
 import { URL_API } from "@/lib/entorno";
-
-/** Sin color elegido: los dos modos con el de la app. */
-const DE_LA_APP: ColoresDeAcento = { claro: null, oscuro: null };
 
 /** El verde agua de la app en cada modo (lo que muestra el selector cuando no hay uno elegido). */
 const ORIGINAL: Record<ModoDeColor, string> = {
@@ -128,76 +125,20 @@ export function useColorDeAcento(): ContextoDeColor {
   return contexto;
 }
 
-/** Cómo queda el acento en un modo: un botón, algo seleccionado y un enlace. */
-function VistaPrevia({ modo, colores }: { modo: ModoDeColor; colores: ColoresDeAcento }) {
-  const base = modo === "claro" ? TEMA_CLARO : TEMA_OSCURO;
-  const tonos = tonosDe(colores, modo) ?? base;
-  return (
-    // Es una muestra, no algo para usar: la leen igual los lectores de pantalla como texto.
-    <div
-      className="flex flex-wrap items-center gap-2 rounded-control border border-borde p-2"
-      style={{ backgroundColor: base.superficie }}
-    >
-      <span
-        className="rounded-control px-3 py-1.5 text-sm font-medium"
-        style={{ backgroundColor: tonos.acento, color: tonos.acentoTexto }}
-      >
-        Botón
-      </span>
-      <span
-        className="rounded-control px-3 py-1.5 text-sm"
-        style={{ backgroundColor: tonos.acentoSuave, color: tonos.acentoSuaveTexto }}
-      >
-        Seleccionado
-      </span>
-      <span className="text-sm underline" style={{ color: tonos.acento }}>
-        Enlace
-      </span>
-    </div>
-  );
-}
-
-function ColorDeUnModo({
-  modo,
-  colores,
-  alCambiar,
-}: {
-  modo: ModoDeColor;
-  colores: ColoresDeAcento;
-  alCambiar: (color: string) => void;
-}) {
-  const Icono = modo === "claro" ? Sun : Moon;
-  const nombre = modo === "claro" ? "Modo claro" : "Modo oscuro";
-  const id = `color-de-acento-${modo}`;
-  return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 flex items-center gap-1.5 text-sm font-medium text-texto">
-        <Icono aria-hidden="true" className="size-4" />
-        {nombre}
-      </legend>
-      <div className="flex items-center gap-3">
-        <input
-          id={id}
-          type="color"
-          aria-label={`Color de acento del ${nombre.toLowerCase()}`}
-          value={colores[modo] ?? ORIGINAL[modo]}
-          onChange={(evento) => alCambiar(evento.target.value)}
-          className="h-11 w-16 shrink-0 cursor-pointer rounded-control border border-borde-fuerte bg-superficie p-1"
-        />
-        <span className="text-sm text-texto-secundario">
-          {colores[modo] === null ? "El de la app" : "Elegido por vos"}
-        </span>
-      </div>
-      <VistaPrevia modo={modo} colores={colores} />
-    </fieldset>
-  );
-}
-
-/** Botón de la barra que abre el selector de color. Solo con sesión: el color es de la cuenta. */
+/**
+ * Botón de la barra que abre el selector de color. Solo con sesión: el color es de la cuenta.
+ * Elige el tono del modo que se está viendo; el del otro modo se elige estando en ese modo.
+ */
 export function SelectorDeColor() {
   const { colores, cambiarColores, error } = useColorDeAcento();
+  const { tema } = useTema();
   const [abierto, setAbierto] = useState(false);
-  const esElOriginal = colores.claro === null && colores.oscuro === null;
+  const elegido = colores[tema];
+  const valor = elegido ?? ORIGINAL[tema];
+  const nombreDelModo = tema === "claro" ? "modo claro" : "modo oscuro";
+  /** Cambia solo el del modo que se está viendo; null vuelve al original. */
+  const cambiarTono = (color: string | null) =>
+    cambiarColores(tema === "claro" ? { ...colores, claro: color } : { ...colores, oscuro: color });
 
   return (
     <>
@@ -222,36 +163,41 @@ export function SelectorDeColor() {
         icono={Palette}
       >
         <p className="text-sm text-texto-secundario">
-          Elegí un color para cada modo. Se usa en botones, enlaces y lo seleccionado, y se
-          guarda en tu cuenta. Si con el color elegido el texto no se lee bien, se ajusta un poco
-          más claro u oscuro, sin cambiar el tono.
+          Seleccioná el tono para el {nombreDelModo}.
         </p>
-        <div className="flex flex-col gap-4">
-          <ColorDeUnModo
-            modo="claro"
-            colores={colores}
-            alCambiar={(color) => cambiarColores({ ...colores, claro: color })}
+
+        {/* El color, su código y, si no es el original, cómo volver a él: todo en una fila. */}
+        <div className="flex items-center gap-3 rounded-control border border-borde bg-superficie-suave p-2">
+          <input
+            type="color"
+            aria-label={`Tono del ${nombreDelModo}`}
+            value={valor}
+            onChange={(evento) => cambiarTono(evento.target.value)}
+            className="h-10 w-14 shrink-0 cursor-pointer rounded-control border border-borde-fuerte bg-superficie p-1"
           />
-          <ColorDeUnModo
-            modo="oscuro"
-            colores={colores}
-            alCambiar={(color) => cambiarColores({ ...colores, oscuro: color })}
-          />
+          <span className="font-mono text-sm uppercase text-texto">{valor}</span>
+          {elegido === null ? (
+            <span className="ml-auto pr-2 text-sm text-texto-secundario">Original</span>
+          ) : (
+            <Boton
+              variante="sutil"
+              tamano="chico"
+              className="ml-auto"
+              title="Volver al color original"
+              onClick={() => cambiarTono(null)}
+            >
+              <RotateCcw aria-hidden="true" className="size-4" />
+              Restablecer
+            </Boton>
+          )}
         </div>
+
         {error ? (
           <p role="alert" className="text-sm text-peligro">
             No pudimos guardar el color. Revisá la conexión y probá de nuevo.
           </p>
         ) : null}
-        <div className="flex flex-wrap justify-between gap-2">
-          <Boton
-            variante="secundario"
-            onClick={() => cambiarColores(DE_LA_APP)}
-            disabled={esElOriginal}
-          >
-            <RotateCcw aria-hidden="true" className="size-4" />
-            Volver al color original
-          </Boton>
+        <div className="flex justify-end">
           <Boton onClick={() => setAbierto(false)}>Listo</Boton>
         </div>
       </Dialogo>
