@@ -26,9 +26,11 @@
 "use client";
 
 import {
+  AJUSTES_DEL_FONDO_POR_DEFECTO,
   DESPLAZAMIENTO_DE_LUZ,
   esColorHex,
   FONDO_ANIMADO,
+  mezclarTonos,
   type PaletaDeFondo,
   tonoDelFondo,
 } from "@gestoria/ui-tokens";
@@ -72,6 +74,11 @@ type Config = {
   cicloColor: number;
   tono: number;
   rango: number;
+  /**
+   * Con un segundo tono elegido, las manchas van y vienen entre `tono` y este (en vez de
+   * repartirse alrededor de `tono` según `rango`). Null: solo el principal.
+   */
+  tonoSecundario: number | null;
 };
 
 /**
@@ -150,12 +157,16 @@ function dibujar(
     const radio =
       lado * cfg.tamano * forma.escala * (1 + Math.sin(tm * 0.8 + forma.fase) * forma.respiracion);
     const estirado = 1 + forma.alargamiento * cfg.variedadFormas * 1.8;
+    const vaiven = Math.cos(t * cfg.cicloColor * 0.12 * forma.velTono + forma.faseTono);
     const tono =
-      cfg.tono +
-      forma.tonoOffset *
-        cfg.rango *
-        Math.cos(t * cfg.cicloColor * 0.12 * forma.velTono + forma.faseTono) +
-      Math.sin(t * cfg.cicloColor * 0.07 + forma.fase) * cfg.rango * 0.35;
+      cfg.tonoSecundario === null
+        ? cfg.tono +
+          forma.tonoOffset * cfg.rango * vaiven +
+          Math.sin(t * cfg.cicloColor * 0.07 + forma.fase) * cfg.rango * 0.35
+        : // Cada mancha tiene su punto entre los dos tonos (`tonoOffset`, de -1 a 1) y se mueve
+          // hacia el otro extremo y vuelve; un poco de vaivén propio para que no queden planas.
+          mezclarTonos(cfg.tono, cfg.tonoSecundario, (1 + forma.tonoOffset * vaiven) / 2) +
+          Math.sin(t * cfg.cicloColor * 0.07 + forma.fase) * 8;
     const color = `hsla(${tono.toFixed(1)},${tema.sat}%,${(tema.luz + forma.luzOffset).toFixed(1)}%,`;
 
     ctx.save();
@@ -178,13 +189,29 @@ function dibujar(
 export function FondoAnimado() {
   const referencia = useRef<HTMLCanvasElement>(null);
   const { tema } = useTema();
-  const { colores } = useColorDeAcento();
+  const { colores, fondos } = useColorDeAcento();
   // Con un color elegido, el fondo gira a su tono (con la misma relación que el original entre
   // claro y oscuro); si no, el tono de la paleta.
   const elegido = colores[tema];
-  // Redondeado: mientras se arrastra el selector, el fondo solo se rehace cuando el tono cambia de
-  // verdad (rehacerlo vuelve a repartir las formas).
-  const tonoElegido = esColorHex(elegido) ? Math.round(tonoDelFondo(elegido, tema)) : null;
+  const tonoElegido = esColorHex(elegido) ? tonoDelFondo(elegido, tema) : null;
+  const ajustes = fondos[tema] ?? AJUSTES_DEL_FONDO_POR_DEFECTO[tema];
+  const secundario = ajustes.tonoSecundario;
+  const tonoSecundario = esColorHex(secundario) ? tonoDelFondo(secundario, tema) : null;
+  const apagado = ajustes.intensidad === 0;
+
+  // Lo que la persona puede cambiar mientras el fondo corre. Va en una referencia que cada cuadro
+  // lee, en vez de reiniciar el efecto de abajo: reiniciarlo vuelve el tiempo a cero y el fondo
+  // saltaría con cada movimiento de un deslizador.
+  const elegidos = useRef({ tono: tonoElegido, tonoSecundario, ajustes });
+  elegidos.current = { tono: tonoElegido, tonoSecundario, ajustes };
+  /** Vuelve a pintar el cuadro actual: para cuando la animación está quieta (ver abajo). */
+  const repintar = useRef<() => void>(() => {});
+
+  // Con la animación quieta (sin movimiento por preferencia del sistema, o velocidad 0) no hay
+  // cuadros nuevos que lean los cambios: se pinta uno a mano.
+  useEffect(() => {
+    repintar.current();
+  }, [tonoElegido, tonoSecundario, ajustes.tamano, ajustes.velocidad]);
 
   useEffect(() => {
     const elemento = referencia.current;
@@ -196,15 +223,23 @@ export function FondoAnimado() {
     const lienzo = elemento;
     const ctx = contexto2d;
 
+    // Apagado (intensidad 0) no se dibuja nada: el lienzo queda transparente y no gasta batería.
+    if (apagado) return;
+
     const paleta: PaletaDeFondo = tema === "oscuro" ? FONDO_ANIMADO.oscuro : FONDO_ANIMADO.claro;
-    const cfg: Config = {
-      velocidad: FONDO_ANIMADO.velocidad,
-      tamano: FONDO_ANIMADO.tamano,
-      variedadFormas: FONDO_ANIMADO.variedadFormas,
-      cicloColor: FONDO_ANIMADO.cicloColor,
-      tono: tonoElegido ?? paleta.tono,
-      rango: paleta.rango,
-    };
+    /** La configuración de este cuadro, con lo que la persona tenga elegido en este momento. */
+    function config(): Config {
+      const actual = elegidos.current;
+      return {
+        velocidad: FONDO_ANIMADO.velocidad,
+        tamano: FONDO_ANIMADO.tamano * (actual.ajustes.tamano / 100),
+        variedadFormas: FONDO_ANIMADO.variedadFormas,
+        cicloColor: FONDO_ANIMADO.cicloColor,
+        tono: actual.tono ?? paleta.tono,
+        rango: paleta.rango,
+        tonoSecundario: actual.tonoSecundario,
+      };
+    }
 
     const intervalo = 1000 / FONDO_ANIMADO.cuadrosPorSegundo;
     const sinMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -223,7 +258,7 @@ export function FondoAnimado() {
       lienzo.width = ancho;
       lienzo.height = alto;
       formas = generar(FONDO_ANIMADO.formas, window.innerWidth, window.innerHeight);
-      dibujar(ctx, ancho, alto, formas, tiempo, cfg, paleta);
+      dibujar(ctx, ancho, alto, formas, tiempo, config(), paleta);
     }
 
     function cuadro(ahora: number): void {
@@ -236,10 +271,17 @@ export function FondoAnimado() {
       ultimoCuadro = ahora;
 
       // Con tope al salto: si la pestaña estuvo oculta o el equipo se durmió, el
-      // fondo sigue desde donde estaba en vez de saltar a otra parte.
+      // fondo sigue desde donde estaba en vez de saltar a otra parte. La velocidad elegida
+      // multiplica el paso del tiempo: así cambiarla no hace saltar el fondo, solo lo acelera o
+      // lo frena desde donde está (y en 0 queda quieto).
+      const velocidadElegida = elegidos.current.ajustes.velocidad / 100;
+      // Quieto: no hay nada nuevo que pintar (si cambia otro ajuste, `repintar` se ocupa).
+      if (velocidadElegida === 0) return;
       tiempo +=
-        (Math.min(transcurrido, FONDO_ANIMADO.saltoMaximoMs) / 1000) * FONDO_ANIMADO.velocidad;
-      dibujar(ctx, lienzo.width, lienzo.height, formas, tiempo, cfg, paleta);
+        (Math.min(transcurrido, FONDO_ANIMADO.saltoMaximoMs) / 1000) *
+        FONDO_ANIMADO.velocidad *
+        velocidadElegida;
+      dibujar(ctx, lienzo.width, lienzo.height, formas, tiempo, config(), paleta);
     }
 
     function arrancar(): void {
@@ -271,6 +313,8 @@ export function FondoAnimado() {
       else arrancar();
     }
 
+    repintar.current = () =>
+      dibujar(ctx, lienzo.width, lienzo.height, formas, tiempo, config(), paleta);
     medir();
     arrancar();
 
@@ -279,13 +323,14 @@ export function FondoAnimado() {
     sinMovimiento.addEventListener("change", alCambiarLaPreferencia);
 
     return () => {
+      repintar.current = () => {};
       frenar();
       window.clearTimeout(esperaDeMedida);
       window.removeEventListener("resize", alRedimensionar);
       document.removeEventListener("visibilitychange", alCambiarVisibilidad);
       sinMovimiento.removeEventListener("change", alCambiarLaPreferencia);
     };
-  }, [tema, tonoElegido]);
+  }, [tema, apagado]);
 
   // `tabIndex={-1}` además de `aria-hidden`: el navegador considera enfocable a
   // un <canvas> (puede llevar contenido alternativo adentro), y un elemento

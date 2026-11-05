@@ -415,3 +415,5 @@ export const DESPLAZAMIENTO_DE_LUZ = 14;
 
 // Color de acento elegido por la persona: deriva los cuatro tonos del acento a partir de un color.
 export * from "./acento-personalizado.ts";
+// Ajustes del fondo animado elegidos por la persona (intensidad, velocidad, tamaño, segundo tono).
+export * from "./fondo-personalizado.ts";

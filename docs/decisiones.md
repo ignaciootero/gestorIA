@@ -5,6 +5,25 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-05 — Ajustes del fondo animado elegidos por la persona
+
+**Decisión.** En el diálogo del color, debajo del tono, cada persona ajusta el fondo de cada modo:
+intensidad, velocidad, tamaño de las manchas y un segundo tono opcional. Se guardan en la cuenta
+como porcentajes enteros (`usuarios.fondo_claro` y `_oscuro`, texto JSON validado con Zod; null es
+el de la app). La intensidad se ofrece como porcentaje de un tope (`INTENSIDAD_MAXIMA_DEL_FONDO`:
+0,32 en claro y 0,30 en oscuro).
+
+**Por qué.** El tope sale del contraste, no del gusto: con el color de acento libre, el fondo puede
+tener cualquier tono, y el test de contraste pasó a recorrer los 360 (antes solo los cercanos al
+verde agua). Así ningún ajuste deja el texto ilegible. Porcentajes y no los valores internos para
+que el esquema sea simple y lo elegido siga significando lo mismo si cambian los valores base.
+Texto JSON y no jsonb porque viaja en la sesión de Better Auth como un campo más del usuario. Los
+ajustes se aplican en vivo leyendo una referencia en cada cuadro, sin reiniciar la animación: si
+no, el fondo saltaría con cada movimiento de un deslizador. Se dejaron afuera la cantidad de
+manchas y su forma: cambian poco lo que se percibe y suman controles.
+
+---
+
 ## 2026-11-05 — Color de acento elegido por la persona
 
 **Decisión.** Cada persona puede elegir el color de acento con un selector libre (cualquier

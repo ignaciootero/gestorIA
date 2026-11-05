@@ -290,7 +290,10 @@ venciera. El costo de desactivarla es una consulta por petición, resuelta por e
 campos: si mañana la librería agrega un campo interno, no se filtra solo por estar en
 el objeto. Incluye `coloresDeAcento` (`{ claro, oscuro }`, null es el de la app), que se
 cambian con `PUT /api/yo/colores` (los dos a la vez, `#rrggbb`; ver Sistema visual). No se
-pueden cambiar por las rutas de Better Auth: son campos con `input: false`.
+pueden cambiar por las rutas de Better Auth: son campos con `input: false`. Lo mismo con
+`fondo` (`{ claro, oscuro }`, cada uno con `intensidad`, `velocidad`, `tamano` y
+`tonoSecundario`, o null), que se cambia con `PUT /api/yo/fondo`; si lo guardado ya no es
+válido, se devuelve null.
 
 Dónde: `apps/api/src/rutas/yo.ts`, `apps/api/src/middlewares/sesion.ts`.
 
@@ -2089,6 +2092,15 @@ componente escribe un valor suelto.
   copia del navegador con los tonos ya derivados, que un script inline aplica antes del
   primer pintado; al salir se borra. Cambiar el color se ve al instante y se guarda un rato
   después de soltar el selector.
+- **Fondo animado ajustable**, en el mismo diálogo, debajo del tono y también por modo:
+  *Intensidad* (0 a 100 %; el 100 % es la opacidad más alta con la que el texto secundario
+  sigue en 4,5:1 con cualquiera de los 360 tonos, y el 0 apaga el fondo y deja de dibujarlo),
+  *Velocidad* (de quieto a 3×; multiplica el paso del tiempo, así cambiarla no hace saltar el
+  fondo), *Tamaño de las manchas* (50 a 150 %) y *Segundo tono* (opcional: las manchas van y
+  vienen entre el tono principal y este, por el camino corto del círculo de color), con
+  "Restablecer" para volver al de siempre. Se guarda en la cuenta (`PUT /api/yo/fondo`, como
+  texto JSON validado; null es el de la app). Los cambios se aplican en vivo sin reiniciar la
+  animación. La intensidad también va en la copia del navegador, para que no haya destello.
 - **Fondo animado:** quince formas de color difuminadas que se mueven, giran y cambian de
   tamaño y de color muy despacio detrás de todo el contenido, cubriendo siempre la
   ventana. El difuminado sale de dibujar un canvas a 1/24 del tamaño de la ventana y

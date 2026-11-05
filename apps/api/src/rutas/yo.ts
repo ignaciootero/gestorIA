@@ -5,12 +5,20 @@
 // interfaz, en nuestro vocabulario, y sin campos internos de la libreria.
 
 import type { ClienteDb } from "@gestoria/db";
-import { esquemaColoresDeAcento } from "@gestoria/shared";
+import { esquemaColoresDeAcento, esquemaFondos, leerAjustesDelFondo } from "@gestoria/shared";
 import { Hono } from "hono";
+import type { z } from "zod";
 import { errores } from "../errores/error-api.ts";
 import { exigirSesion } from "../middlewares/sesion.ts";
-import { guardarColoresDeAcento } from "../servicios/usuarios/colores-de-acento.ts";
+import { guardarColoresDeAcento, guardarFondos } from "../servicios/usuarios/colores-de-acento.ts";
 import type { EntornoHono } from "../tipos.ts";
+
+function detalleDe(problema: z.ZodError): { campo: string; mensaje: string }[] {
+  return problema.issues.map((issue) => ({
+    campo: issue.path.join(".") || "(raíz)",
+    mensaje: issue.message,
+  }));
+}
 
 export function rutasDeSesion(cliente: ClienteDb): Hono<EntornoHono> {
   const rutas = new Hono<EntornoHono>();
@@ -18,6 +26,7 @@ export function rutasDeSesion(cliente: ClienteDb): Hono<EntornoHono> {
   // Solo para cambiar los colores: GET /api/yo tiene que seguir respondiendo a quien debe cambiar
   // la contraseña (así la web sabe que tiene que mandarla a cambiarla).
   rutas.use("/api/yo/colores", exigirSesion);
+  rutas.use("/api/yo/fondo", exigirSesion);
 
   rutas.get("/api/yo", (c) => {
     const sesion = c.get("sesion");
@@ -44,6 +53,10 @@ export function rutasDeSesion(cliente: ClienteDb): Hono<EntornoHono> {
         claro: usuario.colorDeAcentoClaro ?? null,
         oscuro: usuario.colorDeAcentoOscuro ?? null,
       },
+      fondo: {
+        claro: leerAjustesDelFondo(usuario.fondoClaro),
+        oscuro: leerAjustesDelFondo(usuario.fondoOscuro),
+      },
     });
   });
 
@@ -54,16 +67,20 @@ export function rutasDeSesion(cliente: ClienteDb): Hono<EntornoHono> {
     if (!sesion) throw errores.noAutenticado();
 
     const resultado = esquemaColoresDeAcento.safeParse(await c.req.json());
-    if (!resultado.success) {
-      throw errores.validacion(
-        resultado.error.issues.map((issue) => ({
-          campo: issue.path.join(".") || "(raíz)",
-          mensaje: issue.message,
-        })),
-      );
-    }
+    if (!resultado.success) throw errores.validacion(detalleDe(resultado.error));
 
     return c.json(await guardarColoresDeAcento(cliente, sesion.user.id, resultado.data));
+  });
+
+  // Los ajustes del fondo animado de los dos modos; null en uno vuelve al fondo de la app.
+  rutas.put("/api/yo/fondo", async (c) => {
+    const sesion = c.get("sesion");
+    if (!sesion) throw errores.noAutenticado();
+
+    const resultado = esquemaFondos.safeParse(await c.req.json());
+    if (!resultado.success) throw errores.validacion(detalleDe(resultado.error));
+
+    return c.json(await guardarFondos(cliente, sesion.user.id, resultado.data));
   });
 
   return rutas;

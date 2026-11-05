@@ -42,6 +42,10 @@ export const CAMPOS_ADICIONALES_USUARIO = {
   // PUT /api/yo/colores, nunca al registrarse (ver auth/colores-de-acento.ts).
   colorDeAcentoClaro: { type: "string", required: false, input: false },
   colorDeAcentoOscuro: { type: "string", required: false, input: false },
+  // Ajustes del fondo animado, como texto JSON (ver auth/fondo.ts); null es el de la app. Se
+  // cambian con PUT /api/yo/fondo.
+  fondoClaro: { type: "string", required: false, input: false },
+  fondoOscuro: { type: "string", required: false, input: false },
 } as const;
 
 export type CamposAdicionalesUsuario = typeof CAMPOS_ADICIONALES_USUARIO;

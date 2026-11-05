@@ -232,6 +232,13 @@
       "when": 1793885190191,
       "tag": "0032_color_de_acento",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793887358644,
+      "tag": "0033_fondo_personalizado",
+      "breakpoints": true
     }
   ]
 }

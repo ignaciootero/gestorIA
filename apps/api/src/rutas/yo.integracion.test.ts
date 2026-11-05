@@ -1,7 +1,8 @@
 // Tests de integracion de la sesion y de los permisos, contra gestion_test.
 
-import type { ClienteDb } from "@gestoria/db";
+import { type ClienteDb, esquema } from "@gestoria/db";
 import { ESTADOS_CUENTA, type RespuestaError, ROLES } from "@gestoria/shared";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { RUTA_BASE_AUTH } from "../auth/opciones.ts";
 import {
@@ -241,5 +242,107 @@ describe("colores de acento", () => {
       body: JSON.stringify({ colorDeAcentoClaro: "#ff0000" }),
     });
     expect(await colores(cookies)).toEqual({ claro: null, oscuro: null });
+  });
+});
+
+describe("ajustes del fondo", () => {
+  const AJUSTES = { intensidad: 40, velocidad: 150, tamano: 80, tonoSecundario: "#FDE047" };
+
+  async function guardar(cookies: string, cuerpo: unknown): Promise<Response> {
+    return app.request("/api/yo/fondo", {
+      method: "PUT",
+      headers: { cookie: cookies, "content-type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+  }
+
+  async function fondo(cookies: string): Promise<unknown> {
+    const respuesta = await app.request("/api/yo", { headers: { cookie: cookies } });
+    return (await leerJson<Record<string, unknown>>(respuesta))["fondo"];
+  }
+
+  it("una cuenta nueva usa el fondo de la app en los dos modos", async () => {
+    const { cookies } = await entrar();
+    expect(await fondo(cookies)).toEqual({ claro: null, oscuro: null });
+  });
+
+  it("guarda los ajustes de cada modo y GET /api/yo los devuelve", async () => {
+    const { cookies } = await entrar();
+
+    const respuesta = await guardar(cookies, { claro: AJUSTES, oscuro: null });
+    expect(respuesta.status).toBe(200);
+    const guardados = { ...AJUSTES, tonoSecundario: "#fde047" };
+    expect(await leerJson(respuesta)).toEqual({ claro: guardados, oscuro: null });
+    expect(await fondo(cookies)).toEqual({ claro: guardados, oscuro: null });
+  });
+
+  it("acepta los extremos: apagado, quieto y sin segundo tono", async () => {
+    const { cookies } = await entrar();
+    const extremos = { intensidad: 0, velocidad: 0, tamano: 50, tonoSecundario: null };
+
+    expect((await guardar(cookies, { claro: extremos, oscuro: extremos })).status).toBe(200);
+    expect(await fondo(cookies)).toEqual({ claro: extremos, oscuro: extremos });
+  });
+
+  it("con null vuelve al fondo de la app", async () => {
+    const { cookies } = await entrar();
+    await guardar(cookies, { claro: AJUSTES, oscuro: AJUSTES });
+
+    await guardar(cookies, { claro: null, oscuro: AJUSTES });
+    expect(await fondo(cookies)).toEqual({
+      claro: null,
+      oscuro: { ...AJUSTES, tonoSecundario: "#fde047" },
+    });
+  });
+
+  it.each([
+    ["una intensidad de más", { ...AJUSTES, intensidad: 101 }],
+    ["una intensidad negativa", { ...AJUSTES, intensidad: -1 }],
+    ["una velocidad de más", { ...AJUSTES, velocidad: 301 }],
+    ["un tamaño de menos", { ...AJUSTES, tamano: 49 }],
+    ["un tamaño de más", { ...AJUSTES, tamano: 151 }],
+    ["un número con decimales", { ...AJUSTES, velocidad: 1.5 }],
+    ["un segundo tono inválido", { ...AJUSTES, tonoSecundario: "amarillo" }],
+    ["un ajuste de menos", { intensidad: 40, velocidad: 100, tamano: 100 }],
+    ["un ajuste de más", { ...AJUSTES, cantidad: 30 }],
+  ])("rechaza %s con 400 y no cambia nada", async (_caso, ajustes) => {
+    const { cookies } = await entrar();
+    await guardar(cookies, { claro: AJUSTES, oscuro: null });
+
+    const respuesta = await guardar(cookies, { claro: ajustes, oscuro: null });
+    expect(respuesta.status).toBe(400);
+    expect((await leerJson<RespuestaError>(respuesta)).error.codigo).toBe("VALIDACION_INVALIDA");
+    expect(await fondo(cookies)).toEqual({
+      claro: { ...AJUSTES, tonoSecundario: "#fde047" },
+      oscuro: null,
+    });
+  });
+
+  it("sin sesión responde 401", async () => {
+    const respuesta = await app.request("/api/yo/fondo", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ claro: null, oscuro: null }),
+    });
+    expect(respuesta.status).toBe(401);
+  });
+
+  it("cada persona cambia solo el suyo", async () => {
+    const una = await entrar();
+    const otra = await entrar();
+
+    await guardar(una.cookies, { claro: AJUSTES, oscuro: AJUSTES });
+    expect(await fondo(otra.cookies)).toEqual({ claro: null, oscuro: null });
+  });
+
+  it("si lo guardado en la base ya no es válido, devuelve el fondo de la app", async () => {
+    const { cookies, usuario } = await entrar();
+    const cuenta = await buscarCuenta(cliente, usuario);
+    await cliente.db
+      .update(esquema.usuarios)
+      .set({ fondoClaro: "{roto", fondoOscuro: JSON.stringify({ intensidad: 999 }) })
+      .where(eq(esquema.usuarios.id, cuenta?.id ?? ""));
+
+    expect(await fondo(cookies)).toEqual({ claro: null, oscuro: null });
   });
 });

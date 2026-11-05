@@ -12,6 +12,7 @@ import {
   BRILLO_DE_BORDE,
   DESPLAZAMIENTO_DE_LUZ,
   FONDO_ANIMADO,
+  INTENSIDAD_MAXIMA_DEL_FONDO,
   MICROINTERACCION,
   type PaletaDeFondo,
   RADIO,
@@ -303,12 +304,23 @@ describe("contraste sobre el fondo animado", () => {
     return ((claro as number) + 0.05) / ((oscuro as number) + 0.05);
   }
 
-  /** El contraste más bajo que puede dar el fondo contra un color de texto. */
-  function peorContraste(texto: Rgb, fondo: Rgb, paleta: PaletaDeFondo): number {
+  /**
+   * El contraste más bajo que puede dar el fondo contra un color de texto. Sin `todosLosTonos`,
+   * recorre los tonos de la paleta (su tono ± su rango); con él, los 360: es lo que puede pasar
+   * con un color de acento o un segundo tono elegidos por la persona.
+   */
+  function peorContraste(
+    texto: Rgb,
+    fondo: Rgb,
+    paleta: PaletaDeFondo,
+    todosLosTonos = false,
+  ): number {
     let peor = Number.POSITIVE_INFINITY;
     const mitad = DESPLAZAMIENTO_DE_LUZ / 2;
+    const desde = todosLosTonos ? 0 : paleta.tono - paleta.rango;
+    const hasta = todosLosTonos ? 359 : paleta.tono + paleta.rango;
 
-    for (let tono = paleta.tono - paleta.rango; tono <= paleta.tono + paleta.rango; tono += 1) {
+    for (let tono = desde; tono <= hasta; tono += 1) {
       for (const desvio of [-mitad, 0, mitad]) {
         const encima = desdeHsl(tono, paleta.sat, paleta.luz + desvio);
         peor = Math.min(peor, contraste(texto, componer(fondo, encima, paleta.intensidad)));
@@ -330,6 +342,16 @@ describe("contraste sobre el fondo animado", () => {
       expect(peorContraste(desdeHex(tema.textoSecundario), fondo, paleta)).toBeGreaterThanOrEqual(
         4.5,
       );
+    });
+
+    it(`en el tema ${nombreTema}, con la intensidad máxima del ajuste y cualquier tono, se lee`, () => {
+      const fondo = desdeHex(tema.fondo);
+      const alTope = { ...paleta, intensidad: INTENSIDAD_MAXIMA_DEL_FONDO[nombreTema] };
+
+      expect(peorContraste(desdeHex(tema.texto), fondo, alTope, true)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        peorContraste(desdeHex(tema.textoSecundario), fondo, alTope, true),
+      ).toBeGreaterThanOrEqual(4.5);
     });
   }
 });

@@ -75,6 +75,13 @@ export const usuarios = pgTable(
      */
     colorDeAcentoClaro: text(),
     colorDeAcentoOscuro: text(),
+    /**
+     * Ajustes del fondo animado de cada modo (intensidad, velocidad, tamaño, segundo tono), como
+     * texto JSON validado con esquemaAjustesDelFondo (packages/shared). Null es el de la app.
+     * Texto y no jsonb porque viaja en la sesión de Better Auth como un campo más del usuario.
+     */
+    fondoClaro: text(),
+    fondoOscuro: text(),
   },
   (tabla) => [
     uniqueIndex("usuarios_email_unico").on(tabla.email),

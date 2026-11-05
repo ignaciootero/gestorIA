@@ -1,7 +1,7 @@
 // Color de acento elegido por la persona: uno por modo, guardado en la cuenta.
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { type CuentaDePrueba, crearCuentaAprobada, limpiarBaseDePruebas } from "./utilidades";
 
 /** El verde agua de la app (tokens.css). */
@@ -26,11 +26,21 @@ function acento(pagina: Page): Promise<string> {
   );
 }
 
-/** Espera a que se guarde en la cuenta (el selector guarda un rato después del último cambio). */
-async function esperarGuardado(pagina: Page): Promise<void> {
-  await pagina.waitForResponse(
-    (respuesta) => respuesta.url().endsWith("/api/yo/colores") && respuesta.ok(),
+/** El valor de --fondo-intensidad (la opacidad del fondo animado) que está usando la página. */
+function intensidad(pagina: Page): Promise<string> {
+  return pagina.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--fondo-intensidad").trim(),
   );
+}
+
+/** La parte del tono dentro del diálogo. */
+function tono(dialogo: Locator): Locator {
+  return dialogo.getByRole("region", { name: "Tono" });
+}
+
+/** Espera a que se guarde en la cuenta (el selector guarda un rato después del último cambio). */
+async function esperarGuardado(pagina: Page, ruta = "/api/yo/colores"): Promise<void> {
+  await pagina.waitForResponse((respuesta) => respuesta.url().endsWith(ruta) && respuesta.ok());
 }
 
 test.describe("color de acento", () => {
@@ -54,7 +64,7 @@ test.describe("color de acento", () => {
     // Solo el tono del modo que se está viendo, y todavía el original.
     await expect(dialogo).toContainText("Seleccioná el tono para el modo claro.");
     await expect(dialogo.getByLabel("Tono del modo oscuro")).toHaveCount(0);
-    await expect(dialogo.getByText("Original", { exact: true })).toBeVisible();
+    await expect(tono(dialogo).getByText("Original", { exact: true })).toBeVisible();
 
     // Un violeta que ya se lee bien con texto blanco: se usa tal cual, al instante.
     const guardado = esperarGuardado(page);
@@ -77,7 +87,7 @@ test.describe("color de acento", () => {
     await expect.poll(() => acento(page)).toBe(ORIGINAL.oscuro);
     await page.getByRole("button", { name: "Color de la app" }).click();
     await expect(dialogo).toContainText("Seleccioná el tono para el modo oscuro.");
-    await expect(dialogo.getByText("Original", { exact: true })).toBeVisible();
+    await expect(tono(dialogo).getByText("Original", { exact: true })).toBeVisible();
     await dialogo.getByRole("button", { name: "Listo" }).click();
 
     // Otro navegador (sin copia): lo trae de la cuenta.
@@ -92,9 +102,9 @@ test.describe("color de acento", () => {
     await page.getByRole("radio", { name: "Tema claro" }).click();
     await page.getByRole("button", { name: "Color de la app" }).click();
     const reinicio = esperarGuardado(page);
-    await dialogo.getByRole("button", { name: "Restablecer" }).click();
+    await dialogo.getByRole("button", { name: "Restablecer el color" }).click();
     await reinicio;
-    await expect(dialogo.getByText("Original", { exact: true })).toBeVisible();
+    await expect(tono(dialogo).getByText("Original", { exact: true })).toBeVisible();
     await expect.poll(() => acento(page)).toBe(ORIGINAL.claro);
     await page.reload();
     expect(await acento(page)).toBe(ORIGINAL.claro);
@@ -132,5 +142,60 @@ test.describe("color de acento", () => {
     await expect.poll(() => acento(page)).toBe(ORIGINAL.claro);
     await page.reload();
     expect(await acento(page)).toBe(ORIGINAL.claro);
+  });
+
+  test("el fondo se ajusta por modo: intensidad, velocidad, tamaño y segundo tono", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    // La intensidad de siempre en claro (tokens.css).
+    expect(await intensidad(page)).toBe("0.18");
+
+    await page.getByRole("button", { name: "Color de la app" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Color de la app" });
+    const fondo = dialogo.getByRole("region", { name: "Fondo" });
+    await expect(fondo.getByText("Original", { exact: true })).toBeVisible();
+
+    // Al máximo: el 100 % es el tope legible (0,32 en claro).
+    const guardado = esperarGuardado(page, "/api/yo/fondo");
+    await dialogo.getByLabel("Intensidad").fill("100");
+    await expect.poll(() => intensidad(page)).toBe("0.32");
+    await dialogo.getByLabel("Velocidad").fill("0");
+    await expect(dialogo.getByText("Quieto", { exact: true })).toBeVisible();
+    await dialogo.getByLabel("Tamaño de las manchas").fill("150");
+    await expect(dialogo.getByText("150 %", { exact: true })).toBeVisible();
+    await dialogo.getByRole("switch", { name: "Segundo tono" }).click();
+    await dialogo.getByLabel("Segundo tono del fondo").fill("#f97316");
+    await guardado;
+    await dialogo.getByRole("button", { name: "Listo" }).click();
+
+    // Al recargar sigue, desde el primer pintado.
+    await page.reload();
+    expect(await intensidad(page)).toBe("0.32");
+    await page.getByRole("button", { name: "Color de la app" }).click();
+    await expect(dialogo.getByLabel("Velocidad")).toHaveValue("0");
+    await expect(dialogo.getByRole("switch", { name: "Segundo tono" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(dialogo.getByLabel("Segundo tono del fondo")).toHaveValue("#f97316");
+
+    // En 0 se apaga.
+    await dialogo.getByLabel("Intensidad").fill("0");
+    await expect(dialogo.getByText("Apagado", { exact: true })).toBeVisible();
+    await expect.poll(() => intensidad(page)).toBe("0");
+
+    // Restablecer vuelve al fondo de siempre.
+    const restablecido = esperarGuardado(page, "/api/yo/fondo");
+    await dialogo.getByRole("button", { name: "Restablecer el fondo" }).click();
+    await restablecido;
+    await expect.poll(() => intensidad(page)).toBe("0.18");
+    await dialogo.getByRole("button", { name: "Listo" }).click();
+
+    // El modo oscuro tiene el suyo, que sigue siendo el de siempre.
+    await page.getByRole("radio", { name: "Tema oscuro" }).click();
+    await expect.poll(() => intensidad(page)).toBe("0.25");
   });
 });
