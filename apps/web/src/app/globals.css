@@ -16,6 +16,12 @@
 @custom-variant con-mouse (@media (hover: hover) and (pointer: fine));
 
 /*
+ * Una ventana con alto de sobra para lo que se ve en grande (el saludo de la pantalla de inicio). En
+ * una más baja, lo que no es esencial se achica o se esconde para que la pantalla entre sin cortarse.
+ */
+@custom-variant ventana-alta (@media (min-height: 701px));
+
+/*
  * Los tokens del sistema visual se exponen como utilidades de Tailwind.
  * `@theme inline` hace que apunten a las variables CSS en vez de copiar su
  * valor, que es lo que permite que cambien solas al cambiar de tema.

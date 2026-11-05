@@ -28,15 +28,24 @@ import { obtenerEventos } from "@/lib/api-calendario";
 import { obtenerWidgetsDeContactos } from "@/lib/api-contactos";
 import { obtenerWidgets } from "@/lib/api-finanzas";
 import { obtenerWidgetsDeTareas } from "@/lib/api-tareas";
+import { cn } from "@/lib/clases";
 import { URL_API } from "@/lib/entorno";
 import { interpretarError } from "@/lib/mensajes-de-error";
 import { zonaDelDispositivo } from "@/lib/preferencias-finanzas";
-import { CarruselDeInicio, type Diapositiva } from "./carrusel-de-inicio";
+import { ALTO_DE_LA_TARJETA, CarruselDeInicio, type Diapositiva } from "./carrusel-de-inicio";
 import type { IdentidadDeModulo } from "./piezas-de-resumen";
 import { DIAS_DEL_RESUMEN_DEL_CALENDARIO, ResumenDeCalendario } from "./resumen-de-calendario";
 import { ResumenDeContactos } from "./resumen-de-contactos";
 import { ResumenDeFinanzas } from "./resumen-de-finanzas";
 import { ResumenDeTareas } from "./resumen-de-tareas";
+import { ENTRADA_DEL_CARRUSEL_S, SaludoDeInicio } from "./saludo-de-inicio";
+
+/**
+ * Ocupa el ancho disponible (hasta 80 rem) y se centra en el alto: la tarjeta tiene un alto propio
+ * (ver ALTO_DE_LA_TARJETA) en vez de estirarse hasta llenar la ventana, que dejaba los gráficos
+ * altísimos y huecos en blanco adentro. Lo que sobra de alto queda repartido arriba y abajo.
+ */
+const CLASE_DEL_PANEL = "mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col justify-center";
 
 type Yo = {
   id: string;
@@ -77,17 +86,7 @@ function diapositiva(
   return { id: clave, nombre: modulo.nombre, Icono: modulo.Icono, punto, contenido: armar(modulo) };
 }
 
-/** "martes 3 de noviembre". */
-function hoyEnPalabras(dia: string): string {
-  return new Intl.DateTimeFormat("es-UY", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  }).format(new Date(`${dia}T00:00:00Z`));
-}
-
-function Carrusel({ hoy }: { hoy: string }) {
+function Carrusel({ hoy, encabezado }: { hoy: string; encabezado: ReactNode }) {
   const finanzas = useQuery({ queryKey: ["finanzas", "widgets"], queryFn: obtenerWidgets });
   const tareas = useQuery({ queryKey: ["tareas", "widgets"], queryFn: obtenerWidgetsDeTareas });
   const contactos = useQuery({
@@ -111,7 +110,14 @@ function Carrusel({ hoy }: { hoy: string }) {
     )),
   ];
 
-  return <CarruselDeInicio diapositivas={diapositivas} etiqueta="Resumen de tus módulos" />;
+  return (
+    <CarruselDeInicio
+      diapositivas={diapositivas}
+      etiqueta="Resumen de tus módulos"
+      encabezado={encabezado}
+      demoraDeEntrada={ENTRADA_DEL_CARRUSEL_S}
+    />
+  );
 }
 
 export function PanelDeInicio() {
@@ -125,11 +131,16 @@ export function PanelDeInicio() {
     // Esqueleto con la forma del contenido, no una pantalla en blanco
     // (docs/guias/rendimiento.md, Velocidad percibida).
     return (
-      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-4">
-        <div aria-busy="true" aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className={CLASE_DEL_PANEL}>
+        <div aria-busy="true" aria-live="polite" className="flex min-h-0 flex-col gap-3">
           <span className="solo-lectores">Cargando tus datos</span>
-          <div className="mx-auto h-8 w-48 animate-pulse rounded-control bg-superficie-suave" />
-          <div className="min-h-40 flex-1 animate-pulse rounded-tarjeta bg-superficie-suave" />
+          <div className="flex items-center gap-3">
+            <div className="size-11 animate-pulse rounded-full bg-superficie-suave" />
+            <div className="h-11 w-56 animate-pulse rounded-control bg-superficie-suave" />
+          </div>
+          <div
+            className={cn(ALTO_DE_LA_TARJETA, "animate-pulse rounded-tarjeta bg-superficie-suave")}
+          />
         </div>
       </div>
     );
@@ -150,18 +161,10 @@ export function PanelDeInicio() {
   }
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-4">
-      <header className="text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Hola, {yo.nombre}</h1>
-        {hoy ? (
-          // En una ventana baja se esconde para dejarle el lugar al carrusel.
-          <p className="mt-1 text-sm text-texto-secundario first-letter:uppercase [@media(max-height:700px)]:hidden">
-            {hoyEnPalabras(hoy)}
-          </p>
-        ) : null}
-      </header>
-
-      {hoy ? <Carrusel hoy={hoy} /> : null}
+    <div className={CLASE_DEL_PANEL}>
+      {hoy ? (
+        <Carrusel hoy={hoy} encabezado={<SaludoDeInicio nombre={yo.nombre} hoy={hoy} />} />
+      ) : null}
     </div>
   );
 }

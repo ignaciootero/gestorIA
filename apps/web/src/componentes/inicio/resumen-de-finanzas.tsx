@@ -182,7 +182,7 @@ export function ResumenDeFinanzas({
                   color={modulo.punto}
                   columnas={evolucion.map((anterior, posicion) => ({
                     // Sin el año, que se repite en todos ("Octubre 2026" → "Octubre").
-                    etiqueta: anterior.nombre.replace(/s+d{4}$/, ""),
+                    etiqueta: anterior.nombre.replace(/\s+\d{4}$/, ""),
                     valor: anterior.gastosCentavos,
                     texto: formatearMontoCorto(anterior.gastosCentavos),
                     resaltada: posicion === evolucion.length - 1,

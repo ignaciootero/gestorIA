@@ -70,7 +70,7 @@ Si un fragmento necesita muchos comentarios para entenderse, primero intentar si
 ## Git
 
 - **Commits chicos** y enfocados en un solo cambio, con mensajes según **Conventional Commits** en español: `feat: registro de gastos`, `fix: cálculo de fecha en recordatorios`, `docs: guía de testing`, `refactor:`, `test:`, `chore:`.
-- **Una rama por funcionalidad o corrección** (`feat/registro-gastos`, `fix/zona-horaria-recordatorios`), integrada a `main` cuando está terminada según la definición de terminado. `main` siempre funciona.
+- **Directo en `main`, sin ramas:** hay una sola persona trabajando (ver `docs/decisiones.md`, 2026-11-04). Cada commit entra terminado según la definición de terminado: `main` siempre funciona.
 - **Hooks con Lefthook:** antes de cada commit, Biome (lint y formato) sobre los archivos modificados y verificación de tipos; antes de cada push, la suite de tests. No saltear los hooks.
 - **El hook revisa el índice, no el árbol de trabajo.** Mientras corre, aparta lo que no está stageado, pero los archivos sin trackear siguen en disco. Un commit parcial (algo stageado, algo no, archivos nuevos sin agregar) produce errores de tipos en cascada aunque `pnpm lint` y `pnpm typecheck` pasen sobre el árbol completo. Por eso: stagear todo lo que compone el paso (incluidos los archivos nuevos), no mezclar en el árbol trabajo de dos pasos al momento de commitear, y antes de proponer el mensaje de commit correr `pnpm lint`, `pnpm typecheck` y `pnpm exec lefthook run pre-commit` (valida el índice tal como se va a commitear).
 - Capturas y archivos de depuración (`_falla.png` y similares) no se commitean: borrarlos o dejarlos fuera del índice.

@@ -33,6 +33,12 @@ import { cn } from "@/lib/clases";
  */
 export const INTERVALO_DEL_CARRUSEL_DE_INICIO_MS = 15000;
 
+/**
+ * El alto de la tarjeta: fijo, para que el gráfico no se estire en una ventana alta ni la tarjeta se
+ * llene de aire. Si la ventana no da, se achica (la tarjeta puede encogerse hasta lo que queda).
+ */
+export const ALTO_DE_LA_TARJETA = "h-[32rem] [@media(min-height:1000px)]:h-[36rem]";
+
 /** Cuánto hay que deslizar con el dedo para pasar de resumen. */
 const UMBRAL_DE_DESLIZAMIENTO = 60;
 const DESPLAZAMIENTO = 32;
@@ -57,10 +63,19 @@ const CLASE_FLECHA = cn(
 export function CarruselDeInicio({
   diapositivas,
   etiqueta,
+  encabezado,
+  demoraDeEntrada,
 }: {
   diapositivas: readonly Diapositiva[];
   /** Anuncia el carrusel a los lectores de pantalla ("Resumen de tus módulos"). */
   etiqueta: string;
+  /** Lo que va a la izquierda de las pestañas, alineado con la tarjeta (el saludo). */
+  encabezado?: ReactNode;
+  /**
+   * Si se da, las pestañas y la tarjeta entran subiendo después de esos segundos (en la pantalla de
+   * inicio, después del saludo). Sin ella, aparecen sin animación.
+   */
+  demoraDeEntrada?: number;
 }) {
   const reducirMovimiento = useReducedMotion();
   const id = useId();
@@ -116,6 +131,28 @@ export function CarruselDeInicio({
     pestanas.current[nuevo]?.focus();
   }
 
+  // Sobre las pestañas o sobre la tarjeta (no sobre el encabezado, que no es parte del carrusel)
+  // se queda quieto. `mouseover` y no `mouseenter`: si el puntero ya estaba encima cuando apareció,
+  // `mouseenter` no llega nunca, y moverlo adentro tiene que detenerlo igual.
+  const quietoConElMouse = {
+    onMouseOver: () => setMouseEncima(true),
+    onMouseLeave: () => setMouseEncima(false),
+  };
+
+  /** Entra subiendo después de `demoraDeEntrada` (más `extra`), salvo con reducir movimiento. */
+  const entrada = (extra: number, desplazamiento: number) => ({
+    initial:
+      demoraDeEntrada === undefined || reducirMovimiento
+        ? false
+        : { opacity: 0, y: desplazamiento },
+    animate: { opacity: 1, y: 0 },
+    transition: {
+      duration: DURACION_MS.lenta / 1000,
+      delay: (demoraDeEntrada ?? 0) + extra,
+      ease: CURVA_SALIDA,
+    },
+  });
+
   if (!actual) return null;
 
   const variantes = {
@@ -147,96 +184,110 @@ export function CarruselDeInicio({
       aria-roledescription="carrusel"
       aria-label={etiqueta}
       data-avanza-solo={avanzaSolo}
-      className="flex min-h-0 flex-1 flex-col gap-3"
-      // `mouseover` y no `mouseenter`: si el puntero ya estaba encima cuando apareció el carrusel,
-      // `mouseenter` no llega nunca, y moverlo adentro tiene que detenerlo igual.
-      onMouseOver={() => setMouseEncima(true)}
-      onMouseLeave={() => setMouseEncima(false)}
+      className="flex min-h-0 flex-col gap-4"
       onFocus={(evento) => setFocoDeTeclado(evento.target.matches(":focus-visible"))}
       onBlur={() => setFocoDeTeclado(false)}
     >
-      <div className="flex items-center justify-center gap-2">
-        {puedeAvanzarSolo ? (
-          <button
-            type="button"
-            onClick={() => setPausado((actual) => !actual)}
-            aria-label={pausado ? "Reanudar el pase automático" : "Pausar el pase automático"}
-            className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-full text-texto-secundario",
-              "transition-colors duration-(--duracion-rapida) ease-salida",
-              "hover:bg-superficie-suave hover:text-texto",
-              "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
-            )}
+      {/* El encabezado a la izquierda y las pestañas a la derecha, alineados con los bordes de la
+          tarjeta (el mismo `sm:px-12` que deja lugar a las flechas). En una pantalla angosta, las
+          pestañas bajan a otra línea. */}
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-x-6 gap-y-3 sm:px-12",
+          encabezado ? "justify-between" : "justify-center",
+        )}
+      >
+        {encabezado}
+        <motion.div className="flex items-center gap-2" {...quietoConElMouse} {...entrada(0, 8)}>
+          {puedeAvanzarSolo ? (
+            <button
+              type="button"
+              onClick={() => setPausado((actual) => !actual)}
+              aria-label={pausado ? "Reanudar el pase automático" : "Pausar el pase automático"}
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-full text-texto-secundario",
+                "transition-colors duration-(--duracion-rapida) ease-salida",
+                "hover:bg-superficie-suave hover:text-texto",
+                "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
+              )}
+            >
+              {pausado ? (
+                <Play aria-hidden="true" className="size-4" />
+              ) : (
+                <Pause aria-hidden="true" className="size-4" />
+              )}
+            </button>
+          ) : null}
+          <div
+            role="tablist"
+            aria-label="Módulos"
+            onKeyDown={alTeclearEnPestanas}
+            className="flex min-w-0 flex-wrap justify-center gap-1 rounded-full border border-borde bg-superficie/80 p-1 shadow-sutil backdrop-blur-sm"
           >
-            {pausado ? (
-              <Play aria-hidden="true" className="size-4" />
-            ) : (
-              <Pause aria-hidden="true" className="size-4" />
-            )}
-          </button>
-        ) : null}
-        <div
-          role="tablist"
-          aria-label="Módulos"
-          onKeyDown={alTeclearEnPestanas}
-          className="flex min-w-0 flex-wrap justify-center gap-1 rounded-full border border-borde bg-superficie/80 p-1 shadow-sutil backdrop-blur-sm"
-        >
-          {diapositivas.map((diapositiva, posicion) => {
-            const elegida = posicion === indice;
-            const { Icono } = diapositiva;
-            return (
-              <button
-                key={diapositiva.id}
-                ref={(elemento) => {
-                  pestanas.current[posicion] = elemento;
-                }}
-                type="button"
-                role="tab"
-                id={`${id}-pestana-${diapositiva.id}`}
-                aria-selected={elegida}
-                aria-label={diapositiva.nombre}
-                aria-controls={`${id}-resumen`}
-                tabIndex={elegida ? 0 : -1}
-                data-modulo={diapositiva.id}
-                onClick={() => irA(posicion, posicion >= indice ? 1 : -1)}
-                className={cn(
-                  "relative flex h-8 items-center gap-1.5 overflow-hidden rounded-full px-3 text-sm font-medium",
-                  "transition-colors duration-(--duracion-rapida) ease-salida",
-                  "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
-                  elegida
-                    ? "bg-superficie-suave text-texto"
-                    : "text-texto-secundario hover:bg-superficie-suave/60 hover:text-texto",
-                )}
-              >
-                <Icono aria-hidden="true" className="size-4 shrink-0" />
-                {/* En pantallas chicas no entran los cuatro nombres: solo se ve el de la elegida (el
+            {diapositivas.map((diapositiva, posicion) => {
+              const elegida = posicion === indice;
+              const { Icono } = diapositiva;
+              return (
+                <button
+                  key={diapositiva.id}
+                  ref={(elemento) => {
+                    pestanas.current[posicion] = elemento;
+                  }}
+                  type="button"
+                  role="tab"
+                  id={`${id}-pestana-${diapositiva.id}`}
+                  aria-selected={elegida}
+                  aria-label={diapositiva.nombre}
+                  aria-controls={`${id}-resumen`}
+                  tabIndex={elegida ? 0 : -1}
+                  data-modulo={diapositiva.id}
+                  onClick={() => irA(posicion, posicion >= indice ? 1 : -1)}
+                  className={cn(
+                    "relative flex h-8 items-center gap-1.5 overflow-hidden rounded-full px-3 text-sm font-medium",
+                    "transition-colors duration-(--duracion-rapida) ease-salida",
+                    "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
+                    elegida
+                      ? "bg-superficie-suave text-texto"
+                      : "text-texto-secundario hover:bg-superficie-suave/60 hover:text-texto",
+                  )}
+                >
+                  <Icono aria-hidden="true" className="size-4 shrink-0" />
+                  {/* En pantallas chicas no entran los cuatro nombres: solo se ve el de la elegida (el
                     nombre accesible está siempre, en `aria-label`). */}
-                <span className={cn(!elegida && "hidden sm:inline")}>{diapositiva.nombre}</span>
-                {elegida && avanzaSolo ? (
-                  // El tiempo que falta para pasar al siguiente: una barra fina que se llena.
-                  <motion.span
-                    key={`${indice}-${ciclo}`}
-                    aria-hidden="true"
-                    data-tiempo
-                    className={cn(
-                      "absolute inset-x-3 bottom-0.5 h-0.5 origin-left rounded-full",
-                      diapositiva.punto,
-                    )}
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{
-                      duration: INTERVALO_DEL_CARRUSEL_DE_INICIO_MS / 1000,
-                      ease: "linear",
-                    }}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
+                  <span className={cn(!elegida && "hidden sm:inline")}>{diapositiva.nombre}</span>
+                  {elegida && avanzaSolo ? (
+                    // El tiempo que falta para pasar al siguiente: una barra fina que se llena.
+                    <motion.span
+                      key={`${indice}-${ciclo}`}
+                      aria-hidden="true"
+                      data-tiempo
+                      className={cn(
+                        "absolute inset-x-3 bottom-0.5 h-0.5 origin-left rounded-full",
+                        diapositiva.punto,
+                      )}
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{
+                        duration: INTERVALO_DEL_CARRUSEL_DE_INICIO_MS / 1000,
+                        ease: "linear",
+                      }}
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 px-0 sm:px-12 [@media(max-height:559px)]:min-h-[30rem]">
+      <motion.div
+        className={cn(
+          "relative flex min-h-0 px-0 sm:px-12 [@media(max-height:559px)]:min-h-120",
+          ALTO_DE_LA_TARJETA,
+        )}
+        {...quietoConElMouse}
+        {...entrada(0.1, 16)}
+      >
         {cantidad > 1 ? (
           <button
             type="button"
@@ -295,7 +346,7 @@ export function CarruselDeInicio({
             <ChevronRight aria-hidden="true" className="size-5" />
           </button>
         ) : null}
-      </div>
+      </motion.div>
     </section>
   );
 }

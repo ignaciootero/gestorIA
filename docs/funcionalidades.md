@@ -1958,6 +1958,25 @@ de otra persona responde 404).
 módulo**, en este orden: Finanzas, Calendario, Tareas y Contactos. Se ve un resumen a la vez y pasa solo al
 siguiente cada **15 segundos**. La pantalla **entra entera en la ventana, sin desplazamiento vertical**.
 
+### El saludo
+
+Una etiqueta **"Inicio"** (con el ícono del menú, para que quede claro en qué pantalla se está), **"Hola,
+<nombre>"** en grande con la fecha de hoy debajo, y una **manito** a la izquierda. Va en la misma fila que las
+pestañas del carrusel, alineado con el borde izquierdo de la tarjeta (en pantallas angostas, las pestañas bajan
+a otra línea). En una ventana de menos de 701 px de alto el saludo se achica y la etiqueta se esconde, para que
+la tarjeta entre sin cortarse.
+
+**La entrada es una bienvenida en pasos**, para que la pantalla se arme en vez de aparecer de golpe:
+1. La manito aparece con un resorte suave.
+2. Sube la etiqueta.
+3. "Hola, <nombre>" se escribe letra por letra.
+4. Llega la fecha y la manito saluda.
+5. Entran las pestañas y, por último, sube la tarjeta. Esto empieza con el saludo todavía en camino, así todo
+   está en su lugar en menos de un segundo.
+
+Pasarle el mouse a la manito la hace saludar de nuevo. Nada de esto bloquea la interacción. Con reducir
+movimiento aparece todo quieto, de una vez.
+
 ### Cada resumen
 
 Todos tienen la misma forma, para no tener que volver a aprender dónde está cada cosa: arriba el módulo
@@ -2002,16 +2021,20 @@ ejes ni leyendas. Pocos datos a propósito: el detalle está en cada módulo.
 ### Sin desplazamiento vertical
 
 La página marca su grilla con `data-pantalla-fija` (`EstructuraDeApp pantallaFija`): el marco de la aplicación
-(barra, contenido y pie) mide entonces el alto de la ventana y el carrusel ocupa lo que queda entre la barra y el
-pie. Para que entre en pantallas chicas: en las angostas se omite la lista (queda la cifra, el aviso y el gráfico)
-y en las bajas se esconden la fecha del saludo y la frase al pie del gráfico, y el gráfico se achica. En una
+(barra, contenido y pie) mide entonces el alto de la ventana. El saludo y el carrusel ocupan **todo el ancho
+disponible** (hasta 80 rem) y se **centran en el alto**: la tarjeta tiene un alto propio (32 rem; 36 rem en
+ventanas de 1000 px de alto o más) en vez de estirarse hasta llenar la ventana, que dejaba los gráficos
+altísimos y huecos en blanco adentro. Si la ventana no da, la tarjeta se achica.
+
+Para que entre en pantallas chicas: en las angostas se omite la lista (queda la cifra, el aviso y el gráfico)
+y en las bajas se esconde la frase al pie del gráfico, y el gráfico se achica. En una
 ventana de menos de 560 px de alto no hay lugar para todo sin cortar algo: ahí la página vuelve a desplazarse
 como cualquier otra (un resumen cortado es peor que un desplazamiento).
 
 ### Dónde está
 
 - Web: `apps/web/src/app/inicio/page.tsx` y `apps/web/src/componentes/inicio/` (`panel-de-inicio` arma el
-  carrusel y hace los pedidos, `carrusel-de-inicio`, `piezas-de-resumen` con las piezas comunes y el gráfico de
+  carrusel y hace los pedidos, `saludo-de-inicio`, `carrusel-de-inicio`, `piezas-de-resumen` con las piezas comunes y el gráfico de
   barras con etiquetas, y un `resumen-de-…` por módulo). El alto fijo, en `.marco-de-la-app` de `globals.css` y
   `EstructuraDeApp`.
 - Tests: `apps/web/e2e/inicio.spec.ts` (que entra entera en siete tamaños de ventana —de 360x640 a 1920x1080— sin

@@ -5,6 +5,33 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-04 — Pantalla de inicio: tarjeta de alto propio, más ancha y con el saludo integrado
+
+**Decisión.** El carrusel de inicio ocupa todo el ancho disponible (hasta 80 rem, antes 64) y la
+tarjeta tiene un alto propio (32 rem; 36 rem en ventanas de 1000 px de alto o más) en vez de estirarse
+hasta llenar la ventana. Saludo, pestañas y tarjeta se centran en el alto. El saludo deja de estar
+suelto y centrado arriba: va a la izquierda de las pestañas, alineado con la tarjeta, en grande y con
+una etiqueta "Inicio". La pantalla entra como una bienvenida en pasos: la manito, el saludo letra por
+letra, la fecha y después las pestañas y la tarjeta. En ventanas de menos de 701 px de alto el saludo
+se achica (variante `ventana-alta` en globals.css).
+
+**Por qué.** Estirada, la tarjeta dejaba los gráficos de barras altísimos y la columna de texto con
+un hueco en blanco; y en pantallas anchas sobraban cientos de píxeles a los costados. Con un alto
+propio, lo que sobra queda afuera de la tarjeta, repartido arriba y abajo. Se descartó llenar el alto
+con más datos (la pantalla es para orientarse de un vistazo) y estirar solo el gráfico con una
+proporción fija (seguía dejando aire en la columna de texto).
+
+---
+
+## 2026-11-04 — Se trabaja directo en `main`, sin ramas
+
+**Decisión.** Los commits van directo a `main`, sin ramas por funcionalidad.
+
+**Por qué.** Hay una sola persona trabajando: las ramas solo agregaban pasos. `main` sigue siempre
+funcionando, porque los hooks (formato, tipos y, antes de cada push, todos los tests) son los mismos.
+
+---
+
 ## 2026-11-04 — Widgets de Contactos: solo lo que sirve en el día a día
 
 **Decisión.** Los widgets de la columna de Contactos quedan en: próximo cumpleaños, próximo
