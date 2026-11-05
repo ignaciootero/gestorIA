@@ -50,7 +50,7 @@ function armarAvisos(datos: WidgetsDeTareas): DatoDeWidget[] {
       Icono: ListPlus,
       titulo: "Todavía sin tareas",
       detalle:
-        "Escribí tu primera tarea arriba y apretá Enter. Si es algo que se repite, usá “Agregar tarea”.",
+        "Para una tarea rápida, escribila en el campo «Nueva tarea para hoy». Para elegir día, hora o repetición, usá el botón «Agregar tarea».",
     });
     return avisos;
   }

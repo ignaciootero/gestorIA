@@ -456,7 +456,7 @@ function EstadoDeDia({ hechas, alAgregar }: { hechas: number; alAgregar: () => v
       <p className="max-w-md text-sm text-texto-secundario">
         {hechas > 0
           ? "Hiciste todo lo de hoy. Podés agregar algo más o descansar."
-          : "Escribí arriba lo que tenés que hacer y apretá Enter. Si es algo que se repite —regar las plantas, pagar el alquiler—, usá “Agregar tarea” y elegí cada cuánto."}
+          : "Para una tarea rápida, escribila en el campo «Nueva tarea para hoy». Si necesitás elegir otro día, una hora o que se repita (por ejemplo, todos los meses), usá el botón «Agregar tarea»."}
       </p>
       <Boton variante="secundario" onClick={alAgregar}>
         <Plus aria-hidden="true" className="size-4" />
