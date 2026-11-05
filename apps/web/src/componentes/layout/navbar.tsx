@@ -14,6 +14,7 @@
 
 import { LogOut, ShieldCheck, Wallet } from "lucide-react";
 import Link from "next/link";
+import { SelectorDeColor } from "@/componentes/color-de-acento";
 import { Logotipo } from "@/componentes/marca/logotipo";
 import { SelectorDeTema } from "@/componentes/tema";
 import { Boton } from "@/componentes/ui/boton";
@@ -109,6 +110,8 @@ export function Navbar() {
             </>
           ) : null}
 
+          {/* El color se guarda en la cuenta: sin sesión queda el de la app. */}
+          {usuario ? <SelectorDeColor /> : null}
           <SelectorDeTema />
         </div>
       </nav>

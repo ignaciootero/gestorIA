@@ -5,6 +5,7 @@ export type { AccionAuditoria } from "./admin/auditoria.ts";
 export { ACCIONES_AUDITORIA } from "./admin/auditoria.ts";
 export type { CamposAdicionalesUsuario } from "./auth/campos-usuario.ts";
 export { CAMPOS_ADICIONALES_USUARIO } from "./auth/campos-usuario.ts";
+export { type ColoresDeAcento, esquemaColoresDeAcento } from "./auth/colores-de-acento.ts";
 export type { DatosCambioPassword, DatosLogin, DatosRegistro } from "./auth/esquemas.ts";
 export {
   esquemaApellido,

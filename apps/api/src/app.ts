@@ -87,7 +87,7 @@ export function crearApp({
   app.use("*", cargarSesion(auth));
 
   app.route("/", rutasDeSalud(cliente));
-  app.route("/", rutasDeSesion());
+  app.route("/", rutasDeSesion(cliente));
   app.route("/", rutasDeAdmin(cliente, auth));
   app.route("/", rutasDeDeudas(cliente, { fuenteDeCotizaciones }));
   app.route("/", rutasDeFinanzas(cliente, { fuenteDeCotizaciones }));
