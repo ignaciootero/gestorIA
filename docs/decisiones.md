@@ -5,6 +5,30 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-05 — Color de acento elegido por la persona
+
+**Decisión.** Cada persona puede elegir el color de acento con un selector libre (cualquier
+color), uno para el modo claro y otro para el oscuro, con un botón para volver al verde agua.
+Se guarda en la cuenta (`usuarios.color_de_acento_claro` y `_oscuro`, null es el de la app). De
+cada color se derivan los cuatro tonos del acento en OKLCH (`derivarAcento`, en
+`packages/ui-tokens`): el acento es el color elegido si se lee bien, y si no se le cambia solo la
+luminosidad hasta llegar a 4,5:1; el fondo suave y su texto usan el tono con luminosidades fijas.
+
+**Por qué.** Un selector libre no puede garantizar contraste por sí solo: un amarillo clarito con
+texto blanco no se lee. Ajustar la luminosidad respeta lo que la persona eligió (el tono) y deja
+la app accesible con cualquier color, sin listas cerradas. OKLCH y no HSL porque su luminosidad es
+perceptual: con HSL, un amarillo y un azul "igual de claros" se ven muy distintos. En la cuenta y
+no en el navegador para que el color siga a la persona en todos sus dispositivos; igual se guarda
+una copia con los tonos derivados en el navegador, que se aplica antes del primer pintado (como el
+tema), porque la sesión llega tarde y si no se vería un destello del verde agua al cargar. Sin
+librería de colores: las conversiones son unas pocas fórmulas publicadas y quedan testeadas.
+
+**Consecuencia.** El acento puede coincidir con colores que ya tienen significado (el verde de
+éxito, los colores de origen de cada módulo): es elección de la persona, y ningún significado
+depende solo del color (siempre hay ícono o texto).
+
+---
+
 ## 2026-11-04 — Con movimiento reducido cambia la duración, no el HTML inicial
 
 **Decisión.** En los componentes que se renderizan en el servidor, la preferencia de reducir movimiento solo cambia la

@@ -288,7 +288,9 @@ venciera. El costo de desactivarla es una consulta por petición, resuelta por e
 
 `GET /api/yo` devuelve los datos de quien tiene la sesión, con una lista explícita de
 campos: si mañana la librería agrega un campo interno, no se filtra solo por estar en
-el objeto.
+el objeto. Incluye `coloresDeAcento` (`{ claro, oscuro }`, null es el de la app), que se
+cambian con `PUT /api/yo/colores` (los dos a la vez, `#rrggbb`; ver Sistema visual). No se
+pueden cambiar por las rutas de Better Auth: son campos con `input: false`.
 
 Dónde: `apps/api/src/rutas/yo.ts`, `apps/api/src/middlewares/sesion.ts`.
 
@@ -2073,6 +2075,20 @@ componente escribe un valor suelto.
   cambia sola si el sistema cambia; una vez que elige, esa elección manda y se guarda en
   su navegador. Un script inline aplica el tema antes del primer pintado, para que no
   haya un destello blanco al entrar en oscuro.
+- **Color de acento elegido por la persona:** al lado del selector de tema, con sesión, un
+  botón "Color de la app" abre un diálogo con un selector de color para el modo claro y otro
+  para el oscuro, una vista previa de cada uno (botón, seleccionado y enlace) y "Volver al
+  color original". El acento son cuatro tonos (`acento`, `acento-texto`, `acento-suave`,
+  `acento-suave-texto`): `derivarAcento` (`packages/ui-tokens/src/acento-personalizado.ts`)
+  los arma a partir del color elegido trabajando en OKLCH. El acento es el color tal cual si
+  el texto encima y los enlaces sobre la superficie llegan a 4,5:1; si no, se le cambia solo
+  la luminosidad, lo justo para llegar, sin tocar el tono. El fondo suave y su texto usan el
+  tono del color con luminosidades fijas. El fondo animado gira al tono elegido (con la
+  misma relación entre claro y oscuro que el original) y el brillo de bordes lo relee.
+  Los colores se guardan en la cuenta (`PUT /api/yo/colores`, null es el de la app) y en una
+  copia del navegador con los tonos ya derivados, que un script inline aplica antes del
+  primer pintado; al salir se borra. Cambiar el color se ve al instante y se guarda un rato
+  después de soltar el selector.
 - **Fondo animado:** quince formas de color difuminadas que se mueven, giran y cambian de
   tamaño y de color muy despacio detrás de todo el contenido, cubriendo siempre la
   ventana. El difuminado sale de dibujar un canvas a 1/24 del tamaño de la ventana y

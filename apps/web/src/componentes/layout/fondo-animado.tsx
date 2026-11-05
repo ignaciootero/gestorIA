@@ -25,8 +25,15 @@
 
 "use client";
 
-import { DESPLAZAMIENTO_DE_LUZ, FONDO_ANIMADO, type PaletaDeFondo } from "@gestoria/ui-tokens";
+import {
+  DESPLAZAMIENTO_DE_LUZ,
+  esColorHex,
+  FONDO_ANIMADO,
+  type PaletaDeFondo,
+  tonoDelFondo,
+} from "@gestoria/ui-tokens";
 import { useEffect, useRef } from "react";
+import { useColorDeAcento } from "@/componentes/color-de-acento";
 import { useTema } from "@/componentes/tema";
 
 /**
@@ -171,6 +178,13 @@ function dibujar(
 export function FondoAnimado() {
   const referencia = useRef<HTMLCanvasElement>(null);
   const { tema } = useTema();
+  const { colores } = useColorDeAcento();
+  // Con un color elegido, el fondo gira a su tono (con la misma relación que el original entre
+  // claro y oscuro); si no, el tono de la paleta.
+  const elegido = colores[tema];
+  // Redondeado: mientras se arrastra el selector, el fondo solo se rehace cuando el tono cambia de
+  // verdad (rehacerlo vuelve a repartir las formas).
+  const tonoElegido = esColorHex(elegido) ? Math.round(tonoDelFondo(elegido, tema)) : null;
 
   useEffect(() => {
     const elemento = referencia.current;
@@ -188,7 +202,7 @@ export function FondoAnimado() {
       tamano: FONDO_ANIMADO.tamano,
       variedadFormas: FONDO_ANIMADO.variedadFormas,
       cicloColor: FONDO_ANIMADO.cicloColor,
-      tono: paleta.tono,
+      tono: tonoElegido ?? paleta.tono,
       rango: paleta.rango,
     };
 
@@ -271,7 +285,7 @@ export function FondoAnimado() {
       document.removeEventListener("visibilitychange", alCambiarVisibilidad);
       sinMovimiento.removeEventListener("change", alCambiarLaPreferencia);
     };
-  }, [tema]);
+  }, [tema, tonoElegido]);
 
   // `tabIndex={-1}` además de `aria-hidden`: el navegador considera enfocable a
   // un <canvas> (puede llevar contenido alternativo adentro), y un elemento

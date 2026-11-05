@@ -225,6 +225,13 @@
       "when": 1792730172883,
       "tag": "0031_importante",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793885190191,
+      "tag": "0032_color_de_acento",
+      "breakpoints": true
     }
   ]
 }

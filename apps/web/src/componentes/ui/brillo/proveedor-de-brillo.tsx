@@ -18,6 +18,7 @@
 
 import { BRILLO_DE_BORDE } from "@gestoria/ui-tokens";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from "react";
+import { useColorDeAcento } from "@/componentes/color-de-acento";
 import { useTema } from "@/componentes/tema";
 
 /** Cuánto sobresale la capa SVG del contenedor, para que el halo no se corte. */
@@ -56,6 +57,7 @@ function pintar(registro: RegistroDeBrillo, acento: string): void {
 
 export function ProveedorDeBrillo({ children }: { children: ReactNode }) {
   const { tema } = useTema();
+  const { colores } = useColorDeAcento();
   const registros = useRef(new Set<RegistroDeBrillo>());
   const acento = useRef("");
   const posicion = useRef<{ x: number; y: number } | null>(null);
@@ -72,15 +74,16 @@ export function ProveedorDeBrillo({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // El color de acento se relee al cambiar de tema. Un gradiente SVG no hereda
-  // las variables CSS del documento, así que hay que escribirle el color.
+  // El color de acento se relee al cambiar de tema o de color elegido. Un gradiente SVG no
+  // hereda las variables CSS del documento, así que hay que escribirle el color. Los colores
+  // elegidos no se usan acá: solo avisan cuándo releer (el proveedor de color ya los aplicó).
   useEffect(() => {
     acento.current = getComputedStyle(document.documentElement)
       .getPropertyValue("--color-acento")
       .trim();
 
     for (const registro of registros.current) pintar(registro, acento.current);
-  }, [tema]);
+  }, [tema, colores.claro, colores.oscuro]);
 
   useEffect(() => {
     // Solo con mouse. En una pantalla táctil no hay puntero que seguir, así que

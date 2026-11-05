@@ -15,6 +15,7 @@ import { Navbar } from "@/componentes/layout/navbar";
 import { PieDePagina } from "@/componentes/layout/pie-de-pagina";
 import { Proveedores } from "@/componentes/proveedores";
 import { SCRIPT_TEMA_INICIAL } from "@/componentes/tema";
+import { SCRIPT_ACENTO_INICIAL } from "@/lib/color-de-acento";
 import { SCRIPT_COLUMNAS_INICIAL } from "@/lib/columnas-plegables";
 import "./globals.css";
 
@@ -50,6 +51,10 @@ export default function LayoutRaiz({ children }: { children: ReactNode }) {
           blanco al entrar con el tema oscuro.
         */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
+        {/*
+          Después del tema, el color de acento elegido (usa el data-theme que acaba de quedar).
+        */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_ACENTO_INICIAL }} />
         {/* Lo mismo con las columnas laterales que la persona dejó escondidas. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_COLUMNAS_INICIAL }} />
       </head>

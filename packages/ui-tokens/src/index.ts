@@ -412,3 +412,6 @@ export type PaletaDeFondo = {
  * quedan un poco más claras y otras un poco más oscuras.
  */
 export const DESPLAZAMIENTO_DE_LUZ = 14;
+
+// Color de acento elegido por la persona: deriva los cuatro tonos del acento a partir de un color.
+export * from "./acento-personalizado.ts";

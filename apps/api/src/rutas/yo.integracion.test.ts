@@ -157,3 +157,89 @@ describe("rutas inexistentes bajo la API", () => {
     expect(cuerpo.error.codigo).toBe("NO_ENCONTRADO");
   });
 });
+
+describe("colores de acento", () => {
+  async function guardar(cookies: string, cuerpo: unknown): Promise<Response> {
+    return app.request("/api/yo/colores", {
+      method: "PUT",
+      headers: { cookie: cookies, "content-type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+  }
+
+  async function colores(cookies: string): Promise<unknown> {
+    const respuesta = await app.request("/api/yo", { headers: { cookie: cookies } });
+    return (await leerJson<Record<string, unknown>>(respuesta))["coloresDeAcento"];
+  }
+
+  it("una cuenta nueva usa los de la app (null en los dos modos)", async () => {
+    const { cookies } = await entrar();
+    expect(await colores(cookies)).toEqual({ claro: null, oscuro: null });
+  });
+
+  it("guarda un color por modo, en minúsculas, y GET /api/yo los devuelve", async () => {
+    const { cookies } = await entrar();
+
+    const respuesta = await guardar(cookies, { claro: "#7C3AED", oscuro: "#fde047" });
+    expect(respuesta.status).toBe(200);
+    expect(await leerJson(respuesta)).toEqual({ claro: "#7c3aed", oscuro: "#fde047" });
+    expect(await colores(cookies)).toEqual({ claro: "#7c3aed", oscuro: "#fde047" });
+  });
+
+  it("con null vuelve al color de la app, en un modo sin tocar el otro", async () => {
+    const { cookies } = await entrar();
+    await guardar(cookies, { claro: "#7c3aed", oscuro: "#fde047" });
+
+    await guardar(cookies, { claro: null, oscuro: "#fde047" });
+    expect(await colores(cookies)).toEqual({ claro: null, oscuro: "#fde047" });
+
+    await guardar(cookies, { claro: null, oscuro: null });
+    expect(await colores(cookies)).toEqual({ claro: null, oscuro: null });
+  });
+
+  it.each([
+    ["un color sin #", { claro: "7c3aed", oscuro: null }],
+    ["un color corto", { claro: "#fff", oscuro: null }],
+    ["un nombre de color", { claro: "teal", oscuro: null }],
+    ["un modo de menos", { claro: "#7c3aed" }],
+    ["un campo de más", { claro: null, oscuro: null, otro: "#000000" }],
+    ["algo que no es un objeto", "#7c3aed"],
+  ])("rechaza %s con 400 y no cambia nada", async (_caso, cuerpo) => {
+    const { cookies } = await entrar();
+    await guardar(cookies, { claro: "#123456", oscuro: null });
+
+    const respuesta = await guardar(cookies, cuerpo);
+    expect(respuesta.status).toBe(400);
+    const error = await leerJson<RespuestaError>(respuesta);
+    expect(error.error.codigo).toBe("VALIDACION_INVALIDA");
+    expect(await colores(cookies)).toEqual({ claro: "#123456", oscuro: null });
+  });
+
+  it("sin sesión responde 401", async () => {
+    const respuesta = await app.request("/api/yo/colores", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ claro: null, oscuro: null }),
+    });
+    expect(respuesta.status).toBe(401);
+  });
+
+  it("cada persona cambia solo los suyos", async () => {
+    const una = await entrar();
+    const otra = await entrar();
+
+    await guardar(una.cookies, { claro: "#7c3aed", oscuro: "#7c3aed" });
+    expect(await colores(otra.cookies)).toEqual({ claro: null, oscuro: null });
+  });
+
+  it("no se pueden cambiar por las rutas de Better Auth (update-user)", async () => {
+    const { cookies } = await entrar();
+
+    await app.request(`${RUTA_BASE_AUTH}/update-user`, {
+      method: "POST",
+      headers: { cookie: cookies, "content-type": "application/json" },
+      body: JSON.stringify({ colorDeAcentoClaro: "#ff0000" }),
+    });
+    expect(await colores(cookies)).toEqual({ claro: null, oscuro: null });
+  });
+});

@@ -38,6 +38,10 @@ export const CAMPOS_ADICIONALES_USUARIO = {
     defaultValue: false,
     input: false,
   },
+  // Colores de acento elegidos ("#rrggbb"); null es el de la app. Se cambian con
+  // PUT /api/yo/colores, nunca al registrarse (ver auth/colores-de-acento.ts).
+  colorDeAcentoClaro: { type: "string", required: false, input: false },
+  colorDeAcentoOscuro: { type: "string", required: false, input: false },
 } as const;
 
 export type CamposAdicionalesUsuario = typeof CAMPOS_ADICIONALES_USUARIO;

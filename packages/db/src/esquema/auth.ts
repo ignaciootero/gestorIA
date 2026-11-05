@@ -69,6 +69,12 @@ export const usuarios = pgTable(
     etiquetasInicialesCreadas: boolean().notNull().default(false),
     /** Lo mismo para las categorías de tareas por defecto: ver servicios/tareas/categorias.ts. */
     categoriasDeTareasInicialesCreadas: boolean().notNull().default(false),
+    /**
+     * Colores de acento que eligió la persona, "#rrggbb", uno por modo. Null es el de la app (el
+     * verde agua). Ver packages/shared/src/auth/colores-de-acento.ts.
+     */
+    colorDeAcentoClaro: text(),
+    colorDeAcentoOscuro: text(),
   },
   (tabla) => [
     uniqueIndex("usuarios_email_unico").on(tabla.email),
