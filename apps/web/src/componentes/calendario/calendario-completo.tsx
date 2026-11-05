@@ -269,7 +269,6 @@ export function CalendarioCompleto() {
           alAlternarEstado={alternarEstado}
           alMostrarTodo={mostrarTodo}
         />
-        {vista === "mes" ? <LeyendaDePuntos /> : null}
 
         {/* Pasar de mes a año (y al revés) es un zoom: se acerca o se aleja. */}
         <AnimatePresence initial={false} mode="wait">
@@ -329,21 +328,6 @@ export function CalendarioCompleto() {
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Explica los puntos de los días: uno por cada origen que tiene algo ese día, del color de ese origen, sin
- * importar cuántos eventos sean. Es decorativa (`aria-hidden`): para los lectores de pantalla, cada día dice
- * cuántos eventos tiene y de qué orígenes en su nombre.
- */
-function LeyendaDePuntos() {
-  return (
-    <p aria-hidden="true" className="-mt-1 text-xs text-texto-secundario">
-      Un punto por cada origen que tiene algo ese día: lleno si falta algo, ✓ si está todo
-      completado, ✗ si quedó algo fallido y un ! si hay tareas atrasadas; el número, cuántos eventos
-      hay.
-    </p>
   );
 }
 

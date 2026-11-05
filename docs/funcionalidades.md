@@ -1774,7 +1774,8 @@ en pantallas más angostas pasa debajo.
   que tienen eventos llevan abajo **un punto del color de cada origen que tenga algo ese día** (naranja
   Calendario, azul Finanzas, violeta Contactos, rosa Tareas), **sin importar cuántos eventos sean**: un día
   con diez tareas tiene un solo punto rosa, así nunca se llena de puntos (como mucho hay cuatro). Si el día
-  tiene varios eventos, el **total** aparece en la esquina, y una leyenda sobre la grilla explica las marcas.
+  tiene varios eventos, el **total** aparece en la esquina. No hay una leyenda escrita de las marcas: los
+  botones de origen ya dicen qué color es cada uno, y el nombre accesible de cada día lo dice en palabras.
   El nombre accesible de la casilla lo dice con palabras ("jueves, 22 de octubre de 2026, hoy, 5 eventos:
   Calendario, Finanzas, Contactos, Tareas").
 - **Filtro por origen.** Sobre la grilla hay cuatro botones —Calendario, Finanzas, Contactos y Tareas—
@@ -1818,11 +1819,16 @@ en pantallas más angostas pasa debajo.
   ocultar las tareas diarias —que ocuparían todos los días— y ver las semanales, mensuales y anuales. Tareas
   y Contactos se filtran por separado. El botón avisa con un número cuántos tipos hay ocultos (aun con el
   panel cerrado, así el filtro no pasa inadvertido) y aparece **"Mostrar todo"**, que quita todas las
-  restricciones (también vuelve a prender los orígenes apagados). Si un origen está apagado entero, sus
-  repeticiones se ven deshabilitadas y lo explican. El filtro vale para los puntos del mes, el total y la
+  restricciones (también vuelve a prender los orígenes apagados). **Cada categoría va en su propio
+  recuadro** (una al lado de la otra en pantallas anchas, una debajo de la otra en las angostas), con una
+  franja de su color arriba con el ícono y el nombre, y adentro los grupos *Repetición* y *Estado*
+  separados por una línea. El panel no lleva textos explicativos: los nombres de los botones alcanzan.
+  Si un origen está apagado entero, sus botones se ven deshabilitados y la franja dice "Está oculto:
+  prendelo arriba". El filtro vale para los puntos del mes, el total y la
   lista del día (que avisa cuántos eventos quedaron ocultos), y se recuerda en este navegador. En pantallas
   anchas el panel flota sobre la grilla (no la deforma); en las angostas se despliega en el lugar. Escape lo
-  cierra y devuelve el foco al botón.
+  cierra y devuelve el foco al botón; **tocar o hacer clic afuera** del panel también lo cierra (lo elegido
+  queda), sin tener que volver a "Más filtros".
 - **Año.** Los doce meses como mini calendarios (entran en cascada); tocar uno lo abre. Se llega con el
   selector "Mes / Año".
 - **Panel del día elegido.** El número grande, el día de la semana y el mes, cuándo cae respecto de hoy

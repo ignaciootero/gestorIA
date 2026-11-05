@@ -3,9 +3,12 @@
 // semanales, las mensuales y las anuales. Por ejemplo, ver las tareas semanales, mensuales y anuales pero
 // no las diarias, que llenarían todos los días.
 //
+// Cada categoría va en su propio recuadro, con una franja de su color arriba (lado a lado en pantallas
+// anchas), y adentro sus dos grupos: repetición y estado. Sin textos explicativos: los nombres alcanzan.
+//
 // Es un botón "Más filtros" que abre y cierra el panel (el calendario queda limpio para quien no lo
 // necesita). En pantallas anchas, donde el calendario tiene un alto fijo, el panel flota sobre la grilla
-// en vez de empujarla; en las angostas se despliega en el lugar y la página se desplaza. Escape lo cierra. El botón avisa cuántas restricciones hay puestas, así el filtro no pasa inadvertido aunque el
+// en vez de empujarla; en las angostas se despliega en el lugar y la página se desplaza. Escape lo cierra, y también tocar afuera. El botón avisa cuántas restricciones hay puestas, así el filtro no pasa inadvertido aunque el
 // panel esté cerrado. Los botones de adentro son de "estado" (`aria-pressed`), como los de origen.
 // Si un origen está oculto del todo, sus repeticiones quedan deshabilitadas: no hay nada para elegir.
 //
@@ -38,7 +41,7 @@ import {
   RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/clases";
 import { ESTILOS_DE_ORIGEN, NOMBRES_DE_ESTADO } from "./origenes";
 
@@ -84,10 +87,25 @@ export function FiltrosAvanzados({
   const [abierto, setAbierto] = useState(false);
   const idPanel = useId();
   const botonDelPanel = useRef<HTMLButtonElement>(null);
+  const contenedor = useRef<HTMLFieldSetElement>(null);
+
+  // Tocar o hacer clic afuera (del panel y de su botón) lo cierra, sin tener que volver al botón.
+  // `pointerdown` y no `click`: cierra apenas se toca, y vale igual para mouse, dedo y lápiz. El foco
+  // queda donde se tocó (no se lo devuelve al botón, como con Escape): la persona ya eligió otra cosa.
+  useEffect(() => {
+    if (!abierto) return;
+    function alTocar(evento: PointerEvent) {
+      if (evento.target instanceof Node && contenedor.current?.contains(evento.target)) return;
+      setAbierto(false);
+    }
+    document.addEventListener("pointerdown", alTocar);
+    return () => document.removeEventListener("pointerdown", alTocar);
+  }, [abierto]);
   const restricciones = cantidadDeRestriccionesPorRepeticion(filtro);
 
   return (
     <fieldset
+      ref={contenedor}
       className="flex min-w-0 flex-col gap-2 border-0 p-0 xl:relative"
       onKeyDown={(evento) => {
         if (evento.key !== "Escape" || !abierto) return;
@@ -150,7 +168,7 @@ export function FiltrosAvanzados({
         <div
           id={idPanel}
           className={cn(
-            "flex flex-col gap-3 rounded-tarjeta border border-borde-fuerte bg-superficie p-3",
+            "grid gap-3 rounded-tarjeta border border-borde-fuerte bg-superficie p-3 sm:grid-cols-2",
             // Con alto fijo (pantallas anchas) flota sobre la grilla y no la deforma.
             "xl:absolute xl:inset-x-0 xl:top-full xl:z-10 xl:mt-1 xl:shadow-flotante",
           )}
@@ -159,103 +177,102 @@ export function FiltrosAvanzados({
             const { icono: Icono, suave } = ESTILOS_DE_ORIGEN[origen];
             const origenOculto = filtro.origenesOcultos.has(origen);
             return (
+              // Cada categoría en su recuadro, con una franja de su color arriba: así se ve de un
+              // vistazo qué filtros son de cuál.
               <fieldset
                 key={origen}
                 data-origen={origen}
                 disabled={origenOculto}
-                className="flex min-w-0 flex-col gap-2.5 border-0 p-0"
+                className="flex min-w-0 flex-col overflow-hidden rounded-control border border-borde p-0"
               >
-                <legend className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-texto">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-                      origenOculto ? "bg-superficie text-texto-secundario" : suave,
-                    )}
-                  >
-                    <Icono aria-hidden="true" className="size-3 shrink-0" />
+                <legend className="solo-lectores">{NOMBRES_DE_ORIGEN[origen]}</legend>
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium",
+                    origenOculto ? "bg-superficie-suave text-texto-secundario" : suave,
+                  )}
+                >
+                  <span aria-hidden="true" className="flex items-center gap-1.5">
+                    <Icono className="size-4 shrink-0" />
                     {NOMBRES_DE_ORIGEN[origen]}
                   </span>
-                  <span className="font-normal text-texto-secundario">
-                    {origenOculto
-                      ? "Está oculto: prendelo arriba para elegir."
-                      : origen === "tareas"
-                        ? "Qué tareas ver"
-                        : "Qué recordatorios ver"}
-                  </span>
-                </legend>
-                <fieldset
-                  data-filtro="repeticion"
-                  className="flex min-w-0 flex-col gap-1 border-0 p-0"
-                >
-                  <legend className="mb-1 text-[11px] text-texto-secundario">
-                    Repetición
-                    <span className="solo-lectores"> de {NOMBRES_DE_ORIGEN[origen]}</span>
-                  </legend>
-                  <div className="flex flex-wrap gap-1.5">
-                    {repeticionesDeEvento(origen).map((repeticion) => {
-                      const visible = !filtro.repeticionesOcultas[origen].has(repeticion);
-                      return (
-                        <button
-                          key={repeticion}
-                          type="button"
-                          aria-pressed={visible}
-                          data-repeticion={repeticion}
-                          disabled={origenOculto}
-                          onClick={() => alAlternarRepeticion(origen, repeticion)}
-                          className={clasesDeBoton(visible && !origenOculto, suave)}
-                        >
-                          <span className={cn(!visible && "line-through")}>
-                            {NOMBRES_DE_REPETICION_EN_PLURAL[repeticion]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-                <fieldset data-filtro="estado" className="flex min-w-0 flex-col gap-1 border-0 p-0">
-                  <legend className="mb-1 text-[11px] text-texto-secundario">
-                    Estado
-                    <span className="solo-lectores"> de {NOMBRES_DE_ORIGEN[origen]}</span>
-                  </legend>
-                  <div className="flex flex-wrap gap-1.5">
-                    {estadosDeOrigen(origen).map((estado) => {
-                      const visible = !filtro.estadosOcultos[origen].has(estado);
-                      const Icono = ICONOS_DEL_FILTRO[estado];
-                      const lleno = ESTADOS_LLENOS.has(estado);
-                      return (
-                        <button
-                          key={estado}
-                          type="button"
-                          aria-pressed={visible}
-                          data-estado={estado}
-                          disabled={origenOculto}
-                          onClick={() => alAlternarEstado(origen, estado)}
-                          className={clasesDeBoton(visible && !origenOculto, suave)}
-                        >
-                          <Icono
-                            aria-hidden="true"
-                            strokeWidth={lleno ? 2 : 3}
-                            className={cn("size-3", lleno && "fill-current")}
-                          />
-                          <span className={cn(!visible && "line-through")}>
-                            {NOMBRES_DE_ESTADO[estado]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
+                  {origenOculto ? (
+                    <span className="text-xs font-normal">Está oculto: prendelo arriba</span>
+                  ) : null}
+                </div>
+                <div className={cn("flex flex-col gap-3 p-3", origenOculto && "opacity-60")}>
+                  <fieldset
+                    data-filtro="repeticion"
+                    className="flex min-w-0 flex-col gap-1.5 border-0 p-0"
+                  >
+                    <legend className="mb-1.5 text-[11px] font-medium tracking-wide text-texto-secundario uppercase">
+                      Repetición
+                      <span className="solo-lectores"> de {NOMBRES_DE_ORIGEN[origen]}</span>
+                    </legend>
+                    <div className="flex flex-wrap gap-1.5">
+                      {repeticionesDeEvento(origen).map((repeticion) => {
+                        const visible = !filtro.repeticionesOcultas[origen].has(repeticion);
+                        return (
+                          <button
+                            key={repeticion}
+                            type="button"
+                            aria-pressed={visible}
+                            data-repeticion={repeticion}
+                            disabled={origenOculto}
+                            onClick={() => alAlternarRepeticion(origen, repeticion)}
+                            className={clasesDeBoton(visible && !origenOculto, suave)}
+                          >
+                            <span className={cn(!visible && "line-through")}>
+                              {NOMBRES_DE_REPETICION_EN_PLURAL[repeticion]}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                  <fieldset
+                    data-filtro="estado"
+                    className="flex min-w-0 flex-col gap-1.5 border-0 border-t border-borde p-0 pt-3"
+                  >
+                    <legend className="solo-lectores">Estado de {NOMBRES_DE_ORIGEN[origen]}</legend>
+                    <p
+                      aria-hidden="true"
+                      className="mb-1.5 text-[11px] font-medium tracking-wide text-texto-secundario uppercase"
+                    >
+                      Estado
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {estadosDeOrigen(origen).map((estado) => {
+                        const visible = !filtro.estadosOcultos[origen].has(estado);
+                        const IconoDeEstado = ICONOS_DEL_FILTRO[estado];
+                        const lleno = ESTADOS_LLENOS.has(estado);
+                        return (
+                          <button
+                            key={estado}
+                            type="button"
+                            aria-pressed={visible}
+                            data-estado={estado}
+                            disabled={origenOculto}
+                            onClick={() => alAlternarEstado(origen, estado)}
+                            className={clasesDeBoton(visible && !origenOculto, suave)}
+                          >
+                            <IconoDeEstado
+                              aria-hidden="true"
+                              strokeWidth={lleno ? 2 : 3}
+                              className={cn("size-3", lleno && "fill-current")}
+                            />
+                            <span className={cn(!visible && "line-through")}>
+                              {NOMBRES_DE_ESTADO[estado]}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                </div>
               </fieldset>
             );
           })}
-          <div className="flex flex-col gap-1 border-t border-borde pt-3 text-xs text-texto-secundario">
-            <p>“Una sola vez” son las tareas sueltas y los recordatorios que no se repiten.</p>
-            <p>
-              Atrasadas son las tareas de un día anterior a hoy que no hiciste ni diste por
-              fallidas; finalizadas, las completadas y las fallidas. Pasados son los recordatorios
-              de un día anterior a hoy. Lo finalizado y lo pasado se ve tachado y con su marca.
-            </p>
-          </div>
         </div>
       ) : null}
     </fieldset>

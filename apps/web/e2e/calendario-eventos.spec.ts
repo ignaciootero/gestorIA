@@ -449,17 +449,6 @@ test.describe("muchos eventos en un día", () => {
     await expect(puntos(page, hoy())).toHaveCount(4);
   });
 
-  test("hay una leyenda que explica los puntos, y no aparece en la vista de año", async ({
-    page,
-  }) => {
-    await entrar(page, await crearCuentaAprobada());
-    await abrirCalendario(page);
-    await expect(page.getByText(/Un punto por cada origen que tiene algo ese día/)).toBeVisible();
-
-    await page.getByRole("radio", { name: "Año" }).click();
-    await expect(page.getByText(/Un punto por cada origen que tiene algo ese día/)).toHaveCount(0);
-  });
-
   for (const esquema of ["light", "dark"] as const) {
     test(`con días muy cargados todo se lee bien en modo ${esquema === "light" ? "claro" : "oscuro"}`, async ({
       page,
@@ -968,6 +957,29 @@ test.describe("filtros avanzados: por repetición", () => {
     await expect(masFiltros(page)).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator("fieldset[data-origen='tareas']")).toHaveCount(0);
     await expect(masFiltros(page)).toBeFocused();
+  });
+
+  test("tocar afuera cierra el panel; tocar adentro no", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await abrirCalendario(page);
+    await abrirFiltros(page);
+
+    // Adentro: elegir una repetición o tocar el fondo del panel lo deja abierto.
+    await repeticion(page, "tareas", "Semanales").click();
+    await page.locator("fieldset[data-origen='tareas'] [data-filtro='estado']").click();
+    await expect(masFiltros(page)).toHaveAttribute("aria-expanded", "true");
+
+    // Afuera: el título de la página.
+    await page.getByRole("heading", { name: "Calendario", level: 1 }).click();
+    await expect(masFiltros(page)).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("fieldset[data-origen='tareas']")).toHaveCount(0);
+    // Lo elegido adentro quedó.
+    await abrirFiltros(page);
+    await expect(repeticion(page, "tareas", "Semanales")).toHaveAttribute("aria-pressed", "false");
+
+    // Y el botón sigue alternándolo, sin que el toque cuente como "afuera" y lo vuelva a abrir.
+    await masFiltros(page).click();
+    await expect(masFiltros(page)).toHaveAttribute("aria-expanded", "false");
   });
 
   test("en pantalla ancha el panel flota: abrirlo no cambia el tamaño del calendario", async ({
