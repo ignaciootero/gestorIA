@@ -2096,8 +2096,8 @@ componente escribe un valor suelto.
   *Intensidad* (0 a 100 %; el 100 % es la opacidad más alta con la que el texto secundario
   sigue en 4,5:1 con cualquiera de los 360 tonos, y el 0 apaga el fondo y deja de dibujarlo),
   *Velocidad* (de quieto a 3×; multiplica el paso del tiempo, así cambiarla no hace saltar el
-  fondo), *Tamaño de las manchas* (50 a 150 %) y *Segundo tono* (opcional: las manchas van y
-  vienen entre el tono principal y este, por el camino corto del círculo de color), con
+  fondo), *Tamaño de las manchas* (50 a 150 %) y *Tono secundario* (opcional: las manchas van
+  y vienen entre el tono principal y este, por el camino corto del círculo de color), con
   "Restablecer" para volver al de siempre. Se guarda en la cuenta (`PUT /api/yo/fondo`, como
   texto JSON validado; null es el de la app). Los cambios se aplican en vivo sin reiniciar la
   animación. La intensidad también va en la copia del navegador, para que no haya destello.

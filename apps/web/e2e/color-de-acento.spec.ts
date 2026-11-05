@@ -33,9 +33,9 @@ function intensidad(pagina: Page): Promise<string> {
   );
 }
 
-/** La parte del tono dentro del diálogo. */
+/** La parte del tono principal dentro del diálogo. */
 function tono(dialogo: Locator): Locator {
-  return dialogo.getByRole("region", { name: "Tono" });
+  return dialogo.getByRole("region", { name: "Tono principal" });
 }
 
 /** Espera a que se guarde en la cuenta (el selector guarda un rato después del último cambio). */
@@ -144,7 +144,7 @@ test.describe("color de acento", () => {
     expect(await acento(page)).toBe(ORIGINAL.claro);
   });
 
-  test("el fondo se ajusta por modo: intensidad, velocidad, tamaño y segundo tono", async ({
+  test("el fondo se ajusta por modo: intensidad, velocidad, tamaño y tono secundario", async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme: "light" });
@@ -166,8 +166,8 @@ test.describe("color de acento", () => {
     await expect(dialogo.getByText("Quieto", { exact: true })).toBeVisible();
     await dialogo.getByLabel("Tamaño de las manchas").fill("150");
     await expect(dialogo.getByText("150 %", { exact: true })).toBeVisible();
-    await dialogo.getByRole("switch", { name: "Segundo tono" }).click();
-    await dialogo.getByLabel("Segundo tono del fondo").fill("#f97316");
+    await dialogo.getByRole("switch", { name: "Tono secundario" }).click();
+    await dialogo.getByLabel("Tono secundario del fondo").fill("#f97316");
     await guardado;
     await dialogo.getByRole("button", { name: "Listo" }).click();
 
@@ -176,11 +176,11 @@ test.describe("color de acento", () => {
     expect(await intensidad(page)).toBe("0.32");
     await page.getByRole("button", { name: "Color de la app" }).click();
     await expect(dialogo.getByLabel("Velocidad")).toHaveValue("0");
-    await expect(dialogo.getByRole("switch", { name: "Segundo tono" })).toHaveAttribute(
+    await expect(dialogo.getByRole("switch", { name: "Tono secundario" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
-    await expect(dialogo.getByLabel("Segundo tono del fondo")).toHaveValue("#f97316");
+    await expect(dialogo.getByLabel("Tono secundario del fondo")).toHaveValue("#f97316");
 
     // En 0 se apaga.
     await dialogo.getByLabel("Intensidad").fill("0");

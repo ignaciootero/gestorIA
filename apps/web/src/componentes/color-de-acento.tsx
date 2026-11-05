@@ -59,7 +59,7 @@ const ORIGINAL: Record<ModoDeColor, string> = {
   oscuro: TEMA_OSCURO.acento,
 };
 
-/** El segundo tono que se propone al encenderlo: un índigo, que va bien con casi todo. */
+/** El tono secundario que se propone al encenderlo: un índigo, que va bien con casi todo. */
 const SEGUNDO_TONO_INICIAL = "#6366f1";
 
 /** Cuánto se espera después del último cambio para guardar en la cuenta. */
@@ -333,17 +333,17 @@ function EditorDelFondo({ modo }: { modo: ModoDeColor }) {
       />
       <div className="flex min-h-11 items-center gap-3">
         <Interruptor
-          etiqueta="Segundo tono"
+          etiqueta="Tono secundario"
           encendido={ajustes.tonoSecundario !== null}
           onCambio={(encendido) =>
             cambiar({ tonoSecundario: encendido ? SEGUNDO_TONO_INICIAL : null })
           }
         />
-        <span className="text-sm text-texto">Segundo tono</span>
+        <span className="text-sm text-texto">Tono secundario</span>
         {ajustes.tonoSecundario !== null ? (
           <input
             type="color"
-            aria-label="Segundo tono del fondo"
+            aria-label="Tono secundario del fondo"
             value={ajustes.tonoSecundario}
             onChange={(evento) => cambiar({ tonoSecundario: evento.target.value })}
             className="ml-auto h-9 w-12 shrink-0 cursor-pointer rounded-control border border-borde-fuerte bg-superficie p-1"
@@ -399,7 +399,7 @@ export function SelectorDeColor() {
         <section aria-labelledby={idDelTono} className="flex flex-col gap-2">
           <Encabezado
             id={idDelTono}
-            titulo="Tono"
+            titulo="Tono principal"
             que="el color"
             esOriginal={elegido === null}
             alRestablecer={() => cambiarTono(null)}
