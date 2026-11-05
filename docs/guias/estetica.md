@@ -155,6 +155,7 @@ Reglas:
 
 - **Rendimiento:** preferir `transform` y `opacity`, que el navegador mueve sin recalcular el layout. Animar otras propiedades (`height`, `box-shadow`) cuando el efecto lo justifique y sea un elemento acotado; nunca en listas largas. Mantener 60 fps en móvil.
 - **Accesibilidad:** respetar la preferencia de reducir movimiento del sistema, reemplazando desplazamientos, escalas y cascadas por cambios de opacidad instantáneos o muy breves. Con esa preferencia activa, la aplicación tiene que seguir siendo legible y completa, solo quieta.
+  - En lo que se renderiza en el servidor, la preferencia cambia la **duración** (cero) o el **destino** de un gesto (`whileTap={{ scale: reducir ? 1 : 0.94 }}`), nunca el punto de partida (`initial`) ni si el gesto está puesto. En el servidor `useReducedMotion` todavía no sabe la preferencia, y si el HTML inicial dependiera de ella no coincidiría con el del cliente (error de hidratación; Motion, por ejemplo, agrega `tabindex` a lo que tiene `whileTap`).
 - **Nunca bloquear la interacción** esperando que termine una animación.
 - Duraciones, curvas y resortes definidos como tokens compartidos, usados con Motion en web y Reanimated en móvil.
 - **Animar solo `transform` y `opacity`.** Se permiten transiciones cortas de color de borde y de fondo, que el navegador resuelve sin recalcular el layout.

@@ -5,6 +5,19 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-04 — Con movimiento reducido cambia la duración, no el HTML inicial
+
+**Decisión.** En los componentes que se renderizan en el servidor, la preferencia de reducir movimiento solo cambia la
+duración de una animación o el destino de un gesto, nunca el estado inicial ni si el gesto existe. La pestaña de columna
+(`PestanaDeColumna`) tiene siempre `whileHover` y `whileTap`, que con movimiento reducido no mueven nada. El encabezado de
+ingreso arranca siempre corrido 8 px y con movimiento reducido llega en duración cero.
+
+**Por qué.** En el servidor `useReducedMotion` todavía no conoce la preferencia (devuelve `null`). Con movimiento reducido,
+el HTML del cliente salía distinto del del servidor y Next.js mostraba un error de hidratación ("1 Issue"). En la pestaña
+la diferencia era el `tabindex` que Motion agrega a lo que tiene `whileTap`; en el ingreso, el `transform` inicial. Lo que
+se renderiza solo en el cliente, después de cargar datos, no tiene este problema. Quedó como regla en
+`docs/guias/estetica.md`.
+
 ## 2026-11-04 — Pantalla de inicio: tarjeta de alto propio, más ancha y con el saludo integrado
 
 **Decisión.** El carrusel de inicio ocupa todo el ancho disponible (hasta 80 rem, antes 64) y la

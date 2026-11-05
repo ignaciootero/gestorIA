@@ -69,9 +69,11 @@ export function PestanaDeColumna({
       aria-expanded={abierta}
       aria-controls={controla}
       aria-label={accion}
-      {...(reducirMovimiento
-        ? {}
-        : { whileHover: { x: izquierda ? ASOMADA_PX : -ASOMADA_PX }, whileTap: { scale: 0.94 } })}
+      // Los gestos van siempre, y con movimiento reducido no mueven nada. Sacarlos cambiaría el
+      // HTML: Motion le agrega `tabindex` a lo que tiene `whileTap`, y en el servidor
+      // `useReducedMotion` todavía no sabe la preferencia (error de hidratación).
+      whileHover={{ x: reducirMovimiento ? 0 : izquierda ? ASOMADA_PX : -ASOMADA_PX }}
+      whileTap={{ scale: reducirMovimiento ? 1 : 0.94 }}
       transition={RESORTE.firme}
       className={cn(
         // `fixed`: acompaña la ventana y no el scroll. `group` para el cartel de al lado.

@@ -20,15 +20,14 @@ export function EncabezadoDeIngreso() {
   };
 
   /*
-   * `y` aparece en los dos estados aunque el movimiento esté reducido, con el
-   * desplazamiento en cero. Si se quitara la propiedad, el elemento se quedaría
-   * en la posición que tenía cuando `useReducedMotion` todavía no había
-   * resuelto: sin destino al que ir, Motion no lo mueve y el título queda
-   * corrido para siempre. Lo que cambia con la preferencia es la duración y la
-   * distancia, no qué propiedades se animan.
+   * El estado oculto es el mismo con y sin movimiento reducido: lo que cambia es
+   * la duración (cero), no de dónde arranca. En el servidor `useReducedMotion`
+   * todavía no sabe la preferencia, así que si el punto de partida dependiera de
+   * ella el HTML del servidor (corrido 8 px) y el del cliente (sin correr) no
+   * coincidirían: error de hidratación. Con duración cero no se ve el salto.
    */
   const hijo = {
-    oculto: { opacity: 0, y: reducirMovimiento ? 0 : 8 },
+    oculto: { opacity: 0, y: 8 },
     visible: {
       opacity: 1,
       y: 0,
