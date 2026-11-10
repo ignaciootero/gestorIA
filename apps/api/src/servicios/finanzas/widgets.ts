@@ -124,7 +124,7 @@ export type WidgetsDeFinanzas = {
 
 function avisarPresupuestos(
   presupuestos: Awaited<ReturnType<typeof listarPresupuestos>>,
-): Omit<WidgetsDelPeriodo["presupuestos"], "total"> {
+): Omit<WidgetsDelPeriodo["presupuestos"], "total" | "lista"> {
   const superados: PresupuestoAvisado[] = [];
   const porAgotarse: PresupuestoAvisado[] = [];
 
