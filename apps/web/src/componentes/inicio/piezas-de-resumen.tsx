@@ -393,8 +393,10 @@ export function Dona({
   let recorrido = 0;
 
   return (
-    <div className="flex min-h-0 flex-1 items-center gap-4 sm:gap-6">
-      <div className="relative aspect-square h-full max-h-40 min-h-24 shrink-0">
+    // El aro ocupa todo el alto disponible (hasta 15 rem): el contenedor mide su alto con
+    // `container-type: size` y el aro usa esa medida (`cqh`) como lado.
+    <div className="flex min-h-24 flex-1 items-center gap-4 [container-type:size] sm:gap-6">
+      <div className="relative size-[min(100cqh,15rem)] shrink-0">
         <svg viewBox="0 0 100 100" className="size-full -rotate-90">
           <circle
             cx={50}
@@ -434,7 +436,7 @@ export function Dona({
             : null}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="numeros-tabulares text-lg leading-tight font-semibold text-texto sm:text-xl">
+          <span className="numeros-tabulares text-xl leading-tight font-semibold text-texto sm:text-2xl">
             {centro}
           </span>
           {detalleDelCentro ? (
@@ -442,15 +444,15 @@ export function Dona({
           ) : null}
         </div>
       </div>
-      <ul className="flex min-w-0 flex-1 flex-col gap-2">
+      <ul className="flex min-w-0 flex-1 flex-col gap-3">
         {porciones.map((porcion, posicion) => (
           <li
             // La posición es la identidad: la leyenda sigue el orden de las porciones.
             key={posicion}
-            className="flex items-center gap-2 text-sm"
+            className="flex items-center gap-2.5 text-sm sm:text-base"
           >
             <span
-              className="size-2.5 shrink-0 rounded-full"
+              className="size-3 shrink-0 rounded-full"
               style={{ backgroundColor: porcion.color }}
             />
             <span className="min-w-0 flex-1 truncate text-texto">{porcion.etiqueta}</span>
@@ -492,22 +494,29 @@ export function Casillas({
 }) {
   const reducirMovimiento = useReducedMotion();
   return (
-    <div className="flex min-h-0 flex-1 items-center">
-      <div
-        className="grid w-full gap-2"
-        style={{ gridTemplateColumns: `repeat(${casillas.length}, minmax(0, 1fr))` }}
-      >
+    <div
+      className="grid min-h-16 flex-1 gap-2"
+      style={{ gridTemplateColumns: `repeat(${casillas.length}, minmax(0, 1fr))` }}
+    >
         {casillas.map((casilla, posicion) => {
           const llena = marcarCompletas && casilla.proporcion !== null && casilla.proporcion >= 1;
           return (
             <div
               // La posición es la identidad: son días en orden fijo.
               key={posicion}
-              className="flex min-w-0 flex-col items-center gap-1.5"
+              className="flex min-h-0 min-w-0 flex-col items-center gap-1"
             >
+              <span
+                className={cn(
+                  "numeros-tabulares text-xs",
+                  casilla.resaltada ? "font-semibold text-texto" : "text-texto-secundario",
+                )}
+              >
+                {casilla.texto}
+              </span>
               <motion.div
                 className={cn(
-                  "relative flex aspect-square w-full max-w-14 items-center justify-center rounded-xl",
+                  "relative flex min-h-6 w-full max-w-12 flex-1 origin-bottom items-center justify-center rounded-lg",
                   casilla.proporcion === null && "border border-dashed border-borde-fuerte",
                   casilla.resaltada && "ring-2 ring-texto/70 ring-offset-2 ring-offset-superficie",
                 )}
@@ -519,24 +528,16 @@ export function Casillas({
                         backgroundColor: `color-mix(in oklab, ${color} ${Math.round(12 + casilla.proporcion * 88)}%, transparent)`,
                       }
                 }
-                initial={reducirMovimiento ? false : { opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={reducirMovimiento ? false : { opacity: 0, scaleY: 0.4 }}
+                animate={{ opacity: 1, scaleY: 1 }}
                 transition={{
                   duration: DURACION_MS.lenta / 1000,
-                  delay: posicion * 0.05,
+                  delay: posicion * 0.04,
                   ease: CURVA_SALIDA,
                 }}
               >
-                {llena ? <Check className="size-1/2 text-white" strokeWidth={3} /> : null}
+                {llena ? <Check className="size-5 text-white" strokeWidth={3} /> : null}
               </motion.div>
-              <span
-                className={cn(
-                  "numeros-tabulares text-xs",
-                  casilla.resaltada ? "font-semibold text-texto" : "text-texto-secundario",
-                )}
-              >
-                {casilla.texto}
-              </span>
               <span
                 className={cn(
                   "w-full truncate text-center text-xs",
@@ -548,7 +549,6 @@ export function Casillas({
             </div>
           );
         })}
-      </div>
     </div>
   );
 }
@@ -573,7 +573,7 @@ export function Agenda({ dias }: { dias: readonly DiaDeAgenda[] }) {
   const reducirMovimiento = useReducedMotion();
   return (
     <div
-      className="grid min-h-0 flex-1 gap-1.5"
+      className="grid min-h-16 flex-1 gap-1.5"
       style={{ gridTemplateColumns: `repeat(${dias.length}, minmax(0, 1fr))` }}
     >
       {dias.map((dia, posicion) => {
@@ -596,15 +596,12 @@ export function Agenda({ dias }: { dias: readonly DiaDeAgenda[] }) {
             >
               {dia.etiqueta}
             </span>
-            <span className="numeros-tabulares text-base font-semibold text-texto">
-              {dia.puntos.length}
-            </span>
-            <div className="flex flex-wrap justify-center gap-1">
+            <div className="flex min-h-0 flex-1 flex-wrap content-center justify-center gap-1.5">
               {visibles.map((color, orden) => (
                 <motion.span
                   // El orden es la identidad: son las cosas del día en el orden del calendario.
                   key={orden}
-                  className="size-2 rounded-full"
+                  className="size-3 rounded-full"
                   style={{ backgroundColor: color }}
                   initial={reducirMovimiento ? false : { opacity: 0, scale: 0 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -617,6 +614,14 @@ export function Agenda({ dias }: { dias: readonly DiaDeAgenda[] }) {
               ))}
             </div>
             {resto > 0 ? <span className="text-xs text-texto-secundario">+{resto}</span> : null}
+            <span
+              className={cn(
+                "numeros-tabulares text-lg leading-none font-semibold",
+                dia.puntos.length > 0 ? "text-texto" : "text-texto-secundario/60",
+              )}
+            >
+              {dia.puntos.length}
+            </span>
           </div>
         );
       })}

@@ -50,7 +50,7 @@ export const DIAS_DEL_RESUMEN_DEL_CALENDARIO = 7;
 const EVENTOS_EN_LA_LISTA = 4;
 
 /** Lo que todavía falta: sin lo hecho, lo fallido ni los recordatorios pasados. */
-export function pendientes(eventos: readonly EventoDeCalendario[], hoy: string): EventoDeCalendario[] {
+function pendientes(eventos: readonly EventoDeCalendario[], hoy: string): EventoDeCalendario[] {
   return eventos
     .filter((evento) => {
       const estado = estadoParaFiltrar(evento, hoy);

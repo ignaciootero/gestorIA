@@ -595,21 +595,6 @@ test.describe("lo que dice cada resumen", () => {
     await expect(panel.locator("[data-grafico]")).toContainText("en 30 días");
   });
 
-  test("el pulso del día junta lo urgente de los módulos en una frase", async ({ page }) => {
-    // En una ventana baja se omite: acá, una alta.
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await entrar(page, await crearCuentaAprobada());
-    await expect(page.locator("[data-pulso]")).toHaveText("Hoy no tenés nada pendiente.");
-
-    await crearTarea(page, "Pagar la luz", hoy());
-    await crearPersona(page, "Ana", "Pérez", `1990${sumarDias(hoy(), 1).slice(4)}`);
-    await page.reload();
-    // La tarea no se cuenta otra vez como cosa del calendario.
-    await expect(page.locator("[data-pulso]")).toHaveText(
-      "Hoy tenés 1 tarea pendiente. Mañana cumple Ana.",
-    );
-  });
-
   test("los resúmenes se ponen al día al volver de un módulo donde se cambió algo", async ({
     page,
   }) => {

@@ -12,8 +12,6 @@
 // 2. La etiqueta "Inicio" sube.
 // 3. "Hola, <nombre>" se escribe letra por letra, en cascada.
 // 4. Llega la fecha y la manito saluda (se agita un par de veces).
-// 4 bis. Cuando llegan los datos, debajo de la fecha aparece el pulso del día: lo más urgente de
-//    los módulos en una frase (pulso-del-dia.ts).
 // 5. Mientras tanto entran las pestañas y la tarjeta del carrusel (ver ENTRADA_DEL_CARRUSEL_S).
 // Pasar el mouse por la manito la hace saludar de nuevo. Todo es `transform` y `opacity`, y nada
 // bloquea la interacción. Con la preferencia de reducir movimiento aparece quieto, de una vez.
@@ -49,16 +47,7 @@ function hoyEnPalabras(dia: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-export function SaludoDeInicio({
-  nombre,
-  hoy,
-  pulso,
-}: {
-  nombre: string;
-  hoy: string;
-  /** Lo más urgente del día en una frase (ver pulso-del-dia.ts); null mientras carga. */
-  pulso?: string | null;
-}) {
+export function SaludoDeInicio({ nombre, hoy }: { nombre: string; hoy: string }) {
   const reducirMovimiento = useReducedMotion();
   const [manito, animar] = useAnimate<HTMLSpanElement>();
 
@@ -152,21 +141,6 @@ export function SaludoDeInicio({
         >
           {hoyEnPalabras(hoy)}
         </motion.p>
-        {/* Aparece cuando llegan los datos. En una ventana de menos de 800 px de alto no entra junto
-            con la tarjeta y se omite (lo mismo está en cada resumen). */}
-        <p aria-live="polite" className="hidden min-h-5 [@media(min-height:800px)]:block">
-          {pulso ? (
-            <motion.span
-              data-pulso
-              className="line-clamp-2 text-sm text-texto"
-              initial={reducirMovimiento ? false : { opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: DURACION_MS.lenta / 1000, ease: CURVA_SALIDA }}
-            >
-              {pulso}
-            </motion.span>
-          ) : null}
-        </p>
       </div>
     </header>
   );

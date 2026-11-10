@@ -1,6 +1,5 @@
 // Contenido de la pantalla de inicio: un saludo y un carrusel con el resumen de cada módulo
-// (Finanzas, Calendario, Tareas y Contactos), que pasa solo de uno a otro. Debajo del saludo, el
-// pulso del día junta lo más urgente de todos en una frase.
+// (Finanzas, Calendario, Tareas y Contactos), que pasa solo de uno a otro.
 //
 // Es una pantalla para orientarse de un vistazo: cada resumen trae solo lo más importante de su
 // módulo —una cifra destacada, a lo sumo un aviso, una lista corta y un gráfico— y el detalle queda
@@ -38,10 +37,8 @@ import { interpretarError } from "@/lib/mensajes-de-error";
 import { zonaDelDispositivo } from "@/lib/preferencias-finanzas";
 import { ALTO_DE_LA_TARJETA, CarruselDeInicio, type Diapositiva } from "./carrusel-de-inicio";
 import type { IdentidadDeModulo } from "./piezas-de-resumen";
-import { armarPulso } from "./pulso-del-dia";
 import {
   DIAS_DEL_RESUMEN_DEL_CALENDARIO,
-  pendientes,
   ResumenDeCalendario,
   VARIANTES_DEL_CALENDARIO,
 } from "./resumen-de-calendario";
@@ -161,18 +158,6 @@ function Carrusel({ hoy, nombre }: { hoy: string; nombre: string }) {
       />
     )),
   ];
-  // El pulso del día, cuando ya llegó lo que necesita; si algún pedido falló, sin pulso (el
-  // resumen de ese módulo ya muestra el error).
-  const pulso =
-    tareas.isSuccess && calendario.isSuccess && contactos.isSuccess
-      ? armarPulso({
-          tareasDeHoy: tareas.data.hoyPendientes,
-          calendarioDeHoy: pendientes(calendario.data, hoy).filter(
-            (evento) => evento.dia === hoy && evento.origen !== "tareas",
-          ).length,
-          cumpleanos: contactos.data.proximosCumpleanos,
-        })
-      : null;
   const indiceInicial = Math.max(
     0,
     diapositivas.findIndex((una) => una.id === eleccion.pestana),
@@ -182,7 +167,7 @@ function Carrusel({ hoy, nombre }: { hoy: string; nombre: string }) {
     <CarruselDeInicio
       diapositivas={diapositivas}
       etiqueta="Resumen de tus módulos"
-      encabezado={<SaludoDeInicio nombre={nombre} hoy={hoy} pulso={pulso} />}
+      encabezado={<SaludoDeInicio nombre={nombre} hoy={hoy} />}
       demoraDeEntrada={ENTRADA_DEL_CARRUSEL_S}
       indiceInicial={indiceInicial}
     />

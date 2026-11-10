@@ -1994,14 +1994,6 @@ la tarjeta entre sin cortarse.
 Pasarle el mouse a la manito la hace saludar de nuevo. Nada de esto bloquea la interacción. Con reducir
 movimiento aparece todo quieto, de una vez.
 
-**El pulso del día.** Cuando llegan los datos, debajo de la fecha aparece una frase con lo más urgente de los
-módulos, para saber cómo viene el día sin pasar por cada resumen: "Hoy tenés 2 tareas pendientes y 1 cosa en
-el calendario. Mañana cumple Ana." Cuenta las tareas de hoy sin hacer, lo pendiente de hoy en el calendario
-que no es una tarea (para no contarlas dos veces) y los cumpleaños de hoy (o, si no hay, los de mañana). Sin
-nada: "Hoy no tenés nada pendiente." Si falla alguno de esos pedidos no se muestra (el resumen de ese módulo
-ya avisa del error), y en ventanas de menos de 800 px de alto se omite para que la tarjeta entre entera.
-Dónde: `componentes/inicio/pulso-del-dia.ts`.
-
 ### Cada resumen
 
 Todos tienen la misma forma, para no tener que volver a aprender dónde está cada cosa: arriba el módulo
@@ -2017,9 +2009,10 @@ Los gráficos no son todos de barras: se elige la forma que mejor cuenta cada da
 - **Dona** para repartos (en qué se va la plata, de dónde viene lo de la semana, lo que falta por categoría):
   el total en el centro y una leyenda con cada parte.
 - **Agenda** para la semana que viene: una columna por día con un punto por cosa, del color del módulo que
-  la trae (seis como mucho, después "+N").
-- **Casillas** para la constancia día a día: un cuadrado por día, más intenso cuanto más se hizo; con tilde
-  los días cumplidos del todo, punteado si ese día no había nada.
+  la trae (seis como mucho, después "+N"), y abajo cuántas son.
+- **Casillas** para la constancia día a día: una casilla por día, todas del mismo alto (ocupan el recuadro
+  entero) y más intensas cuanto más se hizo; con tilde los días cumplidos del todo, punteada si ese día no
+  había nada.
 - **Línea con área** para el gasto de los últimos días, con el promedio como línea punteada.
 - **Barras** y **rankings** donde se comparan pocas cantidades una al lado de la otra.
 
