@@ -56,8 +56,8 @@ export function guardarEleccion(eleccion: EleccionDelInicio): void {
 
 /** Lo que pide la dirección, si pide algo válido: `?resumen=<módulo>&variante=<variante>`. */
 function leerForzado(variantesPorModulo: Record<string, readonly string[]>): {
-  pestana?: string;
-  variante?: string;
+  pestana?: string | undefined;
+  variante?: string | undefined;
 } {
   const parametros = new URLSearchParams(window.location.search);
   const pestana = parametros.get("resumen") ?? undefined;
