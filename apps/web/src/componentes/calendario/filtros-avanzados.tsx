@@ -41,10 +41,10 @@ import {
 import {
   Check,
   Circle,
-  CircleAlert,
   type LucideIcon,
   RotateCcw,
   SlidersHorizontal,
+  TriangleAlert,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/clases";
@@ -53,7 +53,7 @@ import { ESTILOS_DE_ORIGEN, NOMBRES_DE_ESTADO } from "./origenes";
 /** El ícono de cada estado, el mismo que la marca de la grilla: lleno lo que está por venir, vacío lo pasado. */
 const ICONOS_DEL_FILTRO: Record<EstadoParaFiltrar, LucideIcon> = {
   pendiente: Circle,
-  atrasada: CircleAlert,
+  atrasada: TriangleAlert,
   finalizada: Check,
   proximo: Circle,
   pasado: Circle,

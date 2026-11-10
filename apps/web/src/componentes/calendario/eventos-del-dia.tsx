@@ -27,13 +27,13 @@ import {
   CalendarOff,
   CalendarPlus,
   Circle,
-  CircleAlert,
   CircleCheck,
   CircleX,
   EyeOff,
   Pencil,
   Plus,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -323,7 +323,7 @@ function FilaDeEvento({
                 {evento.fallido ? (
                   <CircleX aria-hidden="true" className="size-3 shrink-0" />
                 ) : estado === "atrasada" ? (
-                  <CircleAlert aria-hidden="true" className="size-3 shrink-0" />
+                  <TriangleAlert aria-hidden="true" className="size-3 shrink-0" />
                 ) : pasado ? (
                   <Circle aria-hidden="true" className="size-3 shrink-0" />
                 ) : (

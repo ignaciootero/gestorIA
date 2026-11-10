@@ -5,6 +5,20 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — Triángulo de aviso para lo atrasado en el calendario
+
+**Decisión.** Lo atrasado (tareas sin hacer de días anteriores y deudas vencidas) se marca en la grilla con un
+triángulo de aviso lleno del color del origen y un "!" blanco, en vez de un círculo con un "!". Ocupa la
+misma caja, el mismo grosor de trazo y el mismo anillo que los círculos. El botón "Atrasadas" y la etiqueta
+de la lista del día usan el mismo triángulo.
+
+**Por qué.** A 12–14 px el "!" dentro del círculo quedaba de unos 8 px y no se entendía. La forma del
+triángulo comunica "aviso" sin tener que leer el signo, y se distingue del punto de lo pendiente sin depender
+del color. Se eligió entre seis propuestas (triángulo, rombo, reloj, reloj con flecha, reloj de arena y punto
+con globito rojo).
+
+---
+
 ## 2026-11-10 — El filtro del calendario se guarda en la cuenta
 
 **Decisión.** El filtro del calendario (orígenes, repeticiones y estados ocultos) pasa de `localStorage` a

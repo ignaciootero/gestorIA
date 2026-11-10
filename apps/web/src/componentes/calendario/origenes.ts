@@ -14,7 +14,6 @@ import {
 import {
   CalendarDays,
   Check,
-  createLucideIcon,
   ListChecks,
   type LucideIcon,
   Minus,
@@ -75,21 +74,15 @@ export const ESTILOS_DE_ORIGEN: Record<OrigenDeEvento, EstiloDeOrigen> = {
 /** Los orígenes en el orden en que se muestran (chips de filtro y puntos de un día). */
 export const ORDEN_DE_ORIGENES: readonly OrigenDeEvento[] = ORIGENES_DE_EVENTO;
 
-/** Solo el signo de exclamación (el de CircleAlert de Lucide), sin el círculo: el marcador ya es un círculo. */
-const Exclamacion = createLucideIcon("Exclamacion", [
-  ["line", { x1: "12", x2: "12", y1: "8", y2: "12", key: "palito" }],
-  ["line", { x1: "12", x2: "12.01", y1: "16", y2: "16", key: "punto" }],
-]);
-
 /**
  * La marca de cada estado de una tarea, que va en blanco dentro del círculo del origen (ver
  * vista-de-mes.tsx). Sin marca: el pendiente (círculo lleno) y el pasado de un recordatorio (solo el borde).
+ * Lo atrasado no es un círculo sino un triángulo de aviso (MarcaDeAtrasada).
  */
 export const ICONOS_DE_MARCADOR: Record<
-  Exclude<MarcadorDeEstado, "pendiente" | "pasado">,
+  Exclude<MarcadorDeEstado, "pendiente" | "pasado" | "atrasada">,
   LucideIcon
 > = {
-  atrasada: Exclamacion,
   completada: Check,
   fallida: X,
   mixta: Minus,

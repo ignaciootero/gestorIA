@@ -37,6 +37,7 @@ import { CURVA_SALIDA, DURACION_MS, RESORTE } from "@gestoria/ui-tokens";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
 import { type KeyboardEvent, useEffect, useRef } from "react";
 import { cn } from "@/lib/clases";
+import { MarcaDeAtrasada } from "./marca-de-atrasada";
 import { ESTILOS_DE_ORIGEN, ICONOS_DE_MARCADOR, ORDEN_DE_ORIGENES } from "./origenes";
 
 const NOMBRES_DE_COLUMNA = [
@@ -340,7 +341,9 @@ function CeldaDeDia({
             {origenes.map((origen) => {
               const estado = marcadorDe(origen);
               const Icono =
-                estado === "pendiente" || estado === "pasado" ? null : ICONOS_DE_MARCADOR[estado];
+                estado === "pendiente" || estado === "pasado" || estado === "atrasada"
+                  ? null
+                  : ICONOS_DE_MARCADOR[estado];
               return (
                 <span
                   key={origen}
@@ -349,17 +352,30 @@ function CeldaDeDia({
                   // "completado" acá es que todo lo de ese origen en el día está cerrado (hecho, fallido o pasado).
                   data-completado={estado !== "pendiente" && estado !== "atrasada"}
                   className={cn(
-                    // Un círculo pleno del color del origen; el pendiente es solo el círculo y los demás llevan
-                    // adentro una marca blanca (tick, cruz, barra o exclamación), que se distingue mejor que un contorno.
-                    "grid size-3 place-items-center rounded-full ring-1 sm:size-3.5",
-                    // Un recordatorio ya pasado es el círculo vacío: solo el borde.
-                    estado === "pasado"
-                      ? cn("border-2 bg-transparent", ESTILOS_DE_ORIGEN[origen].borde)
-                      : ESTILOS_DE_ORIGEN[origen].punto,
-                    // El anillo separa la marca del fondo (la pastilla del día elegido, o la superficie).
-                    elegido ? "ring-acento-texto" : "ring-superficie",
+                    "grid size-3 place-items-center sm:size-3.5",
+                    estado === "atrasada"
+                      ? // Lo atrasado es un triángulo de aviso, en la misma caja (ver MarcaDeAtrasada).
+                        null
+                      : cn(
+                          // Un círculo pleno del color del origen; el pendiente es solo el círculo y los
+                          // demás llevan adentro una marca blanca (tick, cruz o barra), que se distingue
+                          // mejor que un contorno.
+                          "rounded-full ring-1",
+                          // Un recordatorio o un evento propio ya pasado es el círculo vacío: solo el borde.
+                          estado === "pasado"
+                            ? cn("border-2 bg-transparent", ESTILOS_DE_ORIGEN[origen].borde)
+                            : ESTILOS_DE_ORIGEN[origen].punto,
+                          // El anillo separa la marca del fondo (la pastilla del día elegido, o la superficie).
+                          elegido ? "ring-acento-texto" : "ring-superficie",
+                        ),
                   )}
                 >
+                  {estado === "atrasada" ? (
+                    <MarcaDeAtrasada
+                      colorDelOrigen={ESTILOS_DE_ORIGEN[origen].color}
+                      colorDelAnillo={elegido ? "stroke-acento-texto" : "stroke-superficie"}
+                    />
+                  ) : null}
                   {Icono ? (
                     <Icono
                       aria-hidden="true"

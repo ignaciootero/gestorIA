@@ -1811,16 +1811,16 @@ en pantallas más angostas pasa debajo.
   finalizadas a la vista se distinguen de las pendientes: en la lista del día
   el título va **tachado y más apagado** y lleva la marca **"Completada"** o **"Fallida"** (con ícono, no
   solo estilo); en el mes, **el marcador de cada origen cambia con el estado**: **punto lleno** si hay algo
-  pendiente; si no, un **signo de exclamación** si hay al menos una **tarea atrasada** (de un día anterior a hoy, sin hacer
+  pendiente; si no, un **triángulo de aviso** si hay al menos una **tarea atrasada** (de un día anterior a hoy, sin hacer
   ni fallar; también aparece con la marca "Atrasada" en la lista del día); y si todo está finalizado, **✓**
   si todo se completó, **✗** si todo falló y **–** si hubo de
   las dos. La prioridad es pendiente > atrasada > finalizada: una sola pendiente alcanza para que el día
-  muestre el punto lleno. Los cinco marcadores miden lo mismo y quedan en la misma línea; son círculos llenos del color del origen (el pendiente liso) y los demás llevan adentro una marca blanca —un !, ✓, ✗ o una barra— que se distingue mejor que un contorno; van sobre un anillo que los separa del fondo (también sobre el día elegido). **Estas marcas son de las tareas.**
+  muestre el punto lleno. Los marcadores miden lo mismo y quedan en la misma línea; son círculos llenos del color del origen (el pendiente liso) y los cerrados llevan adentro una marca blanca —✓, ✗ o una barra— que se distingue mejor que un contorno; van sobre un anillo que los separa del fondo (también sobre el día elegido). El de **atrasada** no es un círculo sino un **triángulo de aviso** lleno del color del origen con un "!" blanco (`marca-de-atrasada.tsx`): la forma sola ya dice "ojo", aunque a 14 px el signo apenas se lea. Ocupa la misma caja que el círculo (todo el ancho), con el mismo grosor de trazo y el mismo anillo. El mismo triángulo (de Lucide, en contorno) va en el botón "Atrasadas" de "Más filtros" y en la etiqueta "Atrasada" de la lista del día. **Estas marcas son de las tareas.**
   Los **recordatorios de Contactos** solo son próximos o pasados: el próximo es el **círculo lleno** y el pasado
   el **círculo vacío** (solo el borde, del color del origen); si el día tiene uno próximo, manda el lleno. En
   la lista del día un recordatorio pasado lleva la marca "Pasado" (no "Completada"), y el nombre accesible de
   la casilla dice cuántos son pasados. Los **eventos propios** se marcan igual: futuro lleno, pasado vacío.
-  Las **deudas de Finanzas** usan las marcas de las tareas: lleno si está pendiente, **!** si está atrasada y
+  Las **deudas de Finanzas** usan las marcas de las tareas: lleno si está pendiente, el **triángulo de aviso** si está atrasada y
   **✓** si está pagada; en la lista del día, "Atrasada" o "Pagada".
   El nombre accesible de la casilla dice cuántos
   están completados, fallidos y atrasados. Los estados que se ocultan se guardan en la cuenta, y "Mostrar todo" no los
