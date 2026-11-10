@@ -513,7 +513,7 @@ export function Casillas({
                 )}
                 style={
                   casilla.proporcion === null
-                    ? undefined
+                    ? {}
                     : {
                         // Nunca del todo transparente: un día con algo y nada hecho igual se ve.
                         backgroundColor: `color-mix(in oklab, ${color} ${Math.round(12 + casilla.proporcion * 88)}%, transparent)`,
