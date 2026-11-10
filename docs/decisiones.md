@@ -5,6 +5,21 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — Animación de entrada en todos los módulos
+
+**Decisión.** Los encabezados de Finanzas, Contactos, Tareas, Calendario y Administración usan un
+componente común (`EncabezadoDeModulo`) con la misma entrada que el saludo del inicio: ícono con resorte,
+título letra por letra y descripción que sube; el contenido entra después con `EntradaDeContenido`.
+
+**Por qué.** Que todas las pantallas se armen igual da continuidad al pasar de una a otra, y concentra la
+animación en un solo lugar en vez de repetirla en cada página.
+
+**Descartado.** Animar cada tarjeta o fila del contenido por separado: cada panel tiene su propia carga de
+datos y sus esqueletos, y una cascada encima se solaparía con ellos. Se anima el contenido como una sola
+pieza.
+
+---
+
 ## 2026-11-10 — Gráficos variados en el inicio
 
 **Decisión.** Los resúmenes del inicio dejan de usar casi siempre barras: cada dato usa la forma que mejor lo

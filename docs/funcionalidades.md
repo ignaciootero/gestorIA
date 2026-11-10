@@ -2246,6 +2246,19 @@ quede en una franja centrada más angosta que el resto.
 
 Dónde: `apps/web/src/componentes/layout/`, `apps/web/src/app/layout.tsx`.
 
+### Entrada de cada módulo
+
+Finanzas, Contactos, Tareas, Calendario y Administración se arman al entrar, con la misma bienvenida en
+pasos que la pantalla de inicio (`componentes/layout/encabezado-de-modulo.tsx`):
+1. El ícono del módulo (el del menú, en su color) aparece con un resorte suave.
+2. El título se escribe letra por letra.
+3. Sube la descripción.
+4. Sube el contenido de la pantalla, con el título todavía en camino.
+
+Dura menos de un segundo, es solo `transform` y `opacity`, y no bloquea nada: se puede usar la pantalla
+mientras termina. El título conserva su nombre accesible entero (las letras sueltas se esconden de los
+lectores de pantalla). Con reducir movimiento aparece todo quieto, de una vez.
+
 ### Marco de la aplicación: navegación, contenido y widgets
 
 Las pantallas con sesión iniciada (`/inicio`, `/admin`, `/finanzas` y las que se sumen) usan

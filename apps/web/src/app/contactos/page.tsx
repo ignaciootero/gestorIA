@@ -2,6 +2,7 @@ import { tituloDePantalla } from "@gestoria/shared";
 import type { Metadata } from "next";
 import { PanelDeContactos } from "@/componentes/contactos/panel-de-contactos";
 import { ColumnaDeWidgetsDeContactos } from "@/componentes/contactos/widgets/widgets-de-contactos";
+import { EncabezadoDeModulo, EntradaDeContenido } from "@/componentes/layout/encabezado-de-modulo";
 import { EstructuraDeApp } from "@/componentes/layout/estructura-de-app";
 
 export const metadata: Metadata = {
@@ -26,14 +27,15 @@ export default async function PaginaDeContactos({
   return (
     <EstructuraDeApp widgets={<ColumnaDeWidgetsDeContactos />}>
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-        <header className="text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Contactos</h1>
-          <p className="mt-1 text-sm text-texto-secundario">
-            Personas, empresas y servicios, con sus datos y las fechas que querés recordar.
-          </p>
-        </header>
+        <EncabezadoDeModulo
+          modulo="contactos"
+          titulo="Contactos"
+          descripcion="Personas, empresas y servicios, con sus datos y las fechas que querés recordar."
+        />
 
-        <PanelDeContactos fichaInicialId={idDeContacto(contacto)} />
+        <EntradaDeContenido>
+          <PanelDeContactos fichaInicialId={idDeContacto(contacto)} />
+        </EntradaDeContenido>
       </div>
     </EstructuraDeApp>
   );
