@@ -5,6 +5,26 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — Inicio al azar, con variantes por resumen
+
+**Decisión.** Cada visita a `/inicio` elige al azar con qué pestaña arranca el carrusel y una variante del
+resumen de cada módulo (tres o cuatro por módulo, la general incluida), sin repetir la de la visita anterior.
+Se elige en el navegador y lo último elegido queda en `localStorage`. Una variante sin datos cede su lugar a la
+general. La dirección puede forzar pestaña y variante (`?resumen=…&variante=…`).
+
+**Por qué.** Ver siempre lo mismo hace que la pantalla de inicio deje de mirarse. Sin la regla de no repetir,
+con cuatro pestañas tocaría la misma dos veces seguidas una de cada cuatro visitas y se sentiría como que no
+cambia. En el navegador y no en el servidor porque el carrusel ya se dibuja solo ahí (necesita la fecha de la
+persona), así no hay diferencias entre el HTML del servidor y el del navegador. Todas las variantes tienen la
+misma forma (cifra, aviso, lista y gráfico) para que cambiar de una a otra no obligue a volver a aprender la
+pantalla, y salen de los mismos pedidos que los widgets: solo se sumaron tres datos chicos. Forzar por la
+dirección sirve para probar cada variante y para volver a una que interesó.
+
+**También.** Se revirtió que el inicio dejara de ser pantalla fija en celulares (2026-11-05): los tests
+verifican que entra entero en 390×844 y 360×640, y era un cambio hecho sin evidencia de que fallara.
+
+---
+
 ## 2026-11-05 — Navegación de abajo en pantallas angostas
 
 **Decisión.** Debajo de `lg` (1024 px) no hay menú a la izquierda: la navegación es una barra fija

@@ -32,20 +32,32 @@ export type IdentidadDeModulo = {
   punto: string;
 };
 
+/**
+ * Lo que arma cada variante de un resumen: la columna de texto (cifra, aviso y lista) y el gráfico.
+ * Una variante que no tiene qué mostrar devuelve null y el resumen usa la general.
+ */
+export type ResumenArmado = { texto: ReactNode; grafico: ReactNode | null };
+
 /** El resumen entero: encabezado, la columna de texto y la del gráfico. */
 export function Resumen({
   modulo,
+  variante,
   texto,
   grafico,
 }: {
   modulo: IdentidadDeModulo;
+  /** Qué variante del resumen es (ver `armarResumen`): queda en `data-variante`, para las pruebas. */
+  variante?: string;
   /** La cifra destacada, el aviso y la lista. */
   texto: ReactNode;
   /** El bloque del gráfico; sin datos para dibujar, se omite y el texto ocupa todo. */
   grafico: ReactNode | null;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 p-4 sm:gap-5 sm:p-6">
+    <div
+      data-variante={variante}
+      className="flex h-full min-h-0 flex-col gap-4 p-4 sm:gap-5 sm:p-6"
+    >
       <EncabezadoDeResumen modulo={modulo} />
       <div
         className={cn(

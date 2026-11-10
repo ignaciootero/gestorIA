@@ -63,7 +63,7 @@ describe("widgets de tareas", () => {
       hoyPendientes: 0,
       atrasadas: { total: 0, primeras: [] },
       proximas: [],
-      masAdelante: { total: 0, primera: null },
+      masAdelante: { total: 0, primera: null, primeras: [] },
       racha: 0,
       rutinas: [],
       repetitivas: 0,
@@ -126,9 +126,12 @@ describe("widgets de tareas", () => {
     await crearTarea(cliente, ana.userId, suelta("Lejana", "2026-11-30"), AHORA);
     await crearTarea(cliente, ana.userId, suelta("Cercana", "2026-10-23", "10:00"), AHORA);
     const datos = await obtenerWidgetsDeTareas(cliente, ana.userId, AHORA);
+    const cercana = { titulo: "Cercana", dia: "2026-10-23", hora: "10:00", dias: 3 };
     expect(datos.masAdelante).toEqual({
       total: 2,
-      primera: { titulo: "Cercana", dia: "2026-10-23", hora: "10:00", dias: 3 },
+      primera: cercana,
+      // Las que siguen, de la más cercana a la más lejana (la página de inicio las lista).
+      primeras: [cercana, { titulo: "Lejana", dia: "2026-11-30", hora: null, dias: 41 }],
     });
   });
 

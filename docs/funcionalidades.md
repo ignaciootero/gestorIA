@@ -1969,6 +1969,12 @@ de otra persona responde 404).
 módulo**, en este orden: Finanzas, Calendario, Tareas y Contactos. Se ve un resumen a la vez y pasa solo al
 siguiente cada **15 segundos**. La pantalla **entra entera en la ventana, sin desplazamiento vertical**.
 
+Para no ver siempre lo mismo, **en cada visita se elige al azar** con qué pestaña arranca el carrusel y qué
+**variante** muestra cada resumen (ver "Variantes"), sin repetir lo de la visita anterior: el navegador guarda
+lo último que se eligió (`gestion.inicio.ultimaEleccion`). Se puede forzar con la dirección:
+`/inicio?resumen=<módulo>&variante=<variante>` abre esa pestaña con esa variante. Dónde:
+`lib/eleccion-del-inicio.ts`.
+
 ### El saludo
 
 Una etiqueta **"Inicio"** (con el ícono del menú, para que quede claro en qué pantalla se está), **"Hola,
@@ -2003,10 +2009,33 @@ ejes ni leyendas. Pocos datos a propósito: el detalle está en cada módulo.
 | **Tareas** | Hechas hoy ("3 de 5") con un anillo de avance, lo que falta y la racha | Tareas atrasadas (y cuál se da por fallida y cuándo) | Lo que falta hoy, con su hora | Hechas de las que había cada uno de los últimos 7 días |
 | **Contactos** | Próximo cumpleaños (quién, cuántos cumple, cuándo); sin cumpleaños, cuántos contactos hay | Recordatorios de hoy | Próximos recordatorios, con el contacto y cuándo | Recordatorios en cada una de las próximas 4 semanas |
 
+Esa es la variante **general** de cada uno. Las demás tienen la misma forma (cifra, aviso, lista y gráfico) y
+el mismo aviso que la general:
+
+| Resumen | Variante | Cifra destacada | Lista | Gráfico |
+|---|---|---|---|---|
+| **Finanzas** | `anterior` | Gasto contra el período anterior a la misma altura (±%) | Balance de los últimos períodos | Gasto acumulado día a día contra el anterior (línea punteada); sin ese dato, gasto de los últimos períodos |
+| | `ritmo` | Cuánto se gasta por día en promedio | El gasto más grande, la categoría donde más y el último movimiento | Gasto de cada uno de los últimos días |
+| | `presupuestos` | "N de M en orden" (menos del 80 % usado), con lo gastado contra lo presupuestado | Lo que queda (o cuánto se pasó) de cada uno | Ranking del % usado, en verde, amarillo (80 % o más) o rojo (pasado) |
+| **Tareas** | `racha` | Días seguidos al día, con el % cumplido de la semana en un anillo | Las rutinas de las últimas dos semanas, con hechas de total | % cumplido de cada uno de los últimos 7 días |
+| | `viene` | Cuántas tareas hay con día más adelante y cuál es la próxima | Las próximas, con el día | Lo que falta, por categoría |
+| | `atender` | Cuántas están atrasadas y cuántas se dan por fallidas pronto | Las que fallaron en las últimas dos semanas | Atrasadas por categoría |
+| **Contactos** | `cumpleanos` | Próximo cumpleaños | Los que siguen, con la fecha y cuántos cumplen | Cumpleaños por mes, con el actual resaltado |
+| | `deudas` | Lo que te deben tus contactos (o lo que les debés) | El próximo vencimiento | Ranking de con quién hay más pendiente (verde te deben, rojo debés; las barras se comparan dentro de cada moneda) |
+| | `semana` | Cuántos recordatorios cayeron en los últimos 7 días | Los que cayeron, con cuándo | Cuántos cayeron cada día |
+| **Calendario** | `dia` | El día más cargado de la semana y cuántas cosas tiene | Lo de ese día | La semana día por día, con ese día resaltado |
+| | `modulos` | Cuántas cosas hay en la semana y de dónde viene la mayoría | Lo próximo de cada origen | Ranking por origen, con el color de cada módulo |
+
+Una variante **sin datos para mostrar** (sin período anterior, sin presupuestos, sin tareas futuras, sin
+cumpleaños, sin eventos…) cede su lugar a la general, que siempre tiene algo que decir.
+
 - El de Calendario cuenta **solo lo que falta**: sin tareas hechas o fallidas ni recordatorios pasados, y sin
   aplicar el filtro guardado del calendario (eso es una forma de mirar el mes).
 - Cada resumen usa **el mismo pedido y la misma clave de caché** que su módulo (`/api/finanzas/widgets`,
   `/api/calendario/eventos`, `/api/tareas/widgets`, `/api/contactos/widgets`): no hay endpoints nuevos.
+  Las variantes sumaron tres datos a esos pedidos: todos los presupuestos con su % usado
+  (`periodo.presupuestos.lista`), las próximas tareas con día futuro (`masAdelante.primeras`) y los
+  próximos cumpleaños (`proximosCumpleanos`).
   Los cuatro se piden juntos al entrar, así pasar de uno a otro es instantáneo, y entrar después al módulo
   no vuelve a pedir nada.
 - **Estados:** mientras carga, un esqueleto con la forma del resumen; si un módulo falla, su resumen lo dice
@@ -2188,8 +2217,7 @@ queda al alcance del pulgar; respeta la zona segura del celular y deja un espaci
 alto al final del marco para no tapar el pie. Administración no entra ahí (sería un
 sexto destino, solo para admins): queda como ícono en la barra de arriba. En pantallas
 angostas la barra de scroll es fina y no se le reserva lugar (desde `lg` con mouse sí,
-para que el contenido no se corra al cambiar de pantalla), y la pantalla de inicio deja
-de entrar fija en el alto de la ventana: se desplaza como las demás. Las pestañas
+para que el contenido no se corra al cambiar de pantalla). Las pestañas
 (`SelectorDeSegmentos`) nunca son más anchas que su contenedor: si no entran, se
 desplazan de costado. `e2e/pantallas-chicas.spec.ts` recorre todas las pantallas a 360
 y 390 px y lista cualquier elemento que asome por los costados.

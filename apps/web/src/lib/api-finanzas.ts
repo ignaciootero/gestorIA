@@ -512,6 +512,13 @@ export type WidgetsDelPeriodo = {
     porAgotarse: PresupuestoAvisado[];
     /** Lo presupuestado y lo gastado en esas categorías; null si no hay ningún límite fijado. */
     total: { presupuestadoCentavos: number; gastadoCentavos: number } | null;
+    /** Todos los que tienen límite, del más usado al menos (hasta seis). */
+    lista: {
+      nombre: string;
+      presupuestadoCentavos: number;
+      gastadoCentavos: number;
+      usadoPorcentaje: number;
+    }[];
   };
   /** Null si el período no tiene ningún movimiento. */
   diasDesdeElUltimoMovimiento: number | null;

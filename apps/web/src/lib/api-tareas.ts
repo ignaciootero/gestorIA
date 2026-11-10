@@ -211,6 +211,9 @@ export function eliminarTareaRepetitiva(id: string): Promise<{ ok: true }> {
 
 // --- Widgets ---
 
+/** Una tarea con día futuro, como la mandan los widgets. */
+export type TareaQueViene = { titulo: string; dia: string; hora: string | null; dias: number };
+
 export type WidgetsDeTareas = {
   hoy: string;
   hoyHechas: number;
@@ -221,7 +224,9 @@ export type WidgetsDeTareas = {
   proximas: { titulo: string; hora: string | null }[];
   masAdelante: {
     total: number;
-    primera: { titulo: string; dia: string; hora: string | null; dias: number } | null;
+    primera: TareaQueViene | null;
+    /** Las que siguen, la más cercana primero (hasta cinco). */
+    primeras: TareaQueViene[];
   };
   /** Los últimos 7 días, el de hoy al final. */
   ultimosDias: { dia: string; total: number; hechas: number }[];

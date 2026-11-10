@@ -33,6 +33,18 @@ const MESES = 12;
 
 type ContactoBreve = { tipo: TipoDeContacto; nombre: string; apellido: string | null };
 
+type Cumpleanos = {
+  nombre: string;
+  apellido: string | null;
+  /** El día en que cae (este año o el que viene). */
+  fecha: string;
+  dias: number;
+  nacimiento: string;
+};
+
+/** Cuántos de los próximos cumpleaños se mandan con su detalle. */
+const CUMPLEANOS_PROXIMOS = 5;
+
 type RecordatorioQueViene = {
   titulo: string;
   repeticion: string;
@@ -87,14 +99,9 @@ export type WidgetsDeContactos = {
     contacto: ContactoBreve;
   }[];
   /** El próximo cumpleaños de una persona con fecha de nacimiento; null si no hay ninguna. */
-  proximoCumpleanos: {
-    nombre: string;
-    apellido: string | null;
-    /** El día en que cae (este año o el que viene). */
-    fecha: string;
-    dias: number;
-    nacimiento: string;
-  } | null;
+  proximoCumpleanos: Cumpleanos | null;
+  /** Los próximos cumpleaños (hasta cinco), el más cercano primero: el primero es `proximoCumpleanos`. */
+  proximosCumpleanos: Cumpleanos[];
   /** Cuántos cumpleaños caen en cada mes, de enero a diciembre. */
   cumpleanosPorMes: number[];
   deudas: {
@@ -210,7 +217,7 @@ export async function obtenerWidgetsDeContactos(
 
   const personas = filas.filter((fila) => fila.tipo === "persona");
 
-  let proximoCumpleanos: WidgetsDeContactos["proximoCumpleanos"] = null;
+  const cumpleanos: Cumpleanos[] = [];
   const cumpleanosPorMes = Array.from({ length: MESES }, () => 0);
   for (const persona of personas) {
     if (!persona.fechaNacimiento) continue;
@@ -230,17 +237,16 @@ export async function obtenerWidgetsDeContactos(
       hoy,
     );
     if (fecha === null) continue;
-    const dias = diasEntre(hoy, fecha);
-    if (proximoCumpleanos === null || dias < proximoCumpleanos.dias) {
-      proximoCumpleanos = {
-        nombre: persona.nombre,
-        apellido: persona.apellido,
-        fecha,
-        dias,
-        nacimiento: persona.fechaNacimiento,
-      };
-    }
+    cumpleanos.push({
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      fecha,
+      dias: diasEntre(hoy, fecha),
+      nacimiento: persona.fechaNacimiento,
+    });
   }
+  // El más cercano primero. `sort` es estable: a igual distancia queda el orden de la consulta.
+  cumpleanos.sort((a, b) => a.dias - b.dias);
 
   const porSemana = Array.from({ length: SEMANAS_DEL_GRAFICO }, () => 0);
   for (const recordatorio of recordatorios) {
@@ -300,7 +306,8 @@ export async function obtenerWidgetsDeContactos(
           apellido: entrada.contacto.apellido,
         },
       })),
-    proximoCumpleanos,
+    proximoCumpleanos: cumpleanos[0] ?? null,
+    proximosCumpleanos: cumpleanos.slice(0, CUMPLEANOS_PROXIMOS),
     cumpleanosPorMes,
     deudas: {
       teDeben: resumirDeudas(deudas.filter((deuda) => deuda.sentido === "me_deben")),

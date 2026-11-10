@@ -28,8 +28,16 @@ const INTERVALO_MS = 15000;
 const MODULOS = ["Finanzas", "Calendario", "Tareas", "Contactos"] as const;
 type Modulo = (typeof MODULOS)[number];
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
   await limpiarBaseDePruebas();
+  // El inicio elige al azar la pestaña y la variante de cada resumen (lib/eleccion-del-inicio.ts).
+  // Estos tests prueban el carrusel y la variante general: con el azar en cero y sin recuerdo de la
+  // visita anterior, siempre arranca en Finanzas con las generales. Las variantes se prueban en
+  // inicio-variantes.spec.ts.
+  await page.addInitScript(() => {
+    window.localStorage.removeItem("gestion.inicio.ultimaEleccion");
+    Math.random = () => 0;
+  });
 });
 
 function hoy(): string {

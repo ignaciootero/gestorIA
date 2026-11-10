@@ -94,6 +94,13 @@ export type WidgetsDelPeriodo = {
     porAgotarse: PresupuestoAvisado[];
     /** Lo presupuestado y lo gastado en total (solo las categorías con límite). Null si no hay ninguno. */
     total: { presupuestadoCentavos: number; gastadoCentavos: number } | null;
+    /** Todos los que tienen límite, del más usado al menos (hasta seis): la página de inicio los lista. */
+    lista: {
+      nombre: string;
+      presupuestadoCentavos: number;
+      gastadoCentavos: number;
+      usadoPorcentaje: number;
+    }[];
   };
   /** Días enteros desde el último movimiento cargado en el período. Null si no tiene ninguno. */
   diasDesdeElUltimoMovimiento: number | null;
@@ -151,6 +158,9 @@ function avisarPresupuestos(
       .slice(0, MAXIMO_DE_PRESUPUESTOS_AVISADOS),
   };
 }
+
+/** Cuántos presupuestos van en la lista completa (los de inicio): el resto se ve en el módulo. */
+const PRESUPUESTOS_EN_LA_LISTA = 6;
 
 async function widgetsDelPeriodo(
   cliente: ClienteDb,
@@ -241,6 +251,17 @@ async function widgetsDelPeriodo(
               ),
               gastadoCentavos: conLimite.reduce((suma, p) => suma + p.gastadoCentavos, 0),
             },
+      lista: conLimite
+        .map((presupuesto) => ({
+          nombre: presupuesto.nombre,
+          presupuestadoCentavos: presupuesto.presupuestadoCentavos,
+          gastadoCentavos: presupuesto.gastadoCentavos,
+          usadoPorcentaje: Math.round(
+            (presupuesto.gastadoCentavos / presupuesto.presupuestadoCentavos) * 100,
+          ),
+        }))
+        .sort((a, b) => b.usadoPorcentaje - a.usadoPorcentaje || a.nombre.localeCompare(b.nombre))
+        .slice(0, PRESUPUESTOS_EN_LA_LISTA),
     },
     diasDesdeElUltimoMovimiento: ultimoMovimiento
       ? Math.max(

@@ -65,6 +65,7 @@ export function CarruselDeInicio({
   etiqueta,
   encabezado,
   demoraDeEntrada,
+  indiceInicial = 0,
 }: {
   diapositivas: readonly Diapositiva[];
   /** Anuncia el carrusel a los lectores de pantalla ("Resumen de tus módulos"). */
@@ -76,10 +77,14 @@ export function CarruselDeInicio({
    * inicio, después del saludo). Sin ella, aparecen sin animación.
    */
   demoraDeEntrada?: number;
+  /** Con qué resumen arranca (la pantalla de inicio lo elige al azar en cada visita). */
+  indiceInicial?: number;
 }) {
   const reducirMovimiento = useReducedMotion();
   const id = useId();
-  const [indice, setIndice] = useState(0);
+  const [indice, setIndice] = useState(() =>
+    indiceInicial >= 0 && indiceInicial < diapositivas.length ? indiceInicial : 0,
+  );
   const [direccion, setDireccion] = useState<1 | -1>(1);
   const [pausado, setPausado] = useState(false);
   const [mouseEncima, setMouseEncima] = useState(false);

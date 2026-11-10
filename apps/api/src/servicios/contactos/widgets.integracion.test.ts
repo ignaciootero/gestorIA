@@ -67,6 +67,7 @@ describe("sin contactos", () => {
       },
       semanaPasada: [],
       proximoCumpleanos: null,
+      proximosCumpleanos: [],
       cumpleanosPorMes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       deudas: { teDeben: sinDeudas, debes: sinDeudas, proximoVencimiento: null },
     });
@@ -159,13 +160,43 @@ describe("próximo cumpleaños", () => {
       personaValida({ nombre: "Pasado", fechaNacimiento: "2000-01-05" }),
     );
 
-    expect((await widgets()).proximoCumpleanos).toEqual({
+    const resultado = await widgets();
+    expect(resultado.proximoCumpleanos).toEqual({
       nombre: "Cercano",
       apellido: "Gómez",
       fecha: "2026-10-23",
       dias: 3,
       nacimiento: "1985-10-23",
     });
+    // La lista de los próximos empieza por el mismo y sigue en orden de cercanía.
+    expect(resultado.proximosCumpleanos[0]).toEqual(resultado.proximoCumpleanos);
+    const dias = resultado.proximosCumpleanos.map((cumpleanos) => cumpleanos.dias);
+    expect(dias).toEqual([...dias].sort((a, b) => a - b));
+  });
+
+  it("la lista de próximos cumpleaños trae hasta cinco", async () => {
+    for (const [nombre, fecha] of [
+      ["A", "1990-10-21"],
+      ["B", "1990-10-22"],
+      ["C", "1990-10-25"],
+      ["D", "1990-11-02"],
+      ["E", "1990-12-24"],
+      ["F", "1990-01-15"],
+    ] as const) {
+      await crearContactoPorApi(
+        app,
+        ana.cookies,
+        personaValida({ nombre, fechaNacimiento: fecha }),
+      );
+    }
+    const { proximosCumpleanos } = await widgets();
+    expect(proximosCumpleanos.map((cumpleanos) => cumpleanos.nombre)).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+    ]);
   });
 
   it("un cumpleaños de hoy es 'en 0 días'", async () => {
@@ -288,6 +319,7 @@ describe("la ruta", () => {
       "deudas",
       "hoy",
       "proximoCumpleanos",
+      "proximosCumpleanos",
       "recordatorios",
       "semanaPasada",
       "totales",

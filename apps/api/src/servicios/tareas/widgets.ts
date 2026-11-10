@@ -52,10 +52,11 @@ export type WidgetsDeTareas = {
   atrasadas: { total: number; primeras: { titulo: string; dia: string }[] };
   /** Lo que sigue por hacer hoy, en orden de hora (todo el día primero). */
   proximas: { titulo: string; hora: string | null }[];
-  /** Tareas sueltas con un día futuro; `primera` es la que cae antes. */
+  /** Tareas sueltas con un día futuro; `primera` es la que cae antes y `primeras`, las que siguen. */
   masAdelante: {
     total: number;
-    primera: { titulo: string; dia: string; hora: string | null; dias: number } | null;
+    primera: TareaQueViene | null;
+    primeras: TareaQueViene[];
   };
   /** Los últimos 7 días, el de hoy al final: cuántas tareas hubo y cuántas se hicieron. */
   ultimosDias: { dia: string; total: number; hechas: number }[];
@@ -112,6 +113,8 @@ function ordenarPorCantidad<T extends CategoriaDeWidget & { total: number }>(fil
       (a.nombre ?? "").localeCompare(b.nombre ?? "", "es"),
   );
 }
+
+type TareaQueViene = { titulo: string; dia: string; hora: string | null; dias: number };
 
 function resumir(tarea: Tarea): { titulo: string; hora: string | null } {
   return { titulo: tarea.titulo, hora: tarea.hora };
@@ -289,6 +292,12 @@ export async function obtenerWidgetsDeTareas(
     return { dia, total: fila?.total ?? 0, hechas: fila?.hechas ?? 0 };
   });
 
+  const queViene = (tarea: Tarea): TareaQueViene => ({
+    titulo: tarea.titulo,
+    dia: tarea.dia,
+    hora: tarea.hora,
+    dias: diasEntre(hoy, tarea.dia),
+  });
   const primeraAdelante = lista.masAdelante[0];
 
   // Las atrasadas ya vienen de la más vieja a la más nueva.
@@ -320,14 +329,8 @@ export async function obtenerWidgetsDeTareas(
     proximas: lista.deHoy.slice(0, CANTIDAD_EN_LISTAS).map(resumir),
     masAdelante: {
       total: lista.masAdelante.length,
-      primera: primeraAdelante
-        ? {
-            titulo: primeraAdelante.titulo,
-            dia: primeraAdelante.dia,
-            hora: primeraAdelante.hora,
-            dias: diasEntre(hoy, primeraAdelante.dia),
-          }
-        : null,
+      primera: primeraAdelante ? queViene(primeraAdelante) : null,
+      primeras: lista.masAdelante.slice(0, CANTIDAD_EN_LISTAS).map(queViene),
     },
     ultimosDias,
     racha,

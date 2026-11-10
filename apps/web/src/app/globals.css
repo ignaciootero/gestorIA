@@ -213,11 +213,11 @@
    * en CSS porque lo decide algo que está mucho más abajo (`:has`), sin que el marco sepa de pantallas.
    *
    * En una ventana muy baja no hay lugar para todo sin cortar algo: ahí vuelve a desplazarse como
-   * cualquier otra pantalla, porque un contenido cortado es peor que un desplazamiento. Lo mismo en
-   * una angosta (celular, tablet): el contenido va en una sola columna, mucho más alta que la
-   * pantalla, y meterlo en el alto de la ventana lo apretaría hasta superponerse.
+   * cualquier otra pantalla, porque un contenido cortado es peor que un desplazamiento. En el
+   * celular también entra fija: el inicio está pensado para eso (e2e/inicio.spec.ts lo verifica en
+   * 390x844 y 360x640, con la barra de navegación de abajo restándole alto).
    */
-  @media (min-height: 560px) and (min-width: 64rem) {
+  @media (min-height: 560px) {
     .marco-de-la-app:has([data-pantalla-fija]) {
       height: 100dvh;
     }

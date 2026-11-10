@@ -361,6 +361,10 @@ describe("obtenerWidgetsDeFinanzas", () => {
       expect(periodo?.presupuestos.superados.map((p) => p.usadoPorcentaje)).toEqual([
         190, 170, 150,
       ]);
+      // La lista completa (la de inicio) trae los cinco, del más usado al menos.
+      expect(periodo?.presupuestos.lista.map((p) => p.usadoPorcentaje)).toEqual([
+        190, 170, 150, 130, 110,
+      ]);
     });
 
     it("no cuenta lo gastado en otro período", async () => {
@@ -383,6 +387,14 @@ describe("obtenerWidgetsDeFinanzas", () => {
         superados: [],
         porAgotarse: [],
         total: { presupuestadoCentavos: 10_000, gastadoCentavos: 0 },
+        lista: [
+          {
+            nombre: entorno.comida.nombre,
+            presupuestadoCentavos: 10_000,
+            gastadoCentavos: 0,
+            usadoPorcentaje: 0,
+          },
+        ],
       });
     });
   });

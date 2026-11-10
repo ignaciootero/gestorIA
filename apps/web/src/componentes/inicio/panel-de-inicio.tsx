@@ -3,7 +3,9 @@
 //
 // Es una pantalla para orientarse de un vistazo: cada resumen trae solo lo más importante de su
 // módulo —una cifra destacada, a lo sumo un aviso, una lista corta y un gráfico— y el detalle queda
-// en el módulo. Entra entera en la ventana, sin desplazamiento vertical (ver `pantallaFija` en
+// en el módulo. Para no ver siempre lo mismo, en cada visita se elige al azar con qué pestaña
+// arranca el carrusel y qué variante muestra cada resumen, sin repetir la de la visita anterior
+// (lib/eleccion-del-inicio.ts). Entra entera en la ventana, sin desplazamiento vertical (ver `pantallaFija` en
 // EstructuraDeApp).
 //
 // Los cuatro pedidos salen juntos al entrar, no recién cuando le toca a cada resumen: así pasar de
@@ -20,7 +22,7 @@ import { diaDeHoy, sumarDias } from "@gestoria/shared";
 import { useQuery } from "@tanstack/react-query";
 import { BookUser, CalendarDays, ListChecks, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { ESTILOS_DE_ORIGEN } from "@/componentes/calendario/origenes";
 import { Aviso } from "@/componentes/ui/aviso";
 import { Boton } from "@/componentes/ui/boton";
@@ -29,15 +31,20 @@ import { obtenerWidgetsDeContactos } from "@/lib/api-contactos";
 import { obtenerWidgets } from "@/lib/api-finanzas";
 import { obtenerWidgetsDeTareas } from "@/lib/api-tareas";
 import { cn } from "@/lib/clases";
+import { elegirInicio, guardarEleccion } from "@/lib/eleccion-del-inicio";
 import { URL_API } from "@/lib/entorno";
 import { interpretarError } from "@/lib/mensajes-de-error";
 import { zonaDelDispositivo } from "@/lib/preferencias-finanzas";
 import { ALTO_DE_LA_TARJETA, CarruselDeInicio, type Diapositiva } from "./carrusel-de-inicio";
 import type { IdentidadDeModulo } from "./piezas-de-resumen";
-import { DIAS_DEL_RESUMEN_DEL_CALENDARIO, ResumenDeCalendario } from "./resumen-de-calendario";
-import { ResumenDeContactos } from "./resumen-de-contactos";
-import { ResumenDeFinanzas } from "./resumen-de-finanzas";
-import { ResumenDeTareas } from "./resumen-de-tareas";
+import {
+  DIAS_DEL_RESUMEN_DEL_CALENDARIO,
+  ResumenDeCalendario,
+  VARIANTES_DEL_CALENDARIO,
+} from "./resumen-de-calendario";
+import { ResumenDeContactos, VARIANTES_DE_CONTACTOS } from "./resumen-de-contactos";
+import { ResumenDeFinanzas, VARIANTES_DE_FINANZAS } from "./resumen-de-finanzas";
+import { ResumenDeTareas, VARIANTES_DE_TAREAS } from "./resumen-de-tareas";
 import { ENTRADA_DEL_CARRUSEL_S, SaludoDeInicio } from "./saludo-de-inicio";
 
 /**
@@ -75,6 +82,14 @@ const MODULOS = {
   contactos: { nombre: "Contactos", Icono: BookUser, href: "/contactos", origen: "contactos" },
 } as const;
 
+/** Las variantes de cada resumen, para elegir una al azar en cada visita. */
+const VARIANTES = {
+  finanzas: VARIANTES_DE_FINANZAS,
+  calendario: VARIANTES_DEL_CALENDARIO,
+  tareas: VARIANTES_DE_TAREAS,
+  contactos: VARIANTES_DE_CONTACTOS,
+} as const satisfies Record<keyof typeof MODULOS, readonly string[]>;
+
 /** El resumen de un módulo, listo para el carrusel. */
 function diapositiva(
   clave: keyof typeof MODULOS,
@@ -99,16 +114,54 @@ function Carrusel({ hoy, encabezado }: { hoy: string; encabezado: ReactNode }) {
     queryFn: () => obtenerEventos(hoy, hasta),
   });
 
+  // Una vez por visita: con qué pestaña arranca y qué variante muestra cada resumen. Este
+  // componente solo se dibuja en el navegador (hace falta `hoy`), así que puede leer el
+  // almacenamiento. Se guarda en un efecto y no al elegir: en desarrollo React llama dos veces a la
+  // función de `useState`, y así queda guardado lo que de verdad se ve.
+  const [eleccion] = useState(() => elegirInicio(VARIANTES));
+  useEffect(() => {
+    guardarEleccion(eleccion);
+  }, [eleccion]);
+  /** La variante elegida para un módulo; si no es una de las suyas, la general (la primera). */
+  const varianteDe = <T extends string>(modulo: keyof typeof VARIANTES, opciones: readonly T[]) =>
+    (opciones.find((opcion) => opcion === eleccion.variantes[modulo]) ?? opciones[0]) as T;
+
   const diapositivas = [
-    diapositiva("finanzas", (modulo) => <ResumenDeFinanzas modulo={modulo} consulta={finanzas} />),
-    diapositiva("calendario", (modulo) => (
-      <ResumenDeCalendario modulo={modulo} consulta={calendario} hoy={hoy} />
+    diapositiva("finanzas", (modulo) => (
+      <ResumenDeFinanzas
+        modulo={modulo}
+        consulta={finanzas}
+        hoy={hoy}
+        variante={varianteDe("finanzas", VARIANTES_DE_FINANZAS)}
+      />
     )),
-    diapositiva("tareas", (modulo) => <ResumenDeTareas modulo={modulo} consulta={tareas} />),
+    diapositiva("calendario", (modulo) => (
+      <ResumenDeCalendario
+        modulo={modulo}
+        consulta={calendario}
+        hoy={hoy}
+        variante={varianteDe("calendario", VARIANTES_DEL_CALENDARIO)}
+      />
+    )),
+    diapositiva("tareas", (modulo) => (
+      <ResumenDeTareas
+        modulo={modulo}
+        consulta={tareas}
+        variante={varianteDe("tareas", VARIANTES_DE_TAREAS)}
+      />
+    )),
     diapositiva("contactos", (modulo) => (
-      <ResumenDeContactos modulo={modulo} consulta={contactos} />
+      <ResumenDeContactos
+        modulo={modulo}
+        consulta={contactos}
+        variante={varianteDe("contactos", VARIANTES_DE_CONTACTOS)}
+      />
     )),
   ];
+  const indiceInicial = Math.max(
+    0,
+    diapositivas.findIndex((una) => una.id === eleccion.pestana),
+  );
 
   return (
     <CarruselDeInicio
@@ -116,6 +169,7 @@ function Carrusel({ hoy, encabezado }: { hoy: string; encabezado: ReactNode }) {
       etiqueta="Resumen de tus módulos"
       encabezado={encabezado}
       demoraDeEntrada={ENTRADA_DEL_CARRUSEL_S}
+      indiceInicial={indiceInicial}
     />
   );
 }

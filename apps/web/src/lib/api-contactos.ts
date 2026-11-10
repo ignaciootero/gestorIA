@@ -275,6 +275,15 @@ export type DeudasConContactos = {
   mayores: (ContactoBreve & { moneda: string; centavos: number })[];
 };
 
+export type CumpleanosQueViene = {
+  nombre: string;
+  apellido: string | null;
+  /** El día en que cae (este año o el que viene). */
+  fecha: string;
+  dias: number;
+  nacimiento: string;
+};
+
 export type WidgetsDeContactos = {
   /** El día de hoy para la persona ("AAAA-MM-DD"), en su zona horaria. */
   hoy: string;
@@ -295,13 +304,9 @@ export type WidgetsDeContactos = {
     diasAtras: number;
     contacto: ContactoBreve;
   }[];
-  proximoCumpleanos: {
-    nombre: string;
-    apellido: string | null;
-    fecha: string;
-    dias: number;
-    nacimiento: string;
-  } | null;
+  proximoCumpleanos: CumpleanosQueViene | null;
+  /** Los próximos cumpleaños (hasta cinco), el más cercano primero. */
+  proximosCumpleanos: CumpleanosQueViene[];
   /** Cuántos cumpleaños caen en cada mes, de enero a diciembre. */
   cumpleanosPorMes: number[];
   deudas: {
