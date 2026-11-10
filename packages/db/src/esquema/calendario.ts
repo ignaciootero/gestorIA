@@ -1,4 +1,5 @@
-// Tabla del módulo de calendario: los eventos que la persona anota a mano.
+// Tablas del módulo de calendario: los eventos que la persona anota a mano y el filtro con el que
+// mira el calendario.
 //
 // Lo que aparece en el calendario y viene de otros módulos (el vencimiento de una deuda, un
 // recordatorio de un contacto, una tarea pendiente) NO se guarda acá: se arma al leer a partir de
@@ -9,7 +10,7 @@
 // lógicamente (`eliminado_en`, docs/guias/seguridad-y-datos.md) y un job lo borra en definitivo
 // pasado un plazo.
 
-import { date, index, pgTable, text, time, timestamp, uuid } from "drizzle-orm/pg-core";
+import { date, index, jsonb, pgTable, text, time, timestamp, uuid } from "drizzle-orm/pg-core";
 import { usuarios } from "./auth.ts";
 
 export const eventosDeCalendario = pgTable(
@@ -35,3 +36,23 @@ export const eventosDeCalendario = pgTable(
     index("eventos_de_calendario_eliminados_idx").on(tabla.eliminadoEn),
   ],
 );
+
+/**
+ * El filtro del calendario de cada persona (qué orígenes, repeticiones y estados oculta), para que se
+ * mantenga en cualquier dispositivo hasta que lo cambie. Una fila por persona; sin fila, el filtro por
+ * defecto. Cada columna es una lista JSON de lo que se **oculta**, validada con `esquemaFiltroDeEventos`
+ * (packages/shared) al guardar y al leer: lo que no está en la lista se ve, así un origen o un estado
+ * nuevos aparecen visibles sin migrar nada.
+ */
+export const filtrosDelCalendario = pgTable("filtros_del_calendario", {
+  userId: text()
+    .primaryKey()
+    .references(() => usuarios.id, { onDelete: "cascade" }),
+  /** `["finanzas", …]`. */
+  origenesOcultos: jsonb().notNull(),
+  /** `{ "tareas": ["diaria", …], "contactos": […] }`. */
+  repeticionesOcultas: jsonb().notNull(),
+  /** `{ "manual": ["pasado"], "finanzas": ["pagada"], "contactos": […], "tareas": […] }`. */
+  estadosOcultos: jsonb().notNull(),
+  actualizadoEn: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});

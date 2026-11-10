@@ -100,10 +100,12 @@ export function CalendarioCompleto() {
     placeholderData: keepPreviousData,
   });
 
-  // El filtro (por origen y, para Tareas y Contactos, por repetición) se aplica acá, sobre lo que ya llegó:
-  // cambiarlo es instantáneo y no vuelve a pedir nada. Se recuerda en este navegador.
+  // El filtro (por origen, por estado y, para Tareas y Contactos, por repetición) se aplica acá, sobre lo
+  // que ya llegó: cambiarlo es instantáneo y no vuelve a pedir eventos. Se guarda en la cuenta.
   const {
     filtro,
+    listo: filtroListo,
+    noSeGuardo,
     alternarOrigen,
     alternarRepeticion,
     alternarEstado,
@@ -112,8 +114,13 @@ export function CalendarioCompleto() {
   } = useFiltroDeEventos();
 
   const visibles = useMemo(
-    () => eventos.data?.filter((evento) => pasaElFiltro(evento, filtro, hoy ?? "")),
-    [eventos.data, filtro, hoy],
+    // Hasta que llega el filtro de la cuenta no se muestra nada (como mientras cargan los eventos): si
+    // no, lo oculto aparecería un instante y se iría.
+    () =>
+      filtroListo
+        ? eventos.data?.filter((evento) => pasaElFiltro(evento, filtro, hoy ?? ""))
+        : undefined,
+    [eventos.data, filtro, filtroListo, hoy],
   );
   const eventosPorDia = useMemo(() => {
     const porDia = new Map<string, EventoDeCalendario[]>();
@@ -275,6 +282,12 @@ export function CalendarioCompleto() {
           alAlternarEstado={alternarEstado}
           alMostrarTodo={mostrarTodo}
         />
+        {/* Si no se pudo guardar, el filtro sigue puesto acá, pero hay que saber que no va a quedar. */}
+        <p role="status" className="text-xs text-peligro empty:hidden">
+          {noSeGuardo
+            ? "No pudimos guardar el filtro. Se aplica igual en esta pantalla; probá cambiarlo de nuevo en un rato."
+            : null}
+        </p>
 
         {/* Pasar de mes a año (y al revés) es un zoom: se acerca o se aleja. */}
         <AnimatePresence initial={false} mode="wait">
@@ -327,7 +340,7 @@ export function CalendarioCompleto() {
             alSiguiente={() => elegirDia(sumarDias(dia, 1))}
             eventos={visibles}
             ocultosPorElFiltro={ocultosDelDia}
-            cargandoEventos={eventos.isPending}
+            cargandoEventos={eventos.isPending || !filtroListo}
             errorDeEventos={eventos.isError ? eventos.error : null}
             alGuardarEvento={(dia) => mostrarEventoPropio(dia, hoy ?? dia)}
           />

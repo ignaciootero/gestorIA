@@ -1787,7 +1787,7 @@ en pantallas más angostas pasa debajo.
   que se prenden y se apagan: sirven a la vez de leyenda de los colores y para dejar de ver lo que no
   interesa (por ejemplo, las tareas). Apagado, un botón se ve tachado y con un círculo vacío. El filtro
   vale para los puntos y el total del mes y para la lista del día, se aplica al instante (sin volver a pedir nada) y
-  **se recuerda en este navegador**. Si un día tiene eventos ocultos, el panel lo dice ("2 eventos ocultos
+  **se guarda en la cuenta** (ver "Dónde se guarda el filtro"). Si un día tiene eventos ocultos, el panel lo dice ("2 eventos ocultos
   por el filtro"), así "no hay nada" no se confunde con "lo ocultaste". Si se agrega un evento propio con
   "Calendario" apagado, vuelve a prenderse solo (si no, parecería que no se guardó).
 - **Eventos completados.** Lo ya completado **no se muestra por defecto**: el calendario sirve para ver
@@ -1823,7 +1823,7 @@ en pantallas más angostas pasa debajo.
   Las **deudas de Finanzas** usan las marcas de las tareas: lleno si está pendiente, **!** si está atrasada y
   **✓** si está pagada; en la lista del día, "Atrasada" o "Pagada".
   El nombre accesible de la casilla dice cuántos
-  están completados, fallidos y atrasados. Los estados que se ocultan se recuerdan en este navegador, y "Mostrar todo" no los
+  están completados, fallidos y atrasados. Los estados que se ocultan se guardan en la cuenta, y "Mostrar todo" no los
   cambia. El botón "Más filtros" se marca (borde de acento) cuando los estados no son los de por defecto.
 - **Filtros avanzados por repetición.** El botón **"Más filtros"** abre un panel donde, para **Tareas** y
   **Contactos**, se elige qué tipos de repetición mostrar: *Una sola vez* (las tareas sueltas y los
@@ -1837,10 +1837,20 @@ en pantallas más angostas pasa debajo.
   separados por una línea. El panel no lleva textos explicativos: los nombres de los botones alcanzan.
   Si un origen está apagado entero, sus botones se ven deshabilitados y la franja dice "Está oculto:
   prendelo arriba". El filtro vale para los puntos del mes, el total y la
-  lista del día (que avisa cuántos eventos quedaron ocultos), y se recuerda en este navegador. En pantallas
+  lista del día (que avisa cuántos eventos quedaron ocultos), y se guarda en la cuenta. En pantallas
   anchas el panel flota sobre la grilla (no la deforma); en las angostas se despliega en el lugar. Escape lo
   cierra y devuelve el foco al botón; **tocar o hacer clic afuera** del panel también lo cierra (lo elegido
   queda), sin tener que volver a "Más filtros".
+- **Dónde se guarda el filtro.** Todo el filtro (orígenes, repeticiones y estados) se guarda **en la
+  cuenta**, en la tabla `filtros_del_calendario` (una fila por persona, con tres columnas JSON de lo que se
+  oculta), así se mantiene igual en cualquier navegador o dispositivo hasta que la persona lo vuelva a
+  cambiar. Cada cambio se aplica al instante y se manda entero a la API (`PUT /api/calendario/filtro`) en
+  segundo plano, en orden; si no se puede guardar, sigue aplicado en la pantalla y debajo de "Más filtros"
+  aparece "No pudimos guardar el filtro…". Al abrir el calendario se pide el de la cuenta
+  (`GET /api/calendario/filtro`; `null` si nunca se guardó, y entonces se usa el de por defecto) y, hasta
+  que llega, la grilla espera en vez de mostrar algo que después se oculte. Antes el filtro vivía en el
+  `localStorage` del navegador: la primera vez, si la cuenta no tiene filtro y el navegador sí, se lo pasa
+  a la cuenta y se lo borra del navegador (`lib/preferencias-calendario.ts` solo hace eso ahora).
 - **Año.** Los doce meses como mini calendarios (entran en cascada); tocar uno lo abre. Se llega con el
   selector "Mes / Año".
 - **Panel del día elegido.** El número grande, el día de la semana y el mes, cuándo cae respecto de hoy
@@ -1939,9 +1949,10 @@ de otra persona responde 404).
 
 - Compartido: `packages/shared/src/calendario/` (`calendario.ts` para las cuentas de fechas y `eventos.ts`
   para los tipos, el esquema del evento manual, `ocurrenciasEnRango` y el orden `compararEventos`).
-- Base: `packages/db/src/esquema/calendario.ts` (migración `0025_eventos_de_calendario`).
+- Base: `packages/db/src/esquema/calendario.ts` (migraciones `0025_eventos_de_calendario` y
+  `0034_filtros_del_calendario`).
 - API: `apps/api/src/rutas/calendario.ts`; `servicios/calendario/` (`eventos.ts` junta todo,
-  `eventos-manuales.ts`, `limpieza.ts`) y el aporte de cada módulo en `servicios/finanzas/calendario.ts`,
+  `eventos-manuales.ts`, `filtro.ts`, `limpieza.ts`) y el aporte de cada módulo en `servicios/finanzas/calendario.ts`,
   `servicios/contactos/calendario.ts` y `servicios/tareas/calendario.ts`.
 - Web: `apps/web/src/app/calendario/`, `apps/web/src/componentes/calendario/` (`calendario-completo`,
   `vista-de-mes`, `vista-de-anio`, `panel-del-dia`, `eventos-del-dia`, `formulario-de-evento`,

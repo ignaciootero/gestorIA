@@ -239,6 +239,13 @@
       "when": 1793887358644,
       "tag": "0033_fondo_personalizado",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794323487914,
+      "tag": "0034_filtros_del_calendario",
+      "breakpoints": true
     }
   ]
 }

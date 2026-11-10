@@ -1,15 +1,11 @@
-// Preferencias del calendario que solo le importan a este navegador: qué orígenes de eventos se
-// ocultan y, para Tareas y Contactos, qué repeticiones (diarias, semanales…). No es un dato que valga la
-// pena guardar en el servidor, así que vive en `localStorage` (mismo criterio que preferencias-finanzas.ts).
+// El filtro del calendario que versiones anteriores guardaban en este navegador (`localStorage`). Ahora
+// el filtro se guarda en la cuenta (tabla `filtros_del_calendario`, ver usar-filtro-de-eventos.ts); esto
+// queda solo para **traer lo que ya estaba elegido** la primera vez, sin que la persona tenga que volver
+// a armarlo. Después de pasarlo a la cuenta, se borra de acá.
 //
-// Además se guarda qué estados se ocultan de cada origen: de las tareas (pendiente, atrasada, finalizada;
-// por defecto, las finalizadas), de los recordatorios (próximo, pasado; por defecto, los pasados), de las
-// deudas de Finanzas (pendiente, atrasada, pagada; por defecto, las pagadas) y de los eventos propios
-// (futuro, pasado; por defecto, los pasados). Un origen que no está guardado (por ejemplo, porque se
-// guardó antes de que tuviera estados) toma los de por defecto.
-//
-// Se guardan los **ocultos** y no los visibles: si algún día se suma un origen o una repetición nuevos,
-// aparecen visibles para todos sin tener que migrar nada.
+// Se guardaban los **ocultos**: qué orígenes, qué repeticiones de Tareas y Contactos y qué estados de cada
+// origen. Un origen que falta (por ejemplo, porque se guardó antes de que tuviera estados) toma los de
+// por defecto, y también se entienden los formatos más viejos (ver estadosDeLaListaAnterior).
 
 import {
   ESTADOS_DE_EVENTO,
@@ -87,8 +83,23 @@ function estadosGuardados(
   ) as FiltroDeEventos["estadosOcultos"];
 }
 
-/** El filtro guardado en este navegador; sin restricciones si no hay nada o lo guardado no sirve. */
-export function leerFiltroDeEventos(): FiltroDeEventos {
+/** Las claves que se usaban, para saber si hay algo que traer y para borrarlas después. */
+const CLAVES = [CLAVE_DE_ORIGENES, CLAVE_DE_REPETICIONES, CLAVE_DE_ESTADOS];
+
+function hayAlgoGuardado(): boolean {
+  try {
+    return CLAVES.some((clave) => localStorage.getItem(clave) !== null);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * El filtro que quedó guardado en este navegador, o null si no hay ninguno. Lo que no sirve (otra
+ * versión, un valor dañado) se reemplaza por lo de por defecto.
+ */
+export function leerFiltroDelNavegador(): FiltroDeEventos | null {
+  if (!hayAlgoGuardado()) return null;
   const filtro = filtroSinRestricciones();
   const guardadas = comoObjeto(leerJson(CLAVE_DE_REPETICIONES));
   return {
@@ -106,25 +117,11 @@ export function leerFiltroDeEventos(): FiltroDeEventos {
   };
 }
 
-/** Un objeto con la lista de cada origen: `{ tareas: [...], contactos: [...] }`. */
-function porOrigen<O extends string>(
-  origenes: readonly O[],
-  conjuntos: Readonly<Record<O, ReadonlySet<string>>>,
-): string {
-  return JSON.stringify(
-    Object.fromEntries(origenes.map((origen) => [origen, [...conjuntos[origen]]])),
-  );
-}
-
-export function guardarFiltroDeEventos(filtro: FiltroDeEventos): void {
+/** Borra lo que quedó en este navegador, una vez que ya está en la cuenta. */
+export function borrarFiltroDelNavegador(): void {
   try {
-    localStorage.setItem(CLAVE_DE_ESTADOS, porOrigen(ORIGENES_DE_EVENTO, filtro.estadosOcultos));
-    localStorage.setItem(CLAVE_DE_ORIGENES, JSON.stringify([...filtro.origenesOcultos]));
-    localStorage.setItem(
-      CLAVE_DE_REPETICIONES,
-      porOrigen(ORIGENES_CON_REPETICION, filtro.repeticionesOcultas),
-    );
+    for (const clave of CLAVES) localStorage.removeItem(clave);
   } catch {
-    // No hay nada que recuperar: el filtro es una comodidad, no un dato.
+    // Si no se puede borrar, la próxima vez la cuenta ya tiene su filtro y esto no se vuelve a leer.
   }
 }

@@ -93,6 +93,14 @@ async function entrar(pagina: Page, cuenta: CuentaDePrueba): Promise<void> {
   await expect(pagina).toHaveURL(/\/inicio$/);
 }
 
+/**
+ * Espera a que el filtro termine de guardarse en la cuenta: cada cambio se manda a la API en segundo
+ * plano, y recargar antes de que llegue lo perdería.
+ */
+async function esperarQueSeGuarde(pagina: Page): Promise<void> {
+  await pagina.waitForLoadState("networkidle");
+}
+
 async function abrirCalendario(pagina: Page): Promise<void> {
   await pagina.goto("/calendario");
   await expect(pagina.getByRole("heading", { name: "Calendario", level: 1 })).toBeVisible();
@@ -546,6 +554,53 @@ test.describe("el filtro por origen", () => {
     await expect(page.getByText("Sin eventos para este día")).toBeVisible();
   });
 
+  test("lo que se apaga se guarda en la cuenta: se ve igual al recargar y desde otro navegador", async ({
+    page,
+    browser,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await abrirCalendario(page);
+    await chip(page, "Finanzas").click();
+    await esperarQueSeGuarde(page);
+    // Nada queda en el navegador: está en la cuenta.
+    expect(
+      await page.evaluate(() => localStorage.getItem("gestoria:calendario:origenes-ocultos")),
+    ).toBeNull();
+
+    const otro = await browser.newContext();
+    const otraPagina = await otro.newPage();
+    await entrar(otraPagina, cuenta);
+    await abrirCalendario(otraPagina);
+    await expect(chip(otraPagina, "Finanzas")).toHaveAttribute("aria-pressed", "false");
+    await expect(chip(otraPagina, "Tareas")).toHaveAttribute("aria-pressed", "true");
+    await otro.close();
+  });
+
+  test("lo que había quedado en el navegador pasa a la cuenta y se borra de ahí", async ({
+    page,
+    browser,
+  }) => {
+    const cuenta = await crearCuentaAprobada();
+    await entrar(page, cuenta);
+    await page.evaluate(() =>
+      localStorage.setItem("gestoria:calendario:origenes-ocultos", '["contactos"]'),
+    );
+    await abrirCalendario(page);
+    await expect(chip(page, "Contactos")).toHaveAttribute("aria-pressed", "false");
+    await esperarQueSeGuarde(page);
+    expect(
+      await page.evaluate(() => localStorage.getItem("gestoria:calendario:origenes-ocultos")),
+    ).toBeNull();
+
+    const otro = await browser.newContext();
+    const otraPagina = await otro.newPage();
+    await entrar(otraPagina, cuenta);
+    await abrirCalendario(otraPagina);
+    await expect(chip(otraPagina, "Contactos")).toHaveAttribute("aria-pressed", "false");
+    await otro.close();
+  });
+
   test("lo que se apaga se recuerda al recargar", async ({ page }) => {
     await entrar(page, await crearCuentaAprobada());
     await sembrarUnDia(page, hoy());
@@ -553,6 +608,7 @@ test.describe("el filtro por origen", () => {
     await chip(page, "Finanzas").click();
     await chip(page, "Contactos").click();
 
+    await esperarQueSeGuarde(page);
     await page.reload();
     await expect(page.locator("[data-grilla]")).toHaveCount(1);
     await expect(chip(page, "Finanzas")).toHaveAttribute("aria-pressed", "false");
@@ -888,6 +944,7 @@ test.describe("filtros avanzados: por repetición", () => {
     await repeticion(page, "tareas", "Diarias").click();
     await repeticion(page, "contactos", "Una sola vez").click();
 
+    await esperarQueSeGuarde(page);
     await page.reload();
     await expect(page.locator("[data-grilla]")).toHaveCount(1);
     await expect(masFiltros(page).locator("[data-restricciones='2']")).toBeVisible();
@@ -1161,6 +1218,7 @@ test.describe("agregar, editar y eliminar a mano", () => {
     await dialogo.getByRole("button", { name: "Agregar evento" }).click();
     await expect(filas(page)).toHaveCount(1);
 
+    await esperarQueSeGuarde(page);
     await page.reload();
     await expect(page.locator("[data-grilla]")).toHaveCount(1);
     await expect(filas(page).first()).toContainText("Persistente");
@@ -1458,6 +1516,7 @@ test.describe("tareas completadas", () => {
     await mostrarCerradas(page);
     await expect(filas(page)).toHaveCount(2);
 
+    await esperarQueSeGuarde(page);
     await page.reload();
     await expect(filas(page)).toHaveCount(2);
     await abrirFiltros(page);
@@ -1579,6 +1638,7 @@ test.describe("tareas completadas", () => {
     await expect(chipDeEstado(page, "pendiente")).toHaveAttribute("aria-pressed", "true");
     await expect(chipDeEstado(page, "finalizada")).toHaveAttribute("aria-pressed", "false");
 
+    await esperarQueSeGuarde(page);
     await page.reload();
     await expect(contactosDe(ayer)).toHaveCount(1);
     await expect(contactosDe(hoy())).toHaveCount(0);
@@ -1811,6 +1871,7 @@ test.describe("estados de Finanzas y de Calendario", () => {
     // Ocultar las pendientes deja la pagada, y se recuerda.
     await chip(page, "finanzas", "pendiente").click();
     await expect(filas(page)).toHaveCount(1);
+    await esperarQueSeGuarde(page);
     await page.reload();
     await casilla(page, manana).click();
     await expect(filas(page)).toHaveCount(1);

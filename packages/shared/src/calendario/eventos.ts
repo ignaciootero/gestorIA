@@ -347,6 +347,66 @@ export function filtroSinRestricciones(): FiltroDeEventos {
   };
 }
 
+/**
+ * El filtro tal como se guarda en la cuenta (tabla `filtros_del_calendario`) y viaja por la API: listas
+ * en vez de conjuntos, y solo valores que existen. Lo que no está en una lista se ve.
+ */
+export const esquemaFiltroDeEventos = z.object({
+  origenesOcultos: z.array(z.enum(ORIGENES_DE_EVENTO)).max(ORIGENES_DE_EVENTO.length * 2),
+  repeticionesOcultas: z.object({
+    tareas: z.array(z.enum(REPETICIONES_DE_EVENTO)).max(REPETICIONES_DE_EVENTO.length * 2),
+    contactos: z.array(z.enum(REPETICIONES_DE_EVENTO)).max(REPETICIONES_DE_EVENTO.length * 2),
+  }),
+  estadosOcultos: z.object({
+    manual: z.array(z.enum(ESTADOS_DE_EVENTO_PROPIO)).max(ESTADOS_DE_EVENTO_PROPIO.length * 2),
+    finanzas: z.array(z.enum(ESTADOS_DE_DEUDA)).max(ESTADOS_DE_DEUDA.length * 2),
+    contactos: z.array(z.enum(ESTADOS_DE_RECORDATORIO)).max(ESTADOS_DE_RECORDATORIO.length * 2),
+    tareas: z.array(z.enum(ESTADOS_DE_EVENTO)).max(ESTADOS_DE_EVENTO.length * 2),
+  }),
+});
+export type FiltroDeEventosGuardado = z.infer<typeof esquemaFiltroDeEventos>;
+
+/** Sin repetidos y en el orden de `todos`, para que lo guardado sea siempre igual para el mismo filtro. */
+function enOrden<T extends string>(conjunto: ReadonlySet<string>, todos: readonly T[]): T[] {
+  return todos.filter((valor) => conjunto.has(valor));
+}
+
+/** El filtro listo para guardar: los conjuntos pasan a listas. */
+export function filtroParaGuardar(filtro: FiltroDeEventos): FiltroDeEventosGuardado {
+  const { repeticionesOcultas: repeticiones, estadosOcultos: estados } = filtro;
+  return {
+    origenesOcultos: enOrden(filtro.origenesOcultos, ORIGENES_DE_EVENTO),
+    repeticionesOcultas: {
+      tareas: enOrden(repeticiones.tareas, REPETICIONES_DE_EVENTO),
+      contactos: enOrden(repeticiones.contactos, REPETICIONES_DE_EVENTO),
+    },
+    estadosOcultos: {
+      manual: enOrden(estados.manual, ESTADOS_DE_EVENTO_PROPIO),
+      finanzas: enOrden(estados.finanzas, ESTADOS_DE_DEUDA),
+      contactos: enOrden(estados.contactos, ESTADOS_DE_RECORDATORIO),
+      tareas: enOrden(estados.tareas, ESTADOS_DE_EVENTO),
+    },
+  };
+}
+
+/** El filtro guardado, de vuelta como conjuntos. */
+export function filtroDesdeGuardado(guardado: FiltroDeEventosGuardado): FiltroDeEventos {
+  const { repeticionesOcultas: repeticiones, estadosOcultos: estados } = guardado;
+  return {
+    origenesOcultos: new Set(guardado.origenesOcultos),
+    repeticionesOcultas: {
+      tareas: new Set(repeticiones.tareas),
+      contactos: new Set(repeticiones.contactos),
+    },
+    estadosOcultos: {
+      manual: new Set(estados.manual),
+      finanzas: new Set(estados.finanzas),
+      contactos: new Set(estados.contactos),
+      tareas: new Set(estados.tareas),
+    },
+  };
+}
+
 /** true si los estados ocultos de cada origen son los de la primera vez. */
 export function estadosPorDefecto(filtro: FiltroDeEventos): boolean {
   return ORIGENES_DE_EVENTO.every((origen) => {

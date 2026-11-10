@@ -8,9 +8,16 @@
 // eventos anotados a mano y lo que aportan Finanzas, Contactos y Tareas. Los eventos manuales se
 // crean, editan y eliminan en `/api/calendario/eventos`; lo que viene de otros módulos se cambia en
 // su módulo.
+//
+// `GET /api/calendario/filtro` devuelve el filtro guardado de la persona (`{ filtro: null }` si nunca
+// guardó uno) y `PUT /api/calendario/filtro` lo reemplaza entero.
 
 import type { ClienteDb } from "@gestoria/db";
-import { esquemaEventoDeCalendario, esquemaRangoDeEventos } from "@gestoria/shared";
+import {
+  esquemaEventoDeCalendario,
+  esquemaFiltroDeEventos,
+  esquemaRangoDeEventos,
+} from "@gestoria/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -23,6 +30,10 @@ import {
   eliminarEventoManual,
   LimiteDeEventos,
 } from "../servicios/calendario/eventos-manuales.ts";
+import {
+  guardarFiltroDelCalendario,
+  obtenerFiltroDelCalendario,
+} from "../servicios/calendario/filtro.ts";
 import type { EntornoHono } from "../tipos.ts";
 
 const esquemaId = z.uuid();
@@ -49,6 +60,17 @@ export function rutasDeCalendario(cliente: ClienteDb): Hono<EntornoHono> {
     const rango = esquemaRangoDeEventos.safeParse(c.req.query());
     if (!rango.success) throw errores.validacion(detalleDe(rango.error));
     return c.json({ eventos: await listarEventosDelCalendario(cliente, usuarioDe(c), rango.data) });
+  });
+
+  rutas.get("/api/calendario/filtro", async (c) => {
+    return c.json({ filtro: await obtenerFiltroDelCalendario(cliente, usuarioDe(c)) });
+  });
+
+  rutas.put("/api/calendario/filtro", async (c) => {
+    const resultado = esquemaFiltroDeEventos.safeParse(await c.req.json());
+    if (!resultado.success) throw errores.validacion(detalleDe(resultado.error));
+    const filtro = await guardarFiltroDelCalendario(cliente, usuarioDe(c), resultado.data);
+    return c.json({ filtro });
   });
 
   rutas.post("/api/calendario/eventos", async (c) => {

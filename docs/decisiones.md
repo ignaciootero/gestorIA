@@ -5,6 +5,25 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — El filtro del calendario se guarda en la cuenta
+
+**Decisión.** El filtro del calendario (orígenes, repeticiones y estados ocultos) pasa de `localStorage` a
+la tabla `filtros_del_calendario`: una fila por persona, con tres columnas `jsonb` validadas con
+`esquemaFiltroDeEventos` al guardar y al leer. La API expone `GET` y `PUT /api/calendario/filtro` (el `PUT`
+reemplaza el filtro entero). En la web, cada cambio se aplica al instante en la caché de TanStack Query y se
+guarda en segundo plano, con los envíos en fila (`scope`) para que uno viejo no pise a uno nuevo. Lo que
+había en el navegador se pasa a la cuenta la primera vez y se borra de ahí.
+
+**Por qué.** Lo pidió el usuario: el filtro tiene que quedar como lo dejó, en cualquier dispositivo, hasta
+que lo vuelva a cambiar. Antes se perdía al cambiar de navegador o de equipo.
+
+**Descartado.** Columnas en `usuarios` (como el color de acento): el filtro es del calendario y tiene
+estructura propia; una tabla del módulo lo deja más claro y no agranda la sesión de Better Auth. Una sola
+columna JSON con todo: tres columnas dicen qué hay en cada una sin abrir el JSON. Guardar cada botón por
+separado: mandar el filtro entero es más simple y siempre deja la base igual a lo que se ve.
+
+---
+
 ## 2026-11-10 — Estados en el filtro del calendario para Finanzas y eventos propios
 
 **Decisión.** Los cuatro orígenes del calendario se filtran por estado: además de Tareas (pendientes,

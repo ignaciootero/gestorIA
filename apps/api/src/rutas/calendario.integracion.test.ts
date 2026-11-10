@@ -93,6 +93,8 @@ describe("sin sesión", () => {
     ["POST", "/api/calendario/eventos"],
     ["PUT", `/api/calendario/eventos/${ID_INEXISTENTE}`],
     ["DELETE", `/api/calendario/eventos/${ID_INEXISTENTE}`],
+    ["GET", "/api/calendario/filtro"],
+    ["PUT", "/api/calendario/filtro"],
   ];
 
   it.each(rutas)("rechaza %s %s con 401", async (metodo, ruta) => {
@@ -1086,5 +1088,74 @@ describe("cada persona ve solo lo suyo", () => {
     expect(respuesta.status).toBe(201);
     expect(await eventos(ana, en(0), en(5))).toEqual([]);
     expect(await eventos(beto, en(0), en(5))).toHaveLength(1);
+  });
+});
+
+describe("el filtro guardado", () => {
+  const filtroDeAna = {
+    origenesOcultos: ["finanzas"],
+    repeticionesOcultas: { tareas: ["diaria"], contactos: [] },
+    estadosOcultos: {
+      manual: [],
+      finanzas: ["pagada"],
+      contactos: ["pasado"],
+      tareas: ["finalizada", "atrasada"],
+    },
+  };
+
+  async function filtroDe(persona: PersonaDePrueba): Promise<unknown> {
+    const respuesta = await pedir(app, persona.cookies, "/api/calendario/filtro");
+    expect(respuesta.status).toBe(200);
+    return (await leerJson<{ filtro: unknown }>(respuesta)).filtro;
+  }
+
+  it("sin nada guardado devuelve null (el cliente usa el de por defecto)", async () => {
+    expect(await filtroDe(ana)).toBeNull();
+  });
+
+  it("se guarda, se lee igual y se reemplaza entero al volver a guardarlo", async () => {
+    const guardar = await pedir(app, ana.cookies, "/api/calendario/filtro", "PUT", filtroDeAna);
+    expect(guardar.status).toBe(200);
+    expect(await filtroDe(ana)).toEqual(filtroDeAna);
+
+    const otro = {
+      ...filtroDeAna,
+      origenesOcultos: [],
+      estadosOcultos: { ...filtroDeAna.estadosOcultos, manual: ["pasado"] },
+    };
+    expect((await pedir(app, ana.cookies, "/api/calendario/filtro", "PUT", otro)).status).toBe(
+      200,
+    );
+    expect(await filtroDe(ana)).toEqual(otro);
+    const filas = await cliente.db.select().from(esquema.filtrosDelCalendario);
+    expect(filas).toHaveLength(1);
+  });
+
+  it("rechaza un filtro con valores que no existen, sin guardar nada", async () => {
+    for (const malo of [
+      { ...filtroDeAna, origenesOcultos: ["facturas"] },
+      { ...filtroDeAna, estadosOcultos: { ...filtroDeAna.estadosOcultos, manual: ["pagada"] } },
+      { origenesOcultos: [] },
+      [],
+    ]) {
+      const respuesta = await pedir(app, ana.cookies, "/api/calendario/filtro", "PUT", malo);
+      expect(respuesta.status).toBe(400);
+    }
+    expect(await filtroDe(ana)).toBeNull();
+  });
+
+  it("cada persona tiene el suyo", async () => {
+    await pedir(app, ana.cookies, "/api/calendario/filtro", "PUT", filtroDeAna);
+    expect(await filtroDe(beto)).toBeNull();
+  });
+
+  it("si lo guardado ya no es válido, se lee como si no hubiera nada", async () => {
+    await cliente.db.insert(esquema.filtrosDelCalendario).values({
+      userId: ana.userId,
+      origenesOcultos: ["algo-viejo"],
+      repeticionesOcultas: {},
+      estadosOcultos: {},
+    });
+    expect(await filtroDe(ana)).toBeNull();
   });
 });

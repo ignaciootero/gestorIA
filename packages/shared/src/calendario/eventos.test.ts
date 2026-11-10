@@ -10,12 +10,15 @@ import {
   type EventoDeCalendario,
   esEventoPasado,
   esquemaEventoDeCalendario,
+  esquemaFiltroDeEventos,
   esquemaRangoDeEventos,
   estadoDeEvento,
   estadoParaFiltrar,
   estadosDeOrigen,
   estadosPorDefecto,
   type FiltroDeEventos,
+  filtroDesdeGuardado,
+  filtroParaGuardar,
   filtroSinRestricciones,
   hayRestricciones,
   marcadorDeEventos,
@@ -654,5 +657,60 @@ describe("estadosPorDefecto", () => {
 
   it("ocultar estados no cuenta como restricción de origen o de repetición", () => {
     expect(hayRestricciones(filtroSinRestricciones())).toBe(false);
+  });
+});
+
+describe("el filtro guardado", () => {
+  it("ida y vuelta da el mismo filtro", () => {
+    const filtro: FiltroDeEventos = {
+      origenesOcultos: new Set(["finanzas"]),
+      repeticionesOcultas: { tareas: new Set(["diaria", "intervalo"]), contactos: new Set() },
+      estadosOcultos: {
+        manual: new Set(),
+        finanzas: new Set(["pagada", "atrasada"]),
+        contactos: new Set(["pasado"]),
+        tareas: new Set(["finalizada"]),
+      },
+    };
+    const guardado = filtroParaGuardar(filtro);
+    expect(esquemaFiltroDeEventos.parse(guardado)).toEqual(guardado);
+    expect(filtroDesdeGuardado(guardado)).toEqual(filtro);
+  });
+
+  it("guarda las listas en un orden fijo, sin importar en qué orden se ocultaron", () => {
+    const filtro = filtroSinRestricciones();
+    const guardado = filtroParaGuardar({
+      ...filtro,
+      estadosOcultos: { ...filtro.estadosOcultos, finanzas: new Set(["pagada", "pendiente"]) },
+    });
+    expect(guardado.estadosOcultos.finanzas).toEqual(["pendiente", "pagada"]);
+  });
+
+  it("el filtro por defecto se guarda con lo que oculta por defecto", () => {
+    expect(filtroParaGuardar(filtroSinRestricciones())).toEqual({
+      origenesOcultos: [],
+      repeticionesOcultas: { tareas: [], contactos: [] },
+      estadosOcultos: {
+        manual: ["pasado"],
+        finanzas: ["pagada"],
+        contactos: ["pasado"],
+        tareas: ["finalizada"],
+      },
+    });
+  });
+
+  it("rechaza valores que no existen o que no son del origen", () => {
+    const valido = filtroParaGuardar(filtroSinRestricciones());
+    expect(
+      esquemaFiltroDeEventos.safeParse({ ...valido, origenesOcultos: ["facturas"] }).success,
+    ).toBe(false);
+    expect(
+      esquemaFiltroDeEventos.safeParse({
+        ...valido,
+        estadosOcultos: { ...valido.estadosOcultos, manual: ["pagada"] },
+      }).success,
+    ).toBe(false);
+    expect(esquemaFiltroDeEventos.safeParse({ ...valido, estadosOcultos: {} }).success).toBe(false);
+    expect(esquemaFiltroDeEventos.safeParse(null).success).toBe(false);
   });
 });

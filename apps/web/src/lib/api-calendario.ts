@@ -3,7 +3,11 @@
 // Mismo patrón que lib/api-tareas.ts: un `pedir` genérico y una función por endpoint. Los eventos
 // llegan ya ordenados por día y hora, y cada uno dice de qué módulo viene.
 
-import type { DatosDeEventoDeCalendario, EventoDeCalendario } from "@gestoria/shared";
+import type {
+  DatosDeEventoDeCalendario,
+  EventoDeCalendario,
+  FiltroDeEventosGuardado,
+} from "@gestoria/shared";
 import { URL_API } from "./entorno";
 
 export type { DatosDeEventoDeCalendario, EventoDeCalendario };
@@ -43,4 +47,19 @@ export function editarEvento(
 
 export function eliminarEvento(id: string): Promise<{ ok: true }> {
   return pedir(`/api/calendario/eventos/${id}`, { method: "DELETE" });
+}
+
+/** El filtro guardado en la cuenta, o null si nunca se guardó uno. */
+export async function obtenerFiltroDelCalendario(): Promise<FiltroDeEventosGuardado | null> {
+  const { filtro } = await pedir<{ filtro: FiltroDeEventosGuardado | null }>(
+    "/api/calendario/filtro",
+  );
+  return filtro;
+}
+
+/** Reemplaza el filtro guardado en la cuenta. */
+export function guardarFiltroDelCalendario(
+  filtro: FiltroDeEventosGuardado,
+): Promise<{ filtro: FiltroDeEventosGuardado }> {
+  return pedir("/api/calendario/filtro", { method: "PUT", body: JSON.stringify(filtro) });
 }
