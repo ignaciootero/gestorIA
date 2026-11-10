@@ -161,7 +161,12 @@ describe("el progreso", () => {
   });
 
   it("se puede anotar en una atrasada, pero no en una de un día futuro ni en una fallida", async () => {
+    // Una progresiva falla sola al terminar el día; devuelta a pendiente, queda atrasada y ya no falla sola.
     const atrasada = await crearTarea(cliente, ana.userId, agua(), AHORA);
+    await listarTareasDeHoy(cliente, ana.userId, enDias(1));
+    await fallarTarea(cliente, ana.userId, atrasada.id, false, enDias(1));
+    const lista = await listarTareasDeHoy(cliente, ana.userId, enDias(1));
+    expect(lista.atrasadas.map((tarea) => tarea.id)).toEqual([atrasada.id]);
     expect(
       await registrarProgreso(cliente, ana.userId, atrasada.id, { sumar: 1 }, enDias(1)),
     ).toMatchObject({ progreso: 1 });
@@ -247,8 +252,14 @@ describe("cambiar la meta", () => {
 });
 
 describe("si no llega a la meta", () => {
-  it("falla sola al terminar el día si su repetitiva lo pide, con lo que llevaba", async () => {
-    await crearTareaRepetitiva(cliente, ana.userId, aguaDiaria({ fallaSola: true }), AHORA);
+  it("una repetitiva progresiva falla sola al terminar el día, aunque no se pida, con lo que llevaba", async () => {
+    const repetitiva = await crearTareaRepetitiva(
+      cliente,
+      ana.userId,
+      aguaDiaria({ fallaSola: false }),
+      AHORA,
+    );
+    expect(repetitiva.fallaSola).toBe(true);
     const [deHoy] = (await listarTareasDeHoy(cliente, ana.userId, AHORA)).deHoy;
     await registrarProgreso(cliente, ana.userId, deHoy?.id ?? "", { sumar: 1 }, AHORA);
 
@@ -262,10 +273,28 @@ describe("si no llega a la meta", () => {
     expect(fila?.progresoCentesimos).toBe(100);
   });
 
-  it("sin eso, queda atrasada como cualquier otra", async () => {
+  it("una suelta progresiva también falla sola al terminar el día", async () => {
     const { id } = await crearTarea(cliente, ana.userId, agua(), AHORA);
     const manana = await listarTareasDeHoy(cliente, ana.userId, enDias(1));
-    expect(manana.atrasadas.map((tarea) => tarea.id)).toEqual([id]);
+    expect(manana.atrasadas).toEqual([]);
+    const [fila] = await cliente.db.select().from(esquema.tareas).where(eq(esquema.tareas.id, id));
+    expect(fila?.falladaEn).not.toBeNull();
+  });
+
+  it("si llegó a la meta, no falla", async () => {
+    const { id } = await crearTarea(cliente, ana.userId, agua(), AHORA);
+    await registrarProgreso(cliente, ana.userId, id, { sumar: 2 }, AHORA);
+    await listarTareasDeHoy(cliente, ana.userId, enDias(1));
+    const [fila] = await cliente.db.select().from(esquema.tareas).where(eq(esquema.tareas.id, id));
+    expect(fila?.falladaEn).toBeNull();
+    expect(fila?.completadaEn).not.toBeNull();
+  });
+
+  it("una tarea común que se vuelve progresiva pasa a fallar sola", async () => {
+    const { id } = await crearTarea(cliente, ana.userId, agua({ meta: null }), AHORA);
+    await editarTarea(cliente, ana.userId, id, agua(), AHORA);
+    const manana = await listarTareasDeHoy(cliente, ana.userId, enDias(1));
+    expect(manana.atrasadas).toEqual([]);
   });
 });
 

@@ -17,9 +17,11 @@ anotaciones.
 tenga nada que ver mantiene el concepto simple: es solo otra forma de marcar cuánto se hizo. Los centésimos
 evitan los errores de redondeo de los decimales, como los centavos en Finanzas.
 
-**Supuestos (el usuario no los definió; a confirmar).** Se suma con botones rápidos y un campo para otra
-cantidad, y el total se puede corregir; una tarea que no llega a la meta falla como cualquier otra (sola al
-terminar el día solo si su repetitiva lo pide); la meta admite decimales y una unidad libre opcional.
+**Ajustes posteriores (pedidos por el usuario).** Una progresiva **falla sola al terminar su día** si no
+llegó a la meta, siempre (nace con `fallaSola`), y no tiene cruz para darla por fallida a mano; el formulario
+no ofrece la opción. El aro va siempre visible, más grande (40 px) y con el porcentaje adentro; sumar o
+restar se abre con un botón que aparece al apuntar a la fila. La meta admite decimales y una unidad libre
+opcional.
 
 **Descartado.** Una tabla con cada anotación (hora y cantidad): sumaría historial que nadie pidió; si hace
 falta, se agrega después sin cambiar cómo se ve. Tildar a mano una progresiva: dejaría progreso y estado

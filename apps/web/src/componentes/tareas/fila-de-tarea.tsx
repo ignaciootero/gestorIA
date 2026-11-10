@@ -12,8 +12,9 @@
 // como los botones de editar y eliminar); una tarea ya completada o fallida muestra siempre su estado final: la
 // casilla marcada en verde o la cruz activada en rojo, y tocarla la devuelve a pendiente.
 //
-// Una tarea progresiva ("tomar 2 litros de agua") no tiene casilla: en su lugar va un aro, siempre visible,
-// que se llena con el porcentaje cubierto, y debajo del título, cuánto lleva ("1,5 de 2 litros · 75 %").
+// Una tarea progresiva ("tomar 2 litros de agua") no tiene casilla ni cruz de fallida (falla sola si al terminar
+// el día no llegó a la meta): en su lugar va un aro, siempre visible, que se llena con el porcentaje cubierto y
+// lo dice adentro, y debajo del título, cuánto lleva ("1,5 de 2 litros · 75 %").
 // Al apuntar a la fila aparece, junto a editar y eliminar, el botón para sumar o restar (ver
 // progreso-de-tarea.tsx). Se completa sola al llegar a la meta.
 
@@ -219,18 +220,15 @@ export function FilaDeTarea({
       )}
     >
       {progresiva && !tarea.fallida ? (
-        // Una progresiva no se tilda: el aro muestra cuánto lleva y abre el campo para anotar. Si se puede dar
-        // por fallida, la cruz va a su derecha, como con la casilla.
+        // Una progresiva no se tilda ni se da por fallida a mano: el aro muestra el porcentaje y abre el campo
+        // para anotar, y si al terminar el día no llegó a la meta, falla sola.
         <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 text-sm">
-          <span className="row-span-3 flex items-center gap-1 self-start pt-0.5">
+          <span className="row-span-3 flex items-center self-start">
             <AnilloDeProgreso
               tarea={tarea}
               abierto={anotando}
               alTocar={puedeAnotar ? () => setAnotando((abierto) => !abierto) : undefined}
             />
-            {alFallar && puedeFallar ? (
-              <BotonDeFallida titulo={tarea.titulo} alFallar={() => alFallar(tarea, true)} />
-            ) : null}
           </span>
           <span
             className={cn(

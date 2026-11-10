@@ -344,16 +344,10 @@ export function HistorialDeTareas() {
                       </span>
                     </span>
                   ) : tarea.meta !== null ? (
-                    // Una progresiva no se tilda: el aro muestra cuánto llegó a hacer ese día. Lo que está
-                    // atrasado se sigue anotando desde Hoy.
+                    // Una progresiva no se tilda ni se da por fallida a mano (falla sola al terminar su día):
+                    // el aro muestra cuánto llegó a hacer.
                     <span className="flex min-w-0 flex-1 items-center gap-3 text-sm">
                       <AnilloDeProgreso tarea={tarea} />
-                      {tarea.completada ? null : (
-                        <BotonDeFallida
-                          titulo={tarea.titulo}
-                          alFallar={() => pedirFallida(tarea)}
-                        />
-                      )}
                       <span className="flex min-w-0 flex-col">
                         <span
                           className={cn(

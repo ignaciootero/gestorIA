@@ -9,7 +9,8 @@
 //
 // Una tarea **progresiva** ("tomar 2 litros de agua") tiene una meta y no se tilda: se le va anotando el
 // progreso (`registrarProgreso`) y se completa sola al llegar a la meta; si se corrige por debajo,
-// vuelve a pendiente. Falla igual que cualquier otra (ver tareas/progreso.ts en @gestoria/shared).
+// vuelve a pendiente. Si al terminar su día no llegó, **falla sola** (siempre: nace con `fallaSola`); ver
+// tareas/progreso.ts en @gestoria/shared.
 //
 // La lista de hoy se arma así:
 // - Atrasadas: tareas pendientes de días anteriores, sean sueltas o de una repetitiva. Se arrastran
@@ -269,6 +270,8 @@ export async function crearTarea(
       categoriaId: datos.categoriaId ?? null,
       importante: datos.importante ?? false,
       ...(columnasDeMeta(datos) ?? {}),
+      // Una progresiva falla sola si al terminar su día no llegó a la meta.
+      fallaSola: datos.meta !== undefined && datos.meta !== null,
       dia,
       hora: datos.hora === "" ? null : datos.hora,
     })
@@ -312,6 +315,9 @@ export async function editarTarea(
       // Sin `importante` se conserva.
       ...(datos.importante === undefined ? {} : { importante: datos.importante }),
       ...(meta ?? {}),
+      // Al volverse progresiva pasa a fallar sola. Si ya lo era, se respeta lo que tenía: una fallida que la
+      // persona devolvió a pendiente no vuelve a fallar sola.
+      ...(meta?.metaCentesimos != null && actual.metaCentesimos === null ? { fallaSola: true } : {}),
       ...progresoAlCambiarLaMeta(actual, meta, ahora),
       dia,
     })

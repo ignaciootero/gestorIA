@@ -115,7 +115,9 @@ function aDatos(valores: Valores): unknown {
     ? { meta: aNumero(valores.meta), unidad: valores.unidad }
     : { meta: null };
   const datos = aDatosSinMeta(valores);
-  return { ...(datos as object), ...meta };
+  // Una repetitiva progresiva siempre falla sola si no se llega a la meta (el servidor también lo fuerza).
+  const fallaSola = valores.progresiva && valores.repeticion !== "ninguna" ? { fallaSola: true } : {};
+  return { ...(datos as object), ...meta, ...fallaSola };
 }
 
 function aDatosSinMeta(valores: Valores): unknown {
@@ -467,7 +469,7 @@ export function FormularioDeTarea({
           />
           <p className="pl-8 text-xs text-texto-secundario">
             Por ejemplo, tomar 2 litros de agua: vas sumando lo que tomás y se completa sola al
-            llegar a la meta.
+            llegar a la meta. Si al terminar el día no llegaste, queda como fallida.
           </p>
         </div>
         {progresiva ? (
@@ -491,7 +493,8 @@ export function FormularioDeTarea({
       </div>
 
       {/* Solo para una repetitiva (la regla): sus tareas pueden darse por fallidas solas al pasar el día. */}
-      {repeticion !== "ninguna" && !editaOcurrencia ? (
+      {/* Una progresiva ya falla sola si no llega a la meta: la opción no hace falta. */}
+      {repeticion !== "ninguna" && !editaOcurrencia && !progresiva ? (
         <div className="flex flex-col gap-1">
           <Casilla
             marcada={fallaSola}
@@ -542,9 +545,13 @@ export function FormularioDeTarea({
       <p className="text-xs text-texto-secundario">
         {editaOcurrencia
           ? "Solo cambia la de hoy. Para cambiar todas, editala desde 'Repetitivas'."
-          : repeticion === "ninguna"
-            ? "Si no la hacés ese día, sigue en tu lista como atrasada hasta que la hagas."
-            : "Aparece en tu lista cada vez que le toca. Si un día no la hacés, queda como atrasada hasta que la hagas o la marques como fallida."}
+          : progresiva
+            ? repeticion === "ninguna"
+              ? "Si ese día no llegás a la meta, queda como fallida."
+              : "Aparece en tu lista cada vez que le toca. Si un día no llegás a la meta, queda como fallida."
+            : repeticion === "ninguna"
+              ? "Si no la hacés ese día, sigue en tu lista como atrasada hasta que la hagas."
+              : "Aparece en tu lista cada vez que le toca. Si un día no la hacés, queda como atrasada hasta que la hagas o la marques como fallida."}
       </p>
 
       {mutacion.isError && !errors.fecha && !errors.categoriaId ? (

@@ -129,6 +129,8 @@ function columnasDe(datos: DatosDeTareaRepetitiva, hoy: string) {
     ...(datos.importante === undefined ? {} : { importante: datos.importante }),
     // Y con la meta (y su unidad): sin `meta` no se tocan.
     ...(columnasDeMeta(datos) ?? {}),
+    // Las tareas progresivas fallan solas si al terminar su día no llegaron a la meta: siempre.
+    ...(datos.meta !== undefined && datos.meta !== null ? { fallaSola: true } : {}),
   };
 
   switch (datos.repeticion) {

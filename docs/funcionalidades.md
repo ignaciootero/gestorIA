@@ -1595,9 +1595,9 @@ Para lo que se hace de a poco: "tomar 2 litros de agua", "leer 20 páginas", "ca
   —"1,5" o "1.5"—, hasta 1.000.000) y, si se quiere, la **unidad** ("litros", hasta 16 caracteres). Una
   repetitiva progresiva le pasa su meta y su unidad a cada tarea que arma. Al editar se puede cambiar la
   meta o desmarcar la casilla: vuelve a ser una tarea que se tilda y se borra lo anotado.
-- **Cómo se anota.** Una progresiva **no tiene casilla**: en su lugar va un **aro** del mismo tamaño,
-  **siempre visible** (también en Hoy, donde la casilla de las demás aparece al apuntar), que se llena de
-  verde con el **porcentaje cubierto**. Debajo del título dice cuánto lleva y el porcentaje ("1,5 de 2
+- **Cómo se anota.** Una progresiva **no tiene casilla ni cruz de fallida**: en su lugar va un **aro** de
+  40 px, **siempre visible** (también en Hoy, donde la casilla de las demás aparece al apuntar), que se llena
+  de verde con el **porcentaje cubierto** y lo dice adentro ("75%"; al llegar a la meta, un tilde). Debajo del título dice cuánto lleva y el porcentaje ("1,5 de 2
   litros · 75 %"). Al apuntar a la fila aparece, junto a editar y eliminar, el botón **"Sumar o restar"**
   (en pantallas táctiles se ve siempre; tocar el aro hace lo mismo). Abre un panel con dos **sumas
   rápidas** (más o menos la cuarta parte y la mitad de la meta, redondeadas a números cómodos: "+0,5" y "+1"
@@ -1606,10 +1606,11 @@ Para lo que se hace de a poco: "tomar 2 litros de agua", "leer 20 páginas", "ca
 - **Cuándo se completa.** Sola, **al llegar a la meta** (se puede pasar: "2,5 de 2 litros"), y pasa a
   "Hechas hoy". Desde ahí, tocando el aro, se puede corregir el total; si queda por debajo de la meta,
   vuelve a pendiente. No se tilda ni se destilda a mano (la API responde 409).
-- **Si no se llega.** Falla igual que cualquier otra tarea: sola al terminar el día si su repetitiva tiene
-  "Darla por fallida automáticamente si pasa el día", o queda atrasada (y se sigue anotando desde Hoy) hasta
-  que se complete, se marque como fallida o pase una semana. Una fallida guarda lo que se llegó a anotar;
-  para seguir anotando hay que deshacer la fallida. En una tarea de un día futuro todavía no se anota.
+- **Si no se llega.** **Falla sola al terminar su día**, siempre (se repita o no): toda progresiva nace con
+  `fallaSola`, y por eso el formulario no muestra la casilla "Darla por fallida automáticamente si pasa el día"
+  cuando se marca como progresiva. No se puede dar por fallida a mano. Una fallida guarda lo que se llegó a
+  anotar; si se deshace (desde "Fallidas hoy" o el historial), queda atrasada, ya no vuelve a fallar sola y
+  se sigue anotando desde Hoy. En una tarea de un día futuro todavía no se anota.
 - **Dónde más se ve.** En el historial, el aro (sin poder tocarlo) y cuánto se llegó a hacer; en
   "Repetitivas", la meta ("Meta: 2 litros"); en el calendario, cuánto lleva en el detalle del evento.
 - **Cómo se guarda.** En `tareas` y `tareas_repetitivas`, `meta_centesimos` y `unidad` (en nulo, una tarea
