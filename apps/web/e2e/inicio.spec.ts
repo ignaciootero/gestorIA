@@ -468,7 +468,7 @@ test.describe("lo que dice cada resumen", () => {
     await expect(page.locator("[data-aviso='peligro']")).toHaveCount(0);
   });
 
-  test("Finanzas: el disponible, el aviso más grave, el balance del período y dónde más se gasta", async ({
+  test("Finanzas: el disponible, el aviso más grave, lo que entró y salió y en qué se gasta", async ({
     page,
   }) => {
     await entrar(page, await crearCuentaAprobada());
@@ -482,12 +482,22 @@ test.describe("lo que dice cada resumen", () => {
     await expect(panel.locator("[data-aviso='peligro']")).toContainText(
       `${cuenta} está en negativo`,
     );
+    // Lo que entró, lo que salió y lo que sobra.
+    const filas = panel.getByRole("listitem");
+    await expect(filas.nth(0)).toContainText("Entró");
+    await expect(filas.nth(0)).toContainText("$ 10.000,00");
+    await expect(filas.nth(1)).toContainText("Salió");
+    await expect(filas.nth(1)).toContainText("$ 3.200,00");
+    await expect(filas.nth(2)).toContainText("Te sobra");
+    await expect(filas.nth(2)).toContainText("$ 6.800,00");
+    // Y en la dona, en qué se fue: la categoría principal primero.
     const grafico = panel.locator("[data-grafico]");
-    await expect(grafico).toContainText("Balance de Prueba: $ 6.800,00");
-    await expect(grafico.getByText("$ 10.000,00", { exact: true })).toBeVisible();
-    await expect(grafico.getByText("$ 3.200,00", { exact: true })).toBeVisible();
-    await expect(panel.getByRole("listitem").first()).toContainText(categoria);
-    await expect(panel.getByRole("listitem").first()).toContainText("$ 3.000,00 · 94%");
+    await expect(grafico).toContainText("En qué se fue la plata en Prueba");
+    const leyenda = grafico.getByRole("listitem");
+    await expect(leyenda.first()).toContainText(categoria);
+    await expect(leyenda).toHaveCount(2);
+    await expect(leyenda.first()).toContainText("94 %");
+    await expect(leyenda.nth(1)).toContainText("6 %");
   });
 
   test("Calendario: lo de hoy, lo que viene y nada de lo ya hecho", async ({ page }) => {
@@ -583,6 +593,21 @@ test.describe("lo que dice cada resumen", () => {
     await expect(filas.nth(1)).toContainText("Devolver el libro");
     await expect(filas.nth(1)).toContainText("En 9 días");
     await expect(panel.locator("[data-grafico]")).toContainText("en 30 días");
+  });
+
+  test("el pulso del día junta lo urgente de los módulos en una frase", async ({ page }) => {
+    // En una ventana baja se omite: acá, una alta.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await entrar(page, await crearCuentaAprobada());
+    await expect(page.locator("[data-pulso]")).toHaveText("Hoy no tenés nada pendiente.");
+
+    await crearTarea(page, "Pagar la luz", hoy());
+    await crearPersona(page, "Ana", "Pérez", `1990${sumarDias(hoy(), 1).slice(4)}`);
+    await page.reload();
+    // La tarea no se cuenta otra vez como cosa del calendario.
+    await expect(page.locator("[data-pulso]")).toHaveText(
+      "Hoy tenés 1 tarea pendiente. Mañana cumple Ana.",
+    );
   });
 
   test("los resúmenes se ponen al día al volver de un módulo donde se cambió algo", async ({

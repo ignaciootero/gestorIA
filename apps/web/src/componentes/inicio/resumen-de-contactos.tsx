@@ -4,7 +4,7 @@
 //   las próximas cuatro semanas.
 // - "cumpleanos": el próximo cumpleaños, los que siguen y cuántos hay en cada mes del año.
 // - "deudas": lo que te deben tus contactos y lo que les debés, y quiénes deben más.
-// - "semana": los recordatorios que cayeron en los últimos siete días.
+// - "semana": los recordatorios que cayeron en los últimos siete días, con una casilla por día.
 // Una variante sin datos para mostrar cede su lugar a la general. Si hay recordatorios hoy, un aviso.
 //
 // Sale del mismo pedido que los widgets de Contactos (GET /api/contactos/widgets), con la misma
@@ -18,6 +18,7 @@ import {
   formatearDiaYMes,
   formatearMonto,
   nombreCompletoDeContacto,
+  sumarDias,
 } from "@gestoria/shared";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { VisualDelWidget } from "@/componentes/widgets/visuales";
@@ -26,8 +27,10 @@ import { totalesEnPalabras } from "@/lib/api-deudas";
 import {
   BarrasConEtiquetas,
   BloqueDeGrafico,
+  Casillas,
   cuandoEs,
   Destacado,
+  diaCortoDeLaSemana,
   ErrorDeResumen,
   EsqueletoDeResumen,
   type IdentidadDeModulo,
@@ -304,6 +307,7 @@ function semana({ datos, modulo }: Contexto): ResumenArmado | null {
     const atras = 7 - posicion;
     return semanaPasada.filter((entrada) => entrada.diasAtras === atras).length;
   });
+  const mayor = Math.max(1, ...porDia);
 
   return {
     texto: (
@@ -334,15 +338,20 @@ function semana({ datos, modulo }: Contexto): ResumenArmado | null {
       <BloqueDeGrafico
         titulo="Día por día"
         descripcion={porDia
-          .map((cantidad, posicion) => `Hace ${7 - posicion} días: ${cantidad}`)
+          .map(
+            (cantidad, posicion) =>
+              `${diaCortoDeLaSemana(sumarDias(datos.hoy, posicion - 7))}: ${cantidad}`,
+          )
           .join(", ")}
-        pie="Cada barra es un día de la semana pasada; la última es ayer."
+        pie="Cuanto más intensa la casilla, más recordatorios ese día."
       >
-        <BarrasConEtiquetas
-          color={modulo.punto}
-          columnas={porDia.map((cantidad, posicion) => ({
-            etiqueta: posicion === 6 ? "ayer" : `-${7 - posicion}`,
-            valor: cantidad,
+        <Casillas
+          color={modulo.color}
+          marcarCompletas={false}
+          casillas={porDia.map((cantidad, posicion) => ({
+            etiqueta:
+              posicion === 6 ? "ayer" : diaCortoDeLaSemana(sumarDias(datos.hoy, posicion - 7)),
+            proporcion: cantidad > 0 ? cantidad / mayor : null,
             texto: String(cantidad),
             resaltada: posicion === 6,
           }))}

@@ -2,8 +2,9 @@
 // azar en cada visita (lib/eleccion-del-inicio.ts):
 // - "general": cuánto de lo de hoy ya se hizo (con un anillo de avance), lo que falta hoy y cómo
 //   vinieron los últimos siete días.
-// - "racha": los días seguidos al día, cuánto se cumplió en la semana y cómo van las rutinas.
-// - "viene": lo que hay más adelante, y lo que falta por categoría.
+// - "racha": los días seguidos al día, cuánto se cumplió en la semana (una casilla por día, más
+//   intensa cuanto más se hizo) y cómo van las rutinas.
+// - "viene": lo que hay más adelante, y lo que falta por categoría en una dona.
 // - "atender": lo atrasado, lo que está por darse por fallido y lo que falló hace poco.
 // Una variante sin datos para mostrar cede su lugar a la general. Si hay tareas atrasadas, un aviso.
 //
@@ -19,8 +20,10 @@ import type { CategoriaDeWidget, WidgetsDeTareas } from "@/lib/api-tareas";
 import {
   BarrasConEtiquetas,
   BloqueDeGrafico,
+  Casillas,
   cuandoEs,
   Destacado,
+  Dona,
   diaCortoDeLaSemana,
   ErrorDeResumen,
   EsqueletoDeResumen,
@@ -156,7 +159,7 @@ function racha({ datos, modulo }: Contexto): ResumenArmado | null {
 
   const cumplido = totalSemana > 0 ? Math.round((hechasSemana / totalSemana) * 100) : 0;
   const porcentajeDe = (dia: { hechas: number; total: number }) =>
-    dia.total > 0 ? Math.round((dia.hechas / dia.total) * 100) : 0;
+    Math.round((dia.hechas / dia.total) * 100);
 
   return {
     texto: (
@@ -197,24 +200,73 @@ function racha({ datos, modulo }: Contexto): ResumenArmado | null {
         <BloqueDeGrafico
           titulo="Cuánto cumpliste cada día"
           descripcion={datos.ultimosDias
-            .map((dia) => `${diaCortoDeLaSemana(dia.dia)}: ${porcentajeDe(dia)} %`)
+            .map(
+              (dia) =>
+                `${diaCortoDeLaSemana(dia.dia)}: ${dia.total > 0 ? `${porcentajeDe(dia)} %` : "sin tareas"}`,
+            )
             .join(", ")}
-          pie="Cada barra es el porcentaje de las tareas de ese día que hiciste."
+          pie="Más intensa, más cumplido. Con tilde, los días que hiciste todo."
         >
-          <BarrasConEtiquetas
-            color={modulo.punto}
-            columnas={datos.ultimosDias.map((dia, posicion) => ({
+          <Casillas
+            color={modulo.color}
+            casillas={datos.ultimosDias.map((dia, posicion) => ({
               etiqueta:
                 posicion === datos.ultimosDias.length - 1 ? "hoy" : diaCortoDeLaSemana(dia.dia),
-              valor: porcentajeDe(dia),
-              total: 100,
-              texto: dia.total > 0 ? `${porcentajeDe(dia)}%` : "–",
+              proporcion: dia.total > 0 ? dia.hechas / dia.total : null,
+              texto: dia.total > 0 ? `${dia.hechas}/${dia.total}` : "–",
               resaltada: posicion === datos.ultimosDias.length - 1,
             }))}
           />
         </BloqueDeGrafico>
       ) : null,
   };
+}
+
+/** Cuántas categorías entran en la dona; el resto va junto. */
+const CATEGORIAS_EN_LA_DONA = 4;
+
+/** Lo que falta, repartido por categoría en una dona; null si no falta nada. */
+function donaDeCategorias(
+  categorias: readonly CategoriaDeWidget<{ total: number }>[],
+): ResumenArmado["grafico"] {
+  const total = categorias.reduce((suma, categoria) => suma + categoria.total, 0);
+  if (total === 0) return null;
+  const ordenadas = [...categorias].sort((a, b) => b.total - a.total);
+  const principales = ordenadas.slice(0, CATEGORIAS_EN_LA_DONA);
+  const resto = ordenadas
+    .slice(CATEGORIAS_EN_LA_DONA)
+    .reduce((suma, categoria) => suma + categoria.total, 0);
+  const porciones = [
+    ...principales.map((categoria) => ({
+      etiqueta: categoria.nombre ?? "Sin categoría",
+      valor: categoria.total,
+      texto: String(categoria.total),
+      color: categoria.color ?? "var(--color-texto-secundario)",
+    })),
+    ...(resto > 0
+      ? [
+          {
+            etiqueta: "Otras",
+            valor: resto,
+            texto: String(resto),
+            color: "var(--color-texto-secundario)",
+          },
+        ]
+      : []),
+  ];
+  return (
+    <BloqueDeGrafico
+      titulo="Lo que falta, por categoría"
+      descripcion={porciones.map((porcion) => `${porcion.etiqueta}: ${porcion.texto}`).join(", ")}
+      pie="Cuenta lo atrasado, lo de hoy y lo de más adelante."
+    >
+      <Dona
+        porciones={porciones}
+        centro={String(total)}
+        detalleDelCentro={plural(total, "pendiente", "pendientes")}
+      />
+    </BloqueDeGrafico>
+  );
 }
 
 /** Lo que viene más adelante. Necesita alguna tarea con día futuro. */
@@ -243,11 +295,7 @@ function loQueViene({ datos }: Contexto): ResumenArmado | null {
         />
       </>
     ),
-    grafico: rankingDeCategorias(
-      datos.categorias.pendientes,
-      "Lo que falta, por categoría",
-      "Cuenta lo atrasado, lo de hoy y lo de más adelante.",
-    ),
+    grafico: donaDeCategorias(datos.categorias.pendientes),
   };
 }
 

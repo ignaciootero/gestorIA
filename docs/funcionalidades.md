@@ -1994,18 +1994,39 @@ la tarjeta entre sin cortarse.
 Pasarle el mouse a la manito la hace saludar de nuevo. Nada de esto bloquea la interacción. Con reducir
 movimiento aparece todo quieto, de una vez.
 
+**El pulso del día.** Cuando llegan los datos, debajo de la fecha aparece una frase con lo más urgente de los
+módulos, para saber cómo viene el día sin pasar por cada resumen: "Hoy tenés 2 tareas pendientes y 1 cosa en
+el calendario. Mañana cumple Ana." Cuenta las tareas de hoy sin hacer, lo pendiente de hoy en el calendario
+que no es una tarea (para no contarlas dos veces) y los cumpleaños de hoy (o, si no hay, los de mañana). Sin
+nada: "Hoy no tenés nada pendiente." Si falla alguno de esos pedidos no se muestra (el resumen de ese módulo
+ya avisa del error), y en ventanas de menos de 800 px de alto se omite para que la tarjeta entre entera.
+Dónde: `componentes/inicio/pulso-del-dia.ts`.
+
 ### Cada resumen
 
 Todos tienen la misma forma, para no tener que volver a aprender dónde está cada cosa: arriba el módulo
 (ícono en su color de origen y nombre) con el enlace **"Ir a …"**; a la izquierda **una cifra destacada**,
 a lo sumo **un aviso** (el más importante del módulo) y una **lista corta** de lo que viene (cuatro filas
 como mucho, con "y N más"); a la derecha **un gráfico** con sus números y etiquetas escritos, que se lee sin
-ejes ni leyendas. Pocos datos a propósito: el detalle está en cada módulo.
+ejes. Pocos datos a propósito: el detalle está en cada módulo. Cada tarjeta lleva, arriba a la derecha, un
+brillo suave del color del módulo, para reconocer de un vistazo en cuál se está.
+
+Los gráficos no son todos de barras: se elige la forma que mejor cuenta cada dato (piezas en
+`componentes/inicio/piezas-de-resumen.tsx`):
+
+- **Dona** para repartos (en qué se va la plata, de dónde viene lo de la semana, lo que falta por categoría):
+  el total en el centro y una leyenda con cada parte.
+- **Agenda** para la semana que viene: una columna por día con un punto por cosa, del color del módulo que
+  la trae (seis como mucho, después "+N").
+- **Casillas** para la constancia día a día: un cuadrado por día, más intenso cuanto más se hizo; con tilde
+  los días cumplidos del todo, punteado si ese día no había nada.
+- **Línea con área** para el gasto de los últimos días, con el promedio como línea punteada.
+- **Barras** y **rankings** donde se comparan pocas cantidades una al lado de la otra.
 
 | Resumen | Cifra destacada | Aviso (uno solo, el más grave) | Lista | Gráfico |
 |---|---|---|---|---|
-| **Finanzas** | Disponible (y lo que te deben y debés) | Cuenta en negativo › presupuesto superado › presupuesto por agotarse › moneda sin cotización › falta abrir un período / el último está cerrado | Donde más gastás: las tres categorías con su monto y su % del gasto | Lo que entró contra lo que salió en el período (con el balance en el título) y, en pantallas anchas, el gasto de los últimos períodos |
-| **Calendario** | Eventos de hoy (y cuántos más en los próximos 6 días) | — | Lo que viene: los próximos eventos de todos los módulos, con su ícono de origen, el día y la hora | Eventos de cada uno de los próximos 7 días |
+| **Finanzas** | Disponible (y lo que te deben y debés) | Cuenta en negativo › presupuesto superado › presupuesto por agotarse › moneda sin cotización › falta abrir un período / el último está cerrado | El período hasta hoy: entró, salió y lo que sobra (o falta) | Dona de en qué se fue la plata: las tres categorías principales y "Otras", con su % y el total gastado en el centro. Sin gastos todavía, lo que entró contra lo que salió |
+| **Calendario** | Eventos de hoy (y cuántos más en los próximos 6 días) | — | Lo que viene: los próximos eventos de todos los módulos, con su ícono de origen, el día y la hora | Agenda de los próximos 7 días: un punto por cosa, del color de su módulo |
 | **Tareas** | Hechas hoy ("3 de 5") con un anillo de avance, lo que falta y la racha | Tareas atrasadas (y cuál se da por fallida y cuándo) | Lo que falta hoy, con su hora | Hechas de las que había cada uno de los últimos 7 días |
 | **Contactos** | Próximo cumpleaños (quién, cuántos cumple, cuándo); sin cumpleaños, cuántos contactos hay | Recordatorios de hoy | Próximos recordatorios, con el contacto y cuándo | Recordatorios en cada una de las próximas 4 semanas |
 
@@ -2015,16 +2036,16 @@ el mismo aviso que la general:
 | Resumen | Variante | Cifra destacada | Lista | Gráfico |
 |---|---|---|---|---|
 | **Finanzas** | `anterior` | Gasto contra el período anterior a la misma altura (±%) | Balance de los últimos períodos | Gasto acumulado día a día contra el anterior (línea punteada); sin ese dato, gasto de los últimos períodos |
-| | `ritmo` | Cuánto se gasta por día en promedio | El gasto más grande, la categoría donde más y el último movimiento | Gasto de cada uno de los últimos días |
+| | `ritmo` | Cuánto se gasta por día en promedio | El gasto más grande, la categoría donde más y el último movimiento | Línea con área del gasto de los últimos días, con el promedio punteado |
 | | `presupuestos` | "N de M en orden" (menos del 80 % usado), con lo gastado contra lo presupuestado | Lo que queda (o cuánto se pasó) de cada uno | Ranking del % usado, en verde, amarillo (80 % o más) o rojo (pasado) |
-| **Tareas** | `racha` | Días seguidos al día, con el % cumplido de la semana en un anillo | Las rutinas de las últimas dos semanas, con hechas de total | % cumplido de cada uno de los últimos 7 días |
-| | `viene` | Cuántas tareas hay con día más adelante y cuál es la próxima | Las próximas, con el día | Lo que falta, por categoría |
+| **Tareas** | `racha` | Días seguidos al día, con el % cumplido de la semana en un anillo | Las rutinas de las últimas dos semanas, con hechas de total | Casillas de los últimos 7 días, más intensas cuanto más se cumplió (con tilde si se hizo todo) |
+| | `viene` | Cuántas tareas hay con día más adelante y cuál es la próxima | Las próximas, con el día | Dona de lo que falta, por categoría (las cuatro principales y "Otras") |
 | | `atender` | Cuántas están atrasadas y cuántas se dan por fallidas pronto | Las que fallaron en las últimas dos semanas | Atrasadas por categoría |
 | **Contactos** | `cumpleanos` | Próximo cumpleaños | Los que siguen, con la fecha y cuántos cumplen | Cumpleaños por mes, con el actual resaltado |
 | | `deudas` | Lo que te deben tus contactos (o lo que les debés) | El próximo vencimiento | Ranking de con quién hay más pendiente (verde te deben, rojo debés; las barras se comparan dentro de cada moneda) |
-| | `semana` | Cuántos recordatorios cayeron en los últimos 7 días | Los que cayeron, con cuándo | Cuántos cayeron cada día |
+| | `semana` | Cuántos recordatorios cayeron en los últimos 7 días | Los que cayeron, con cuándo | Casillas de cada día, más intensas cuantos más cayeron |
 | **Calendario** | `dia` | El día más cargado de la semana y cuántas cosas tiene | Lo de ese día | La semana día por día, con ese día resaltado |
-| | `modulos` | Cuántas cosas hay en la semana y de dónde viene la mayoría | Lo próximo de cada origen | Ranking por origen, con el color de cada módulo |
+| | `modulos` | Cuántas cosas hay en la semana y de dónde viene la mayoría | Lo próximo de cada origen | Dona por origen, con el color de cada módulo |
 
 Una variante **sin datos para mostrar** (sin período anterior, sin presupuestos, sin tareas futuras, sin
 cumpleaños, sin eventos…) cede su lugar a la general, que siempre tiene algo que decir.

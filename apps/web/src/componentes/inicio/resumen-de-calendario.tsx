@@ -1,9 +1,9 @@
 // Resumen del Calendario en la pantalla de inicio. Tiene varias variantes, y la pantalla elige una
 // al azar en cada visita (lib/eleccion-del-inicio.ts):
-// - "general": cuántos eventos hay hoy, lo próximo que viene y cuántos caen en cada uno de los
-//   próximos siete días.
+// - "general": cuántos eventos hay hoy, lo próximo que viene y una agenda de los próximos siete
+//   días (un punto por evento, del color del módulo que lo trae).
 // - "dia": el día más cargado de la semana, con lo que hay ese día.
-// - "modulos": de dónde viene lo de la semana (Finanzas, Contactos, Tareas o propio).
+// - "modulos": de dónde viene lo de la semana (Finanzas, Contactos, Tareas o propio), en una dona.
 // Una variante sin eventos en la semana cede su lugar a la general.
 //
 // Junta lo mismo que el calendario (los eventos propios y lo que aportan Finanzas, Contactos y
@@ -25,13 +25,14 @@ import {
 } from "@gestoria/shared";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ESTILOS_DE_ORIGEN } from "@/componentes/calendario/origenes";
-import { VisualDelWidget } from "@/componentes/widgets/visuales";
 import { cn } from "@/lib/clases";
 import {
+  Agenda,
   BarrasConEtiquetas,
   BloqueDeGrafico,
   cuandoEs,
   Destacado,
+  Dona,
   diaCortoDeLaSemana,
   ErrorDeResumen,
   EsqueletoDeResumen,
@@ -49,7 +50,7 @@ export const DIAS_DEL_RESUMEN_DEL_CALENDARIO = 7;
 const EVENTOS_EN_LA_LISTA = 4;
 
 /** Lo que todavía falta: sin lo hecho, lo fallido ni los recordatorios pasados. */
-function pendientes(eventos: readonly EventoDeCalendario[], hoy: string): EventoDeCalendario[] {
+export function pendientes(eventos: readonly EventoDeCalendario[], hoy: string): EventoDeCalendario[] {
   return eventos
     .filter((evento) => {
       const estado = estadoParaFiltrar(evento, hoy);
@@ -126,6 +127,30 @@ function GraficoDeLaSemana({
   );
 }
 
+/** La semana como agenda: un punto por evento, del color del módulo que lo trae. */
+function AgendaDeLaSemana({ contexto }: { contexto: Contexto }) {
+  const { dias, eventos, porDia } = contexto;
+  return (
+    <BloqueDeGrafico
+      titulo="Próximos 7 días"
+      descripcion={dias
+        .map((dia, indice) => `${diaCortoDeLaSemana(dia)}: ${porDia[indice] ?? 0}`)
+        .join(", ")}
+      pie="Cada punto es una cosa, del color del módulo que la trae."
+    >
+      <Agenda
+        dias={dias.map((dia, indice) => ({
+          etiqueta: indice === 0 ? "hoy" : diaCortoDeLaSemana(dia),
+          puntos: eventos
+            .filter((evento) => evento.dia === dia)
+            .map((evento) => `var(--color-origen-${evento.origen})`),
+          resaltada: indice === 0,
+        }))}
+      />
+    </BloqueDeGrafico>
+  );
+}
+
 function general(contexto: Contexto): ResumenArmado {
   const { eventos, porDia, hoy } = contexto;
   const deHoy = porDia[0] ?? 0;
@@ -153,15 +178,7 @@ function general(contexto: Contexto): ResumenArmado {
         />
       </>
     ),
-    grafico:
-      enLaSemana > 0 ? (
-        <GraficoDeLaSemana
-          contexto={contexto}
-          resaltada={0}
-          titulo="Próximos 7 días"
-          pie="Cada barra son los eventos de ese día, de todos los módulos."
-        />
-      ) : null,
+    grafico: enLaSemana > 0 ? <AgendaDeLaSemana contexto={contexto} /> : null,
   };
 }
 
@@ -220,7 +237,6 @@ function porModulo({ eventos, hoy }: Contexto): ResumenArmado | null {
     .filter((cuenta) => cuenta.total > 0)
     .sort((a, b) => b.total - a.total);
   const [mas] = cuentas;
-  const mayor = mas?.total ?? 1;
   // Lo próximo de cada origen, en el orden del ranking.
   const proximos = cuentas
     .map((cuenta) => eventos.find((evento) => evento.origen === cuenta.origen))
@@ -253,19 +269,16 @@ function porModulo({ eventos, hoy }: Contexto): ResumenArmado | null {
         descripcion={cuentas
           .map((cuenta) => `${NOMBRES_DE_ORIGEN[cuenta.origen]}: ${cuenta.total}`)
           .join(", ")}
-        pie="Cada barra es lo que aporta ese módulo a tu semana."
       >
-        <VisualDelWidget
-          grande
-          visual={{
-            tipo: "ranking",
-            filas: cuentas.map((cuenta) => ({
-              etiqueta: NOMBRES_DE_ORIGEN[cuenta.origen],
-              texto: String(cuenta.total),
-              proporcion: cuenta.total / mayor,
-              color: `var(--color-origen-${cuenta.origen})`,
-            })),
-          }}
+        <Dona
+          porciones={cuentas.map((cuenta) => ({
+            etiqueta: NOMBRES_DE_ORIGEN[cuenta.origen],
+            valor: cuenta.total,
+            texto: String(cuenta.total),
+            color: `var(--color-origen-${cuenta.origen})`,
+          }))}
+          centro={String(eventos.length)}
+          detalleDelCentro={plural(eventos.length, "cosa", "cosas")}
         />
       </BloqueDeGrafico>
     ),

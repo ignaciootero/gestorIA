@@ -1,9 +1,9 @@
 // Resumen de Finanzas en la pantalla de inicio. Tiene varias variantes, y la pantalla elige una al
 // azar en cada visita (lib/eleccion-del-inicio.ts):
-// - "general": cuánta plata hay, cómo va el período (lo que entró contra lo que salió) y en qué se
-//   va la mayor parte.
+// - "general": cuánta plata hay, lo que entró y salió en el período y, en una dona, en qué se va.
 // - "anterior": cuánto se lleva gastado contra el período anterior a la misma altura.
-// - "ritmo": cuánto se gasta por día, lo que más pesó y el gasto de los últimos días.
+// - "ritmo": cuánto se gasta por día, lo que más pesó y el gasto de los últimos días contra el
+//   promedio.
 // - "presupuestos": cómo va cada presupuesto.
 // Una variante sin datos para mostrar (sin período, sin presupuestos) cede su lugar a la general.
 // En todas, si hay algo que atender, un solo aviso: el más grave (una cuenta en rojo, un
@@ -22,11 +22,13 @@ import type { WidgetsDeFinanzas } from "@/lib/api-finanzas";
 import {
   BarrasConEtiquetas,
   BloqueDeGrafico,
-  diaCortoDeLaSemana,
   Destacado,
+  Dona,
+  diaCortoDeLaSemana,
   ErrorDeResumen,
   EsqueletoDeResumen,
   type IdentidadDeModulo,
+  LineaConArea,
   LineaDeAviso,
   ListaBreve,
   plural,
@@ -111,11 +113,61 @@ function variacion(actual: number, antes: number): string | null {
   return `${porcentaje > 0 ? "+" : "−"}${Math.abs(porcentaje)} %`;
 }
 
-function general({ datos, modulo }: Contexto): ResumenArmado {
+/** Cuántas categorías se muestran en la dona; el resto va junto en "Otras". */
+const CATEGORIAS_EN_LA_DONA = 3;
+
+/** En qué se fue la plata del período, como dona; null si todavía no hay gastos. */
+function donaDeGastos(datos: WidgetsDeFinanzas): ResumenArmado["grafico"] {
+  const { periodo } = datos;
+  if (!periodo || periodo.gastosCentavos <= 0) return null;
+  const principales = periodo.categoriasPrincipales.slice(0, CATEGORIAS_EN_LA_DONA);
+  const otras =
+    periodo.gastosCentavos - principales.reduce((suma, una) => suma + una.totalCentavos, 0);
+  const porcentaje = (centavos: number) =>
+    `${Math.round((centavos / periodo.gastosCentavos) * 100)} %`;
+  const porciones = [
+    ...principales.map((categoria) => ({
+      etiqueta: categoria.nombre,
+      valor: categoria.totalCentavos,
+      texto: porcentaje(categoria.totalCentavos),
+      color: categoria.color,
+    })),
+    ...(otras > 0
+      ? [
+          {
+            etiqueta: "Otras",
+            valor: otras,
+            texto: porcentaje(otras),
+            color: "var(--color-texto-secundario)",
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <BloqueDeGrafico
+      titulo={`En qué se fue la plata en ${periodo.nombre}`}
+      descripcion={porciones
+        .map((porcion) => `${porcion.etiqueta}: ${porcion.texto}`)
+        .join(", ")}
+      pie={
+        periodo.categoriaPrincipal
+          ? `${periodo.categoriaPrincipal.nombre} se lleva ${periodo.categoriaPrincipal.porcentajeDelGasto} % de lo gastado.`
+          : undefined
+      }
+    >
+      <Dona
+        porciones={porciones}
+        centro={formatearMontoCorto(periodo.gastosCentavos)}
+        detalleDelCentro="gastado"
+      />
+    </BloqueDeGrafico>
+  );
+}
+
+function general({ datos }: Contexto): ResumenArmado {
   const { monedaBase: moneda, periodo } = datos;
   const deudas = deudasEnPalabras(datos);
-  const totalDeGastos = periodo?.gastosCentavos ?? 0;
-  const evolucion = periodo?.evolucion ?? [];
 
   return {
     texto: (
@@ -139,75 +191,64 @@ function general({ datos, modulo }: Contexto): ResumenArmado {
         />
         <Aviso datos={datos} />
         <ListaBreve
-          titulo="Donde más gastás"
-          vacio="Cuando cargues gastos, acá vas a ver en qué se va la mayor parte."
-          filas={(periodo?.categoriasPrincipales ?? []).map((categoria) => ({
-            id: categoria.nombre,
-            principal: categoria.nombre,
-            secundario:
-              totalDeGastos > 0
-                ? `${formatearMonto(categoria.totalCentavos, moneda)} · ${Math.round((categoria.totalCentavos / totalDeGastos) * 100)}%`
-                : formatearMonto(categoria.totalCentavos, moneda),
-            marca: (
-              <span
-                aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: categoria.color }}
-              />
-            ),
-          }))}
+          titulo={periodo ? `${periodo.nombre}, hasta hoy` : "El período"}
+          vacio="Abrí un período para ver lo que entra y lo que sale."
+          filas={
+            periodo
+              ? [
+                  {
+                    id: "entro",
+                    principal: "Entró",
+                    secundario: formatearMonto(periodo.ingresosCentavos, moneda),
+                    marca: <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-exito" />,
+                  },
+                  {
+                    id: "salio",
+                    principal: "Salió",
+                    secundario: formatearMonto(periodo.gastosCentavos, moneda),
+                    marca: <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-peligro" />,
+                  },
+                  {
+                    id: "balance",
+                    principal: periodo.balanceCentavos >= 0 ? "Te sobra" : "Te falta",
+                    secundario: formatearMonto(Math.abs(periodo.balanceCentavos), moneda),
+                  },
+                ]
+              : []
+          }
         />
       </>
     ),
-    grafico: periodo ? (
-      <BloqueDeGrafico
-        titulo={`Balance de ${periodo.nombre}: ${formatearMonto(periodo.balanceCentavos, moneda)}`}
-        descripcion={`Entró ${formatearMonto(periodo.ingresosCentavos, moneda)} y salió ${formatearMonto(periodo.gastosCentavos, moneda)}.${evolucion.length > 1 ? ` Gasto de los últimos períodos: ${evolucion.map((p) => `${p.nombre}, ${formatearMonto(p.gastosCentavos, moneda)}`).join("; ")}.` : ""}`}
-        pie={
-          periodo.balanceCentavos >= 0
-            ? "Entró más de lo que salió."
-            : "Salió más de lo que entró."
-        }
-      >
-        <VisualDelWidget
-          visual={{
-            tipo: "comparacion",
-            filas: [
-              {
-                etiqueta: "Entró",
-                texto: formatearMonto(periodo.ingresosCentavos, moneda),
-                valor: periodo.ingresosCentavos,
-                color: "ingreso",
-              },
-              {
-                etiqueta: "Salió",
-                texto: formatearMonto(periodo.gastosCentavos, moneda),
-                valor: periodo.gastosCentavos,
-                color: "gasto",
-              },
-            ],
-          }}
-        />
-        {evolucion.length > 1 ? (
-          // En pantallas angostas no entra: queda lo que entró y lo que salió.
-          <div className="hidden min-h-0 flex-1 flex-col md:flex">
-            <p className="mt-5 mb-2 text-xs text-texto-secundario">
-              Gasto de los últimos períodos
-            </p>
-            <BarrasConEtiquetas
-              color={modulo.punto}
-              columnas={evolucion.map((anterior, posicion) => ({
-                // Sin el año, que se repite en todos ("Octubre 2026" → "Octubre").
-                etiqueta: anterior.nombre.replace(/\s+\d{4}$/, ""),
-                valor: anterior.gastosCentavos,
-                texto: formatearMontoCorto(anterior.gastosCentavos),
-                resaltada: posicion === evolucion.length - 1,
-              }))}
-            />
-          </div>
-        ) : null}
-      </BloqueDeGrafico>
-    ) : null,
+    // Sin gastos todavía, lo que entró contra lo que salió (que igual dice algo).
+    grafico:
+      donaDeGastos(datos) ??
+      (periodo ? (
+        <BloqueDeGrafico
+          titulo={`Balance de ${periodo.nombre}: ${formatearMonto(periodo.balanceCentavos, moneda)}`}
+          descripcion={`Entró ${formatearMonto(periodo.ingresosCentavos, moneda)} y salió ${formatearMonto(periodo.gastosCentavos, moneda)}.`}
+          pie="Cuando cargues gastos, acá vas a ver en qué se va la plata."
+        >
+          <VisualDelWidget
+            visual={{
+              tipo: "comparacion",
+              filas: [
+                {
+                  etiqueta: "Entró",
+                  texto: formatearMonto(periodo.ingresosCentavos, moneda),
+                  valor: periodo.ingresosCentavos,
+                  color: "ingreso",
+                },
+                {
+                  etiqueta: "Salió",
+                  texto: formatearMonto(periodo.gastosCentavos, moneda),
+                  valor: periodo.gastosCentavos,
+                  color: "gasto",
+                },
+              ],
+            }}
+          />
+        </BloqueDeGrafico>
+      ) : null),
   };
 }
 
@@ -343,16 +384,13 @@ function ritmo({ datos, modulo, hoy }: Contexto): ResumenArmado | null {
                 `${etiquetaDe(posicion) || `Día ${posicion + 1}`}: ${formatearMonto(centavos, moneda)}`,
             )
             .join(", ")}
-          pie="Cada barra es lo que se gastó ese día."
+          pie="La línea punteada es tu promedio por día."
         >
-          <BarrasConEtiquetas
-            color={modulo.punto}
-            columnas={diario.map((centavos, posicion) => ({
-              etiqueta: etiquetaDe(posicion),
-              valor: centavos,
-              texto: centavos > 0 ? formatearMontoCorto(centavos) : "0",
-              resaltada: posicion === diario.length - 1,
-            }))}
+          <LineaConArea
+            valores={diario}
+            referencia={periodo.promedioPorDiaCentavos}
+            etiquetas={diario.map((_, posicion) => etiquetaDe(posicion))}
+            color={modulo.color}
           />
         </BloqueDeGrafico>
       ) : null,

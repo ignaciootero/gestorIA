@@ -14,10 +14,10 @@
 "use client";
 
 import { CURVA_SALIDA, DURACION_MS } from "@gestoria/ui-tokens";
-import { CircleAlert, Info, type LucideIcon, TriangleAlert } from "lucide-react";
+import { Check, CircleAlert, Info, type LucideIcon, TriangleAlert } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import { cn } from "@/lib/clases";
 import { interpretarError } from "@/lib/mensajes-de-error";
 
@@ -30,6 +30,8 @@ export type IdentidadDeModulo = {
   suave: string;
   /** El color pleno, para las barras del gráfico. */
   punto: string;
+  /** El mismo color como valor CSS (`var(--color-origen-…)`), para lo que se pinta con `style`. */
+  color: string;
 };
 
 /**
@@ -57,6 +59,11 @@ export function Resumen({
     <div
       data-variante={variante}
       className="flex h-full min-h-0 flex-col gap-4 p-4 sm:gap-5 sm:p-6"
+      // Un tinte muy suave del color del módulo desde la esquina de arriba: cada resumen tiene su
+      // identidad y el cambio de uno a otro se nota, sin restarle contraste al texto.
+      style={{
+        backgroundImage: `radial-gradient(ellipse at top right, color-mix(in oklab, ${modulo.color} 14%, transparent), transparent 65%)`,
+      }}
     >
       <EncabezadoDeResumen modulo={modulo} />
       <div
@@ -238,7 +245,7 @@ export function BloqueDeGrafico({
   /** El gráfico en palabras, para los lectores de pantalla. */
   descripcion: string;
   /** Una frase visible debajo del gráfico que ayuda a leerlo. */
-  pie?: string;
+  pie?: string | undefined;
   children: ReactNode;
 }) {
   return (
@@ -339,6 +346,381 @@ export function BarrasConEtiquetas({
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- Dona ---
+
+export type PorcionDeDona = {
+  etiqueta: string;
+  valor: number;
+  /** Lo que se lee en la leyenda ("$ 1.200", "3"). */
+  texto: string;
+  /** Un color CSS (`var(--color-…)` o el de una categoría). */
+  color: string;
+};
+
+/** Grosor del aro y su radio, en unidades del `viewBox` (100 × 100). */
+const ARO = 14;
+const RADIO = 50 - ARO / 2;
+const CIRCUNFERENCIA = 2 * Math.PI * RADIO;
+/** Lo que queda entre una porción y la siguiente, para que se distingan aunque tengan colores parecidos. */
+const SEPARACION = 1.6;
+
+/**
+ * Un reparto: una dona con la cifra total en el centro y la leyenda al costado, cada porción con su
+ * color, su nombre y su valor escritos. Sirve cuando importa **cuánto de cada cosa** (en qué se va la
+ * plata, de qué módulo viene la semana) más que el orden. Las porciones se dibujan en orden, de la
+ * más grande a la más chica, empezando arriba; al aparecer se van completando, una detrás de otra.
+ */
+export function Dona({
+  porciones,
+  centro,
+  detalleDelCentro,
+}: {
+  porciones: readonly PorcionDeDona[];
+  /** La cifra del medio (el total). */
+  centro: string;
+  /** Una palabra debajo de la cifra ("gastos", "cosas"). */
+  detalleDelCentro?: string;
+}) {
+  const reducirMovimiento = useReducedMotion();
+  const total = porciones.reduce((suma, porcion) => suma + Math.max(0, porcion.valor), 0);
+  const conGrosor = porciones.filter((porcion) => porcion.valor > 0);
+  // Con una sola porción no hay separación que dejar.
+  const separacion = conGrosor.length > 1 ? SEPARACION : 0;
+  let recorrido = 0;
+
+  return (
+    <div className="flex min-h-0 flex-1 items-center gap-4 sm:gap-6">
+      <div className="relative aspect-square h-full max-h-40 min-h-24 shrink-0">
+        <svg viewBox="0 0 100 100" className="size-full -rotate-90">
+          <circle
+            cx={50}
+            cy={50}
+            r={RADIO}
+            fill="none"
+            strokeWidth={ARO}
+            className="stroke-texto-secundario/10"
+          />
+          {total > 0
+            ? conGrosor.map((porcion, posicion) => {
+                const largo = (porcion.valor / total) * CIRCUNFERENCIA;
+                const inicio = recorrido;
+                recorrido += largo;
+                const visible = Math.max(0.01, largo - separacion);
+                return (
+                  <motion.circle
+                    // La posición es la identidad: las porciones van en un orden fijo.
+                    key={posicion}
+                    cx={50}
+                    cy={50}
+                    r={RADIO}
+                    fill="none"
+                    strokeWidth={ARO}
+                    stroke={porcion.color}
+                    strokeDashoffset={-inicio}
+                    initial={reducirMovimiento ? false : { strokeDasharray: `0 ${CIRCUNFERENCIA}` }}
+                    animate={{ strokeDasharray: `${visible} ${CIRCUNFERENCIA - visible}` }}
+                    transition={{
+                      duration: DURACION_MS.lenta / 1000,
+                      delay: posicion * 0.12,
+                      ease: CURVA_SALIDA,
+                    }}
+                  />
+                );
+              })
+            : null}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="numeros-tabulares text-lg leading-tight font-semibold text-texto sm:text-xl">
+            {centro}
+          </span>
+          {detalleDelCentro ? (
+            <span className="text-xs text-texto-secundario">{detalleDelCentro}</span>
+          ) : null}
+        </div>
+      </div>
+      <ul className="flex min-w-0 flex-1 flex-col gap-2">
+        {porciones.map((porcion, posicion) => (
+          <li
+            // La posición es la identidad: la leyenda sigue el orden de las porciones.
+            key={posicion}
+            className="flex items-center gap-2 text-sm"
+          >
+            <span
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: porcion.color }}
+            />
+            <span className="min-w-0 flex-1 truncate text-texto">{porcion.etiqueta}</span>
+            <span className="numeros-tabulares shrink-0 text-texto-secundario">{porcion.texto}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// --- Casillas ---
+
+export type Casilla = {
+  /** Lo que va debajo ("lun", "hoy"). */
+  etiqueta: string;
+  /** De 0 a 1: qué tan llena está. Null es "no había nada ese día" (queda punteada). */
+  proporcion: number | null;
+  /** Lo que se lee adentro o debajo ("3/4", "2"). */
+  texto: string;
+  /** La que se destaca (hoy). */
+  resaltada?: boolean;
+};
+
+/**
+ * Una casilla por día, más intensa cuanto más se cumplió: se lee como un calendario de hábitos. Un día
+ * completo lleva una tilde. Para **constancia** (lo que se hizo de lo que había), donde unas barras de
+ * distinto alto harían pensar en cantidades.
+ */
+export function Casillas({
+  casillas,
+  color,
+  marcarCompletas = true,
+}: {
+  casillas: readonly Casilla[];
+  color: string;
+  /** Si una casilla llena lleva tilde (sí para lo cumplido; no para una cantidad). */
+  marcarCompletas?: boolean;
+}) {
+  const reducirMovimiento = useReducedMotion();
+  return (
+    <div className="flex min-h-0 flex-1 items-center">
+      <div
+        className="grid w-full gap-2"
+        style={{ gridTemplateColumns: `repeat(${casillas.length}, minmax(0, 1fr))` }}
+      >
+        {casillas.map((casilla, posicion) => {
+          const llena = marcarCompletas && casilla.proporcion !== null && casilla.proporcion >= 1;
+          return (
+            <div
+              // La posición es la identidad: son días en orden fijo.
+              key={posicion}
+              className="flex min-w-0 flex-col items-center gap-1.5"
+            >
+              <motion.div
+                className={cn(
+                  "relative flex aspect-square w-full max-w-14 items-center justify-center rounded-xl",
+                  casilla.proporcion === null && "border border-dashed border-borde-fuerte",
+                  casilla.resaltada && "ring-2 ring-texto/70 ring-offset-2 ring-offset-superficie",
+                )}
+                style={
+                  casilla.proporcion === null
+                    ? undefined
+                    : {
+                        // Nunca del todo transparente: un día con algo y nada hecho igual se ve.
+                        backgroundColor: `color-mix(in oklab, ${color} ${Math.round(12 + casilla.proporcion * 88)}%, transparent)`,
+                      }
+                }
+                initial={reducirMovimiento ? false : { opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{
+                  duration: DURACION_MS.lenta / 1000,
+                  delay: posicion * 0.05,
+                  ease: CURVA_SALIDA,
+                }}
+              >
+                {llena ? <Check className="size-1/2 text-white" strokeWidth={3} /> : null}
+              </motion.div>
+              <span
+                className={cn(
+                  "numeros-tabulares text-xs",
+                  casilla.resaltada ? "font-semibold text-texto" : "text-texto-secundario",
+                )}
+              >
+                {casilla.texto}
+              </span>
+              <span
+                className={cn(
+                  "w-full truncate text-center text-xs",
+                  casilla.resaltada ? "font-medium text-texto" : "text-texto-secundario",
+                )}
+              >
+                {casilla.etiqueta}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- Agenda ---
+
+export type DiaDeAgenda = {
+  etiqueta: string;
+  /** Un color CSS por cosa que hay ese día, en orden. */
+  puntos: readonly string[];
+  resaltada?: boolean;
+};
+
+/** Cuántos puntos entran por día antes de pasar a "+N". */
+const PUNTOS_POR_DIA = 6;
+
+/**
+ * La semana como una agenda: una columna por día con un punto por cosa, del color de su módulo. Se
+ * ve de un vistazo qué días están cargados y de dónde viene cada cosa, sin leer números.
+ */
+export function Agenda({ dias }: { dias: readonly DiaDeAgenda[] }) {
+  const reducirMovimiento = useReducedMotion();
+  return (
+    <div
+      className="grid min-h-0 flex-1 gap-1.5"
+      style={{ gridTemplateColumns: `repeat(${dias.length}, minmax(0, 1fr))` }}
+    >
+      {dias.map((dia, posicion) => {
+        const visibles = dia.puntos.slice(0, PUNTOS_POR_DIA);
+        const resto = dia.puntos.length - visibles.length;
+        return (
+          <div
+            // La posición es la identidad: son días en orden fijo.
+            key={posicion}
+            className={cn(
+              "flex min-w-0 flex-col items-center gap-2 rounded-xl px-1 py-2",
+              dia.resaltada ? "bg-superficie" : "bg-superficie/40",
+            )}
+          >
+            <span
+              className={cn(
+                "w-full truncate text-center text-xs",
+                dia.resaltada ? "font-semibold text-texto" : "text-texto-secundario",
+              )}
+            >
+              {dia.etiqueta}
+            </span>
+            <span className="numeros-tabulares text-base font-semibold text-texto">
+              {dia.puntos.length}
+            </span>
+            <div className="flex flex-wrap justify-center gap-1">
+              {visibles.map((color, orden) => (
+                <motion.span
+                  // El orden es la identidad: son las cosas del día en el orden del calendario.
+                  key={orden}
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: color }}
+                  initial={reducirMovimiento ? false : { opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{
+                    duration: DURACION_MS.normal / 1000,
+                    delay: posicion * 0.05 + orden * 0.04,
+                    ease: CURVA_SALIDA,
+                  }}
+                />
+              ))}
+            </div>
+            {resto > 0 ? <span className="text-xs text-texto-secundario">+{resto}</span> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Línea con área ---
+
+/**
+ * Una serie en el tiempo, con el área de abajo pintada y una línea punteada de referencia (el
+ * promedio). Para ver **el ritmo**: si los últimos días van por encima o por debajo de lo normal.
+ */
+export function LineaConArea({
+  valores,
+  referencia,
+  etiquetas,
+  color,
+}: {
+  valores: readonly number[];
+  /** La línea punteada (por ejemplo, el promedio). */
+  referencia?: number;
+  /** Debajo del gráfico, una por valor ("lun", "hoy"). */
+  etiquetas: readonly string[];
+  /** Un color CSS. */
+  color: string;
+}) {
+  const reducirMovimiento = useReducedMotion();
+  const id = useId();
+  if (valores.length < 2) return null;
+  const maximo = Math.max(1, referencia ?? 0, ...valores) * 1.1;
+  const ancho = 100;
+  const alto = 50;
+  const x = (posicion: number) => (posicion / (valores.length - 1)) * ancho;
+  const y = (valor: number) => alto - (valor / maximo) * alto;
+  const linea = valores
+    .map((valor, posicion) => `${posicion === 0 ? "M" : "L"}${x(posicion)},${y(valor)}`)
+    .join(" ");
+  const area = `${linea} L${ancho},${alto} L0,${alto} Z`;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <svg
+        viewBox={`0 0 ${ancho} ${alto}`}
+        preserveAspectRatio="none"
+        className="min-h-16 w-full flex-1 overflow-visible"
+      >
+        <defs>
+          <linearGradient id={`${id}-relleno`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <motion.path
+          d={area}
+          fill={`url(#${id}-relleno)`}
+          initial={reducirMovimiento ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DURACION_MS.lenta / 1000, ease: CURVA_SALIDA }}
+        />
+        {referencia !== undefined ? (
+          <line
+            x1={0}
+            x2={ancho}
+            y1={y(referencia)}
+            y2={y(referencia)}
+            strokeWidth={1.5}
+            strokeDasharray="3 4"
+            vectorEffect="non-scaling-stroke"
+            className="stroke-texto-secundario"
+          />
+        ) : null}
+        <motion.path
+          d={linea}
+          fill="none"
+          stroke={color}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          initial={reducirMovimiento ? false : { pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: DURACION_MS.lenta / 1000, ease: CURVA_SALIDA }}
+        />
+      </svg>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${etiquetas.length}, minmax(0, 1fr))` }}
+      >
+        {etiquetas.map((etiqueta, posicion) => (
+          <span
+            // La posición es la identidad: son días en orden fijo.
+            key={posicion}
+            className={cn(
+              "truncate text-center text-xs",
+              posicion === etiquetas.length - 1
+                ? "font-medium text-texto"
+                : "text-texto-secundario",
+            )}
+          >
+            {etiqueta}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

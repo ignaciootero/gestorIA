@@ -1,5 +1,6 @@
 // Contenido de la pantalla de inicio: un saludo y un carrusel con el resumen de cada módulo
-// (Finanzas, Calendario, Tareas y Contactos), que pasa solo de uno a otro.
+// (Finanzas, Calendario, Tareas y Contactos), que pasa solo de uno a otro. Debajo del saludo, el
+// pulso del día junta lo más urgente de todos en una frase.
 //
 // Es una pantalla para orientarse de un vistazo: cada resumen trae solo lo más importante de su
 // módulo —una cifra destacada, a lo sumo un aviso, una lista corta y un gráfico— y el detalle queda
@@ -37,8 +38,10 @@ import { interpretarError } from "@/lib/mensajes-de-error";
 import { zonaDelDispositivo } from "@/lib/preferencias-finanzas";
 import { ALTO_DE_LA_TARJETA, CarruselDeInicio, type Diapositiva } from "./carrusel-de-inicio";
 import type { IdentidadDeModulo } from "./piezas-de-resumen";
+import { armarPulso } from "./pulso-del-dia";
 import {
   DIAS_DEL_RESUMEN_DEL_CALENDARIO,
+  pendientes,
   ResumenDeCalendario,
   VARIANTES_DEL_CALENDARIO,
 } from "./resumen-de-calendario";
@@ -97,11 +100,11 @@ function diapositiva(
 ): Diapositiva {
   const { origen, ...datos } = MODULOS[clave];
   const { suave, punto } = ESTILOS_DE_ORIGEN[origen];
-  const modulo = { ...datos, suave, punto };
+  const modulo = { ...datos, suave, punto, color: `var(--color-origen-${origen})` };
   return { id: clave, nombre: modulo.nombre, Icono: modulo.Icono, punto, contenido: armar(modulo) };
 }
 
-function Carrusel({ hoy, encabezado }: { hoy: string; encabezado: ReactNode }) {
+function Carrusel({ hoy, nombre }: { hoy: string; nombre: string }) {
   const finanzas = useQuery({ queryKey: ["finanzas", "widgets"], queryFn: obtenerWidgets });
   const tareas = useQuery({ queryKey: ["tareas", "widgets"], queryFn: obtenerWidgetsDeTareas });
   const contactos = useQuery({
@@ -158,6 +161,18 @@ function Carrusel({ hoy, encabezado }: { hoy: string; encabezado: ReactNode }) {
       />
     )),
   ];
+  // El pulso del día, cuando ya llegó lo que necesita; si algún pedido falló, sin pulso (el
+  // resumen de ese módulo ya muestra el error).
+  const pulso =
+    tareas.isSuccess && calendario.isSuccess && contactos.isSuccess
+      ? armarPulso({
+          tareasDeHoy: tareas.data.hoyPendientes,
+          calendarioDeHoy: pendientes(calendario.data, hoy).filter(
+            (evento) => evento.dia === hoy && evento.origen !== "tareas",
+          ).length,
+          cumpleanos: contactos.data.proximosCumpleanos,
+        })
+      : null;
   const indiceInicial = Math.max(
     0,
     diapositivas.findIndex((una) => una.id === eleccion.pestana),
@@ -167,7 +182,7 @@ function Carrusel({ hoy, encabezado }: { hoy: string; encabezado: ReactNode }) {
     <CarruselDeInicio
       diapositivas={diapositivas}
       etiqueta="Resumen de tus módulos"
-      encabezado={encabezado}
+      encabezado={<SaludoDeInicio nombre={nombre} hoy={hoy} pulso={pulso} />}
       demoraDeEntrada={ENTRADA_DEL_CARRUSEL_S}
       indiceInicial={indiceInicial}
     />
@@ -217,7 +232,7 @@ export function PanelDeInicio() {
   return (
     <div className={CLASE_DEL_PANEL}>
       {hoy ? (
-        <Carrusel hoy={hoy} encabezado={<SaludoDeInicio nombre={yo.nombre} hoy={hoy} />} />
+        <Carrusel hoy={hoy} nombre={yo.nombre} />
       ) : null}
     </div>
   );

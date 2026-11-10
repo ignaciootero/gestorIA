@@ -5,6 +5,23 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — Gráficos variados y pulso del día en el inicio
+
+**Decisión.** Los resúmenes del inicio dejan de usar casi siempre barras: cada dato usa la forma que mejor lo
+cuenta (dona para repartos, agenda de puntos para la semana que viene, casillas de intensidad para la
+constancia día a día, línea con área para el gasto diario). Las cuatro piezas nuevas son SVG y CSS propios en
+`piezas-de-resumen.tsx`, animados con Motion. Debajo del saludo se agrega el **pulso del día**, una frase que
+junta lo urgente de Tareas, Calendario y Contactos.
+
+**Por qué.** Con 8 de 15 gráficos de barras la pantalla se veía monótona, y es lo primero que se ve al
+entrar. El pulso da valor apenas se abre la app, sin tener que recorrer el carrusel.
+
+**Descartado.** Una librería de gráficos (Recharts y similares): suma peso al cliente para cuatro formas
+simples y es una dependencia nueva fuera del stack. Insignias con números en las pestañas: recargan la fila y
+el pulso ya cuenta lo urgente. Mostrar el pulso en ventanas bajas: no entra junto con la tarjeta.
+
+---
+
 ## 2026-11-10 — Inicio al azar, con variantes por resumen
 
 **Decisión.** Cada visita a `/inicio` elige al azar con qué pestaña arranca el carrusel y una variante del
