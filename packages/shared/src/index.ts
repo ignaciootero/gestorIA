@@ -62,7 +62,9 @@ export {
 } from "./calendario/calendario.ts";
 export type {
   DatosDeEventoDeCalendario,
+  EstadoDeDeudaEnElCalendario,
   EstadoDeEvento,
+  EstadoDeEventoPropio,
   EstadoDeRecordatorio,
   EstadoParaFiltrar,
   EventoDeCalendario,
@@ -79,9 +81,12 @@ export {
   cantidadDeRestriccionesPorRepeticion,
   compararEventos,
   DIAS_MAXIMOS_POR_CONSULTA_DE_EVENTOS,
+  ESTADOS_DE_DEUDA,
   ESTADOS_DE_EVENTO,
+  ESTADOS_DE_EVENTO_PROPIO,
   ESTADOS_DE_RECORDATORIO,
   ESTADOS_OCULTOS_POR_DEFECTO,
+  esEventoPasado,
   esquemaEventoDeCalendario,
   esquemaRangoDeEventos,
   estadoDeEvento,

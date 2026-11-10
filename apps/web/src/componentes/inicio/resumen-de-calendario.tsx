@@ -7,7 +7,8 @@
 // Una variante sin eventos en la semana cede su lugar a la general.
 //
 // Junta lo mismo que el calendario (los eventos propios y lo que aportan Finanzas, Contactos y
-// Tareas) y cuenta solo **lo que falta**: sin tareas ya hechas o fallidas ni recordatorios pasados.
+// Tareas) y cuenta solo **lo que falta**: sin tareas ya hechas o fallidas, deudas pagadas ni
+// recordatorios pasados.
 // No usa el filtro guardado del calendario (eso es una forma de mirar el mes); acá se ve todo lo
 // pendiente. El pedido es el mismo del calendario (GET /api/calendario/eventos) con la clave
 // "calendario", así que cualquier cambio en un evento lo pone al día.
@@ -49,12 +50,12 @@ export const DIAS_DEL_RESUMEN_DEL_CALENDARIO = 7;
 /** Cuántos eventos se listan: el resto se cuenta con "y N más". */
 const EVENTOS_EN_LA_LISTA = 4;
 
-/** Lo que todavía falta: sin lo hecho, lo fallido ni los recordatorios pasados. */
+/** Lo que todavía falta: sin lo hecho, lo fallido, las deudas pagadas ni los recordatorios pasados. */
 function pendientes(eventos: readonly EventoDeCalendario[], hoy: string): EventoDeCalendario[] {
   return eventos
     .filter((evento) => {
       const estado = estadoParaFiltrar(evento, hoy);
-      return estado !== "finalizada" && estado !== "pasado";
+      return estado !== "finalizada" && estado !== "pasado" && estado !== "pagada";
     })
     .sort(compararEventos);
 }

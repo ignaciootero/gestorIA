@@ -719,9 +719,12 @@ test.describe("filtros avanzados: por repetición", () => {
       "true",
     );
     await expect(repeticion(page, "contactos", "Cada varios días")).toHaveCount(0);
-    // Finanzas y Calendario no tienen repetición: no aparecen.
-    await expect(page.locator("fieldset[data-origen='finanzas']")).toHaveCount(0);
-    await expect(page.locator("fieldset[data-origen='manual']")).toHaveCount(0);
+    // Finanzas y Calendario no tienen repetición: su recuadro solo tiene el estado.
+    for (const origen of ["finanzas", "manual"] as const) {
+      const recuadro = page.locator(`fieldset[data-origen='${origen}']`).last();
+      await expect(recuadro.locator("[data-filtro='repeticion']")).toHaveCount(0);
+      await expect(recuadro.locator("[data-filtro='estado']")).toBeVisible();
+    }
 
     await masFiltros(page).click();
     await expect(page.locator("fieldset[data-origen='tareas']")).toHaveCount(0);
@@ -1737,5 +1740,120 @@ test.describe("accesibilidad", () => {
     await page.keyboard.press("Enter");
     await expect(dialogo).toBeHidden();
     await expect(filas(page).first()).toContainText("Con teclado");
+  });
+});
+
+test.describe("estados de Finanzas y de Calendario", () => {
+  const chip = (pagina: Page, origen: "finanzas" | "manual", estado: string): Locator =>
+    pagina.locator(
+      `fieldset[data-origen='${origen}'] [data-filtro='estado'] [data-estado='${estado}']`,
+    );
+
+  async function abrirFiltros(pagina: Page): Promise<void> {
+    await pagina.getByRole("button", { name: /Más filtros/ }).click();
+    await expect(chip(pagina, "finanzas", "pagada")).toBeVisible();
+  }
+
+  /** Una deuda de cada estado: que vence mañana, que venció ayer y otra de mañana ya pagada. */
+  async function sembrarDeudas(pagina: Page): Promise<{ ayer: string; manana: string }> {
+    const ayer = sumarDias(hoy(), -1);
+    const manana = sumarDias(hoy(), 1);
+    const deuda = (concepto: string, fechaLimite: string) =>
+      pedirApi<{ id: string }>(pagina, "POST", "/api/finanzas/deudas", {
+        nombreLibre: "Marcos",
+        sentido: "me_deben",
+        concepto,
+        monto: 100,
+        moneda: "UYU",
+        fecha: sumarDias(hoy(), -10),
+        fechaLimite,
+      });
+    await deuda("Pendiente", manana);
+    await deuda("Atrasada", ayer);
+    const pagada = await deuda("Pagada", manana);
+    await pedirApi(pagina, "POST", `/api/finanzas/deudas/${pagada.id}/pagos`, {
+      monto: 100,
+      fecha: hoy(),
+    });
+    return { ayer, manana };
+  }
+
+  test("por defecto se ven las deudas pendientes y atrasadas, y las pagadas se muestran al pedirlas", async ({
+    page,
+  }) => {
+    await entrar(page, await crearCuentaAprobada());
+    const { ayer, manana } = await sembrarDeudas(page);
+    await abrirCalendario(page);
+    await abrirFiltros(page);
+    await expect(chip(page, "finanzas", "pendiente")).toHaveAttribute("aria-pressed", "true");
+    await expect(chip(page, "finanzas", "atrasada")).toHaveAttribute("aria-pressed", "true");
+    await expect(chip(page, "finanzas", "pagada")).toHaveAttribute("aria-pressed", "false");
+    const estados = page.locator("fieldset[data-origen='finanzas'] [data-filtro='estado']");
+    await expect(estados).toContainText(/Pendientes.*Atrasadas.*Pagadas/);
+
+    // La vencida se marca como atrasada.
+    await expect(casilla(page, ayer).locator("[data-origen='finanzas']")).toHaveAttribute(
+      "data-estado",
+      "atrasada",
+    );
+    await page.keyboard.press("Escape");
+    await casilla(page, manana).click();
+    await expect(filas(page)).toHaveCount(1);
+    await expect(filas(page).first()).toContainText("Vence: Pendiente");
+
+    await abrirFiltros(page);
+    await chip(page, "finanzas", "pagada").click();
+    await expect(filas(page)).toHaveCount(2);
+    const pagada = filas(page).filter({ hasText: "Vence: Pagada" });
+    await expect(pagada.getByText("Pagada", { exact: true })).toBeVisible();
+    await expect(pagada).toContainText("Marcos te pagó");
+
+    // Ocultar las pendientes deja la pagada, y se recuerda.
+    await chip(page, "finanzas", "pendiente").click();
+    await expect(filas(page)).toHaveCount(1);
+    await page.reload();
+    await casilla(page, manana).click();
+    await expect(filas(page)).toHaveCount(1);
+    await expect(filas(page).first()).toContainText("Vence: Pagada");
+  });
+
+  test("por defecto se ven los eventos propios futuros, y los pasados se muestran al pedirlos", async ({
+    page,
+  }) => {
+    await entrar(page, await crearCuentaAprobada());
+    const ayer = sumarDias(hoy(), -1);
+    await crearEventoManual(page, { titulo: "Ya pasó", fecha: ayer });
+    await crearEventoManual(page, { titulo: "Hoy todavía", fecha: hoy() });
+    await abrirCalendario(page);
+
+    // El de hoy cuenta como futuro: se ve. El de ayer no.
+    await expect(filas(page)).toHaveCount(1);
+    await expect(casilla(page, ayer).locator("[data-origen='manual']")).toHaveCount(0);
+
+    await abrirFiltros(page);
+    await expect(chip(page, "manual", "futuro")).toHaveAttribute("aria-pressed", "true");
+    await expect(chip(page, "manual", "pasado")).toHaveAttribute("aria-pressed", "false");
+    await chip(page, "manual", "pasado").click();
+    await expect(casilla(page, ayer).locator("[data-origen='manual']")).toHaveAttribute(
+      "data-estado",
+      "pasado",
+    );
+    await page.keyboard.press("Escape");
+    await casilla(page, ayer).click();
+    await expect(filas(page).first()).toContainText("Ya pasó");
+    await expect(filas(page).first().getByText("Pasado", { exact: true })).toBeVisible();
+  });
+
+  test("agregar un evento en un día pasado vuelve a mostrar los pasados", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    const ayer = sumarDias(hoy(), -1);
+    await abrirCalendario(page);
+    await casilla(page, ayer).click();
+    await page.getByRole("button", { name: "Agregar evento" }).click();
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByLabel("¿Qué evento es?").fill("Lo de ayer");
+    await dialogo.getByRole("button", { name: "Agregar evento" }).click();
+    await expect(dialogo).toBeHidden();
+    await expect(filas(page).first()).toContainText("Lo de ayer");
   });
 });

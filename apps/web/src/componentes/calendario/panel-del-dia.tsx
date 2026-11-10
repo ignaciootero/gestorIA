@@ -62,7 +62,7 @@ type PropsPanelDelDia = {
   cargandoEventos: boolean;
   errorDeEventos: unknown;
   /** Se llama cuando se guardó un evento manual. */
-  alGuardarEvento?: (() => void) | undefined;
+  alGuardarEvento?: ((dia: string) => void) | undefined;
 };
 
 export function PanelDelDia({

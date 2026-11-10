@@ -5,6 +5,25 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — Estados en el filtro del calendario para Finanzas y eventos propios
+
+**Decisión.** Los cuatro orígenes del calendario se filtran por estado: además de Tareas (pendientes,
+atrasadas, finalizadas) y Contactos (próximos, pasados), Finanzas tiene **pendientes, atrasadas y pagadas** y
+los eventos propios, **futuros y pasados**. Por defecto se ocultan las deudas pagadas y los eventos propios
+pasados. Para eso la API de eventos trae también las deudas saldadas con fecha límite en el rango, marcadas
+como completadas; el filtro (en el navegador) decide qué se ve.
+
+**Por qué.** Es lo que pidió el usuario y sigue la regla del calendario: mostrar lo que falta sin perder la
+posibilidad de mirar lo hecho. Traer las saldadas y filtrarlas en el cliente mantiene el cambio de filtro
+instantáneo, como con los otros estados.
+
+**Descartado.** Un parámetro en la API para pedir o no las saldadas: obligaría a volver a pedir al cambiar el
+filtro y separaría su lógica de la de los demás estados. **Cambio de comportamiento:** los eventos propios de
+días pasados, que antes se veían siempre, ahora quedan ocultos por defecto; se ven prendiendo "Pasados" y,
+al guardar uno en un día pasado, el estado se prende solo.
+
+---
+
 ## 2026-11-10 — Animación de entrada en todos los módulos
 
 **Decisión.** Los encabezados de Finanzas, Contactos, Tareas, Calendario y Administración usan un

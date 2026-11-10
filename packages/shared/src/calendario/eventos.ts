@@ -50,9 +50,9 @@ export type EventoDeCalendario = {
    */
   repeticion: RepeticionDeEvento | null;
   /**
-   * true si ya está hecho: una tarea tildada, o un recordatorio de Contactos cuyo día ya pasó (un
-   * recordatorio no se tilda). Por defecto el filtro los oculta (ver `FiltroDeEventos.estadosOcultos`);
-   * Finanzas y los manuales siempre traen false.
+   * true si ya está hecho: una tarea tildada, un recordatorio de Contactos cuyo día ya pasó (un
+   * recordatorio no se tilda) o una deuda de Finanzas ya pagada. Por defecto el filtro los oculta (ver
+   * `FiltroDeEventos.estadosOcultos`); los manuales siempre traen false (se sabe si pasaron por el día).
    */
   completado: boolean;
   /**
@@ -189,16 +189,17 @@ export function ocurrenciasEnRango(
  * puede ocultar las tareas diarias y dejar las semanales, mensuales y anuales. Se guardan los que se
  * **ocultan**, así un origen o una repetición nuevos aparecen visibles sin migrar nada.
  *
- * Esos mismos orígenes se filtran también por estado, cada uno con los suyos (ver `estadosDeOrigen`): las
- * tareas son pendientes, atrasadas o finalizadas, y los recordatorios, próximos o pasados. Por defecto se
- * ocultan las tareas finalizadas y los recordatorios pasados: el calendario sirve para ver lo que falta, y un
- * mes pasado lleno de cosas hechas lo taparía. Los estados también se guardan como "ocultos"; lo que cambia
- * es el valor por defecto, que no es "todo visible". Finanzas y los manuales no tienen estado que filtrar.
+ * Los cuatro orígenes se filtran también por estado, cada uno con los suyos (ver `estadosDeOrigen`): las
+ * tareas son pendientes, atrasadas o finalizadas; los recordatorios, próximos o pasados; las deudas de
+ * Finanzas, pendientes, atrasadas o pagadas; y los eventos propios, futuros o pasados. Por defecto se
+ * ocultan las tareas finalizadas, los recordatorios pasados, las deudas pagadas y los eventos propios
+ * pasados: el calendario sirve para ver lo que falta, y un mes pasado lleno de cosas hechas lo taparía. Los
+ * estados también se guardan como "ocultos"; lo que cambia es el valor por defecto, que no es "todo visible".
  */
 export type FiltroDeEventos = {
   origenesOcultos: ReadonlySet<OrigenDeEvento>;
   repeticionesOcultas: Readonly<Record<OrigenConRepeticion, ReadonlySet<RepeticionDeEvento>>>;
-  estadosOcultos: Readonly<Record<OrigenConRepeticion, ReadonlySet<EstadoParaFiltrar>>>;
+  estadosOcultos: Readonly<Record<OrigenDeEvento, ReadonlySet<EstadoParaFiltrar>>>;
 };
 
 /**
@@ -216,37 +217,83 @@ export type EstadoDeEvento = (typeof ESTADOS_DE_EVENTO)[number];
 export const ESTADOS_DE_RECORDATORIO = ["proximo", "pasado"] as const;
 export type EstadoDeRecordatorio = (typeof ESTADOS_DE_RECORDATORIO)[number];
 
-/** Cualquiera de los estados por los que se filtra, de tareas o de recordatorios. */
-export type EstadoParaFiltrar = EstadoDeEvento | EstadoDeRecordatorio;
-
-/** Los estados que ofrece el filtro de cada origen. */
-export function estadosDeOrigen(origen: OrigenConRepeticion): readonly EstadoParaFiltrar[] {
-  return origen === "tareas" ? ESTADOS_DE_EVENTO : ESTADOS_DE_RECORDATORIO;
-}
-
-/** Los estados que el filtro oculta mientras la persona no cambie nada. */
-export const ESTADOS_OCULTOS_POR_DEFECTO: Readonly<
-  Record<OrigenConRepeticion, readonly EstadoParaFiltrar[]>
-> = { tareas: ["finalizada"], contactos: ["pasado"] };
+/**
+ * Los estados por los que se filtran las deudas de Finanzas: pendiente (vence hoy o más adelante),
+ * atrasada (venció y no se pagó del todo) o pagada (saldada).
+ */
+export const ESTADOS_DE_DEUDA = ["pendiente", "atrasada", "pagada"] as const;
+export type EstadoDeDeudaEnElCalendario = (typeof ESTADOS_DE_DEUDA)[number];
 
 /**
- * El estado de un evento. Lo completado y lo fallido vienen del origen y están finalizados; una tarea de
- * un día anterior a `hoy` que no se hizo ni se dio por fallida está atrasada. Todo lo demás (también
- * Finanzas y los manuales) es pendiente.
+ * Los estados por los que se filtran los eventos propios del calendario: un evento no se tilda, solo es
+ * futuro (hoy o más adelante) o pasado (su día ya pasó).
+ */
+export const ESTADOS_DE_EVENTO_PROPIO = ["futuro", "pasado"] as const;
+export type EstadoDeEventoPropio = (typeof ESTADOS_DE_EVENTO_PROPIO)[number];
+
+/** Cualquiera de los estados por los que se filtra, de cualquier origen. */
+export type EstadoParaFiltrar =
+  | EstadoDeEvento
+  | EstadoDeRecordatorio
+  | EstadoDeDeudaEnElCalendario
+  | EstadoDeEventoPropio;
+
+/** Los estados que ofrece el filtro de cada origen. */
+const ESTADOS_DE_ORIGEN: Readonly<Record<OrigenDeEvento, readonly EstadoParaFiltrar[]>> = {
+  manual: ESTADOS_DE_EVENTO_PROPIO,
+  finanzas: ESTADOS_DE_DEUDA,
+  contactos: ESTADOS_DE_RECORDATORIO,
+  tareas: ESTADOS_DE_EVENTO,
+};
+
+/** Los estados que ofrece el filtro de cada origen. */
+export function estadosDeOrigen(origen: OrigenDeEvento): readonly EstadoParaFiltrar[] {
+  return ESTADOS_DE_ORIGEN[origen];
+}
+
+/** Los estados que el filtro oculta mientras la persona no cambie nada: lo hecho y lo pasado. */
+export const ESTADOS_OCULTOS_POR_DEFECTO: Readonly<
+  Record<OrigenDeEvento, readonly EstadoParaFiltrar[]>
+> = { manual: ["pasado"], finanzas: ["pagada"], contactos: ["pasado"], tareas: ["finalizada"] };
+
+/**
+ * El estado de un evento. Lo completado (también una deuda pagada) y lo fallido vienen del origen y están
+ * finalizados; una tarea de un día anterior a `hoy` que no se hizo ni se dio por fallida está atrasada, y
+ * una deuda cuyo límite ya pasó sin pagarse, también. Todo lo demás (también los manuales) es pendiente.
  */
 export function estadoDeEvento(evento: EventoDeCalendario, hoy: string): EstadoDeEvento {
   if (evento.fallido || evento.completado) return "finalizada";
-  if (evento.origen === "tareas" && evento.dia < hoy) return "atrasada";
+  if ((evento.origen === "tareas" || evento.origen === "finanzas") && evento.dia < hoy) {
+    return "atrasada";
+  }
   return "pendiente";
 }
 
 /**
- * El estado de un evento tal como lo filtra su origen: el de `estadoDeEvento` para las tareas, y próximo o
- * pasado para los recordatorios (pasado es el que viene completado: su día ya pasó; el de hoy es próximo).
+ * El estado de un evento tal como lo filtra su origen: el de `estadoDeEvento` para las tareas; próximo o
+ * pasado para los recordatorios (pasado es el que viene completado: su día ya pasó; el de hoy es próximo);
+ * pendiente, atrasada o pagada para las deudas; y futuro o pasado para los eventos propios (el de hoy es
+ * futuro: todavía no terminó el día).
  */
 export function estadoParaFiltrar(evento: EventoDeCalendario, hoy: string): EstadoParaFiltrar {
-  if (evento.origen === "contactos") return evento.completado ? "pasado" : "proximo";
-  return estadoDeEvento(evento, hoy);
+  switch (evento.origen) {
+    case "contactos":
+      return evento.completado ? "pasado" : "proximo";
+    case "manual":
+      return evento.dia < hoy ? "pasado" : "futuro";
+    case "finanzas": {
+      const estado = estadoDeEvento(evento, hoy);
+      return estado === "finalizada" ? "pagada" : estado;
+    }
+    case "tareas":
+      return estadoDeEvento(evento, hoy);
+  }
+}
+
+/** true si el evento ya pasó sin poder tildarse: un recordatorio o un evento propio de un día anterior. */
+export function esEventoPasado(evento: EventoDeCalendario, hoy: string): boolean {
+  const estado = estadoParaFiltrar(evento, hoy);
+  return (evento.origen === "contactos" || evento.origen === "manual") && estado === "pasado";
 }
 
 /**
@@ -264,17 +311,20 @@ export type MarcadorDeEstado =
 
 /**
  * El marcador de un conjunto de eventos (los de un origen en un día). Sin eventos, "pendiente". Los
- * recordatorios de Contactos solo pueden ser próximos o pasados: con alguno próximo, "pendiente"; con todos
- * pasados, "pasado".
+ * recordatorios de Contactos y los eventos propios solo pueden ser próximos o pasados: con alguno
+ * próximo, "pendiente"; con todos pasados, "pasado". Una deuda pagada cuenta como completada.
  */
 export function marcadorDeEventos(
   eventos: readonly EventoDeCalendario[],
   hoy: string,
 ): MarcadorDeEstado {
-  const estados = eventos.map((evento) => estadoDeEvento(evento, hoy));
-  if (eventos.length > 0 && eventos.every((evento) => evento.origen === "contactos")) {
-    return estados.includes("pendiente") ? "pendiente" : "pasado";
+  const soloPasan = eventos.every(
+    (evento) => evento.origen === "contactos" || evento.origen === "manual",
+  );
+  if (eventos.length > 0 && soloPasan) {
+    return eventos.every((evento) => esEventoPasado(evento, hoy)) ? "pasado" : "pendiente";
   }
+  const estados = eventos.map((evento) => estadoDeEvento(evento, hoy));
   if (estados.includes("pendiente") || estados.length === 0) return "pendiente";
   if (estados.includes("atrasada")) return "atrasada";
   const fallidos = eventos.some((evento) => evento.fallido);
@@ -289,15 +339,17 @@ export function filtroSinRestricciones(): FiltroDeEventos {
     origenesOcultos: new Set(),
     repeticionesOcultas: { tareas: new Set(), contactos: new Set() },
     estadosOcultos: {
-      tareas: new Set(ESTADOS_OCULTOS_POR_DEFECTO.tareas),
+      manual: new Set(ESTADOS_OCULTOS_POR_DEFECTO.manual),
+      finanzas: new Set(ESTADOS_OCULTOS_POR_DEFECTO.finanzas),
       contactos: new Set(ESTADOS_OCULTOS_POR_DEFECTO.contactos),
+      tareas: new Set(ESTADOS_OCULTOS_POR_DEFECTO.tareas),
     },
   };
 }
 
 /** true si los estados ocultos de cada origen son los de la primera vez. */
 export function estadosPorDefecto(filtro: FiltroDeEventos): boolean {
-  return ORIGENES_CON_REPETICION.every((origen) => {
+  return ORIGENES_DE_EVENTO.every((origen) => {
     const ocultos = filtro.estadosOcultos[origen];
     const porDefecto = ESTADOS_OCULTOS_POR_DEFECTO[origen];
     return ocultos.size === porDefecto.length && porDefecto.every((estado) => ocultos.has(estado));
@@ -308,16 +360,16 @@ function esOrigenConRepeticion(origen: OrigenDeEvento): origen is OrigenConRepet
   return (ORIGENES_CON_REPETICION as readonly OrigenDeEvento[]).includes(origen);
 }
 
-/** true si el evento se muestra con ese filtro. `hoy` hace falta para saber qué tareas están atrasadas. */
+/** true si el evento se muestra con ese filtro. `hoy` hace falta para saber qué está atrasado o pasó. */
 export function pasaElFiltro(
   evento: EventoDeCalendario,
   filtro: FiltroDeEventos,
   hoy: string,
 ): boolean {
   if (filtro.origenesOcultos.has(evento.origen)) return false;
-  // Solo Tareas y Contactos tienen estado y repetición; para otro origen no hay nada más que filtrar.
-  if (!esOrigenConRepeticion(evento.origen)) return true;
   if (filtro.estadosOcultos[evento.origen].has(estadoParaFiltrar(evento, hoy))) return false;
+  // Solo Tareas y Contactos tienen repetición; para otro origen no hay nada más que filtrar.
+  if (!esOrigenConRepeticion(evento.origen)) return true;
   return (
     evento.repeticion === null || !filtro.repeticionesOcultas[evento.origen].has(evento.repeticion)
   );

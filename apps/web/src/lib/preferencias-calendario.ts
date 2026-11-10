@@ -3,7 +3,10 @@
 // pena guardar en el servidor, así que vive en `localStorage` (mismo criterio que preferencias-finanzas.ts).
 //
 // Además se guarda qué estados se ocultan de cada origen: de las tareas (pendiente, atrasada, finalizada;
-// por defecto, las finalizadas) y de los recordatorios (próximo, pasado; por defecto, los pasados).
+// por defecto, las finalizadas), de los recordatorios (próximo, pasado; por defecto, los pasados), de las
+// deudas de Finanzas (pendiente, atrasada, pagada; por defecto, las pagadas) y de los eventos propios
+// (futuro, pasado; por defecto, los pasados). Un origen que no está guardado (por ejemplo, porque se
+// guardó antes de que tuviera estados) toma los de por defecto.
 //
 // Se guardan los **ocultos** y no los visibles: si algún día se suma un origen o una repetición nuevos,
 // aparecen visibles para todos sin tener que migrar nada.
@@ -16,7 +19,6 @@ import {
   filtroSinRestricciones,
   ORIGENES_CON_REPETICION,
   ORIGENES_DE_EVENTO,
-  type OrigenConRepeticion,
   REPETICIONES_DE_EVENTO,
 } from "@gestoria/shared";
 
@@ -54,10 +56,12 @@ function comoObjeto(valor: unknown): Record<string, unknown> {
  */
 function estadosDeLaListaAnterior(
   guardados: unknown[],
-): Record<OrigenConRepeticion, Set<EstadoParaFiltrar>> {
+  porDefecto: FiltroDeEventos["estadosOcultos"],
+): FiltroDeEventos["estadosOcultos"] {
   const tareas = soloLosValidos<EstadoParaFiltrar>(guardados, ESTADOS_DE_EVENTO);
   if (guardados.includes("completada") || guardados.includes("fallida")) tareas.add("finalizada");
   return {
+    ...porDefecto,
     tareas,
     contactos: new Set<EstadoParaFiltrar>(tareas.has("finalizada") ? ["pasado"] : []),
   };
@@ -71,10 +75,10 @@ function estadosGuardados(
   guardados: unknown,
   porDefecto: FiltroDeEventos["estadosOcultos"],
 ): FiltroDeEventos["estadosOcultos"] {
-  if (Array.isArray(guardados)) return estadosDeLaListaAnterior(guardados);
+  if (Array.isArray(guardados)) return estadosDeLaListaAnterior(guardados, porDefecto);
   const porOrigen = comoObjeto(guardados);
   return Object.fromEntries(
-    ORIGENES_CON_REPETICION.map((origen) => [
+    ORIGENES_DE_EVENTO.map((origen) => [
       origen,
       Array.isArray(porOrigen[origen])
         ? soloLosValidos(porOrigen[origen], estadosDeOrigen(origen))
@@ -102,18 +106,24 @@ export function leerFiltroDeEventos(): FiltroDeEventos {
   };
 }
 
-/** Un objeto con la lista de cada origen con repetición: `{ tareas: [...], contactos: [...] }`. */
-function porOrigen(conjuntos: Readonly<Record<OrigenConRepeticion, ReadonlySet<string>>>): string {
+/** Un objeto con la lista de cada origen: `{ tareas: [...], contactos: [...] }`. */
+function porOrigen<O extends string>(
+  origenes: readonly O[],
+  conjuntos: Readonly<Record<O, ReadonlySet<string>>>,
+): string {
   return JSON.stringify(
-    Object.fromEntries(ORIGENES_CON_REPETICION.map((origen) => [origen, [...conjuntos[origen]]])),
+    Object.fromEntries(origenes.map((origen) => [origen, [...conjuntos[origen]]])),
   );
 }
 
 export function guardarFiltroDeEventos(filtro: FiltroDeEventos): void {
   try {
-    localStorage.setItem(CLAVE_DE_ESTADOS, porOrigen(filtro.estadosOcultos));
+    localStorage.setItem(CLAVE_DE_ESTADOS, porOrigen(ORIGENES_DE_EVENTO, filtro.estadosOcultos));
     localStorage.setItem(CLAVE_DE_ORIGENES, JSON.stringify([...filtro.origenesOcultos]));
-    localStorage.setItem(CLAVE_DE_REPETICIONES, porOrigen(filtro.repeticionesOcultas));
+    localStorage.setItem(
+      CLAVE_DE_REPETICIONES,
+      porOrigen(ORIGENES_CON_REPETICION, filtro.repeticionesOcultas),
+    );
   } catch {
     // No hay nada que recuperar: el filtro es una comodidad, no un dato.
   }

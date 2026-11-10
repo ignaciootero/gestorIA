@@ -344,9 +344,10 @@ describe("las deudas de Finanzas", () => {
     expect(evento?.detalle).toContain("600,00");
   });
 
-  it("una deuda saldada, sin fecha límite, eliminada o de otro día no aparece", async () => {
+  it("una deuda saldada aparece completada, con el total que se pagó", async () => {
     const saldada = await crearDeudaPorApi(app, ana.cookies, {
       nombreLibre: "Juan",
+      sentido: "debo",
       concepto: "Saldada",
       monto: 100,
       fechaLimite: en(2),
@@ -355,6 +356,24 @@ describe("las deudas de Finanzas", () => {
       monto: 100,
       fecha: "2026-10-05",
     });
+    await crearDeudaPorApi(app, ana.cookies, {
+      nombreLibre: "Juan",
+      concepto: "Pendiente",
+      monto: 50,
+      fechaLimite: en(2),
+    });
+
+    const lista = await eventos(ana, en(0), en(10));
+    expect(lista).toHaveLength(2);
+    const pagada = lista.find((evento) => evento.titulo === "Vence: Saldada");
+    expect(pagada).toMatchObject({ completado: true, dia: en(2) });
+    expect(pagada?.detalle).toContain("Le pagaste");
+    expect(pagada?.detalle).toContain("100,00");
+    const pendiente = lista.find((evento) => evento.titulo === "Vence: Pendiente");
+    expect(pendiente).toMatchObject({ completado: false });
+  });
+
+  it("una deuda sin fecha límite, eliminada o de otro día no aparece", async () => {
     await crearDeudaPorApi(app, ana.cookies, { nombreLibre: "Juan", concepto: "Sin límite" });
     const eliminada = await crearDeudaPorApi(app, ana.cookies, {
       nombreLibre: "Juan",

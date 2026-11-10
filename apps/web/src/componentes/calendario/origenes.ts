@@ -102,4 +102,6 @@ export const NOMBRES_DE_ESTADO: Record<EstadoParaFiltrar, string> = {
   finalizada: "Finalizadas",
   proximo: "Próximos",
   pasado: "Pasados",
+  pagada: "Pagadas",
+  futuro: "Futuros",
 };

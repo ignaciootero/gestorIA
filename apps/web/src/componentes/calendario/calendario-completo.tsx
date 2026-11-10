@@ -102,8 +102,14 @@ export function CalendarioCompleto() {
 
   // El filtro (por origen y, para Tareas y Contactos, por repetición) se aplica acá, sobre lo que ya llegó:
   // cambiarlo es instantáneo y no vuelve a pedir nada. Se recuerda en este navegador.
-  const { filtro, alternarOrigen, alternarRepeticion, alternarEstado, mostrarOrigen, mostrarTodo } =
-    useFiltroDeEventos();
+  const {
+    filtro,
+    alternarOrigen,
+    alternarRepeticion,
+    alternarEstado,
+    mostrarEventoPropio,
+    mostrarTodo,
+  } = useFiltroDeEventos();
 
   const visibles = useMemo(
     () => eventos.data?.filter((evento) => pasaElFiltro(evento, filtro, hoy ?? "")),
@@ -323,7 +329,7 @@ export function CalendarioCompleto() {
             ocultosPorElFiltro={ocultosDelDia}
             cargandoEventos={eventos.isPending}
             errorDeEventos={eventos.isError ? eventos.error : null}
-            alGuardarEvento={() => mostrarOrigen("manual")}
+            alGuardarEvento={(dia) => mostrarEventoPropio(dia, hoy ?? dia)}
           />
         </div>
       </div>

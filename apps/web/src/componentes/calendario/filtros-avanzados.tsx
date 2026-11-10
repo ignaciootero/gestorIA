@@ -12,10 +12,13 @@
 // panel esté cerrado. Los botones de adentro son de "estado" (`aria-pressed`), como los de origen.
 // Si un origen está oculto del todo, sus repeticiones quedan deshabilitadas: no hay nada para elegir.
 //
-// Cada uno se elige también por **estado**, con los suyos (ver `estadosDeOrigen`): las tareas pendientes,
-// atrasadas y finalizadas (tildadas o dadas por fallidas), y los recordatorios próximos y pasados (un
-// recordatorio no se tilda: pasó cuando pasó su día). Por defecto se ven las tareas pendientes y atrasadas y
-// los recordatorios próximos, para que lo hecho no tape lo que falta.
+// Los cuatro orígenes se eligen también por **estado**, con los suyos (ver `estadosDeOrigen`): las tareas
+// pendientes, atrasadas y finalizadas (tildadas o dadas por fallidas); los recordatorios próximos y pasados
+// (un recordatorio no se tilda: pasó cuando pasó su día); las deudas de Finanzas pendientes, atrasadas
+// (venció y no se saldó) y pagadas; y los eventos propios futuros y pasados. Por defecto se ven las tareas
+// pendientes y atrasadas, los recordatorios próximos, las deudas pendientes y atrasadas y los eventos
+// futuros, para que lo hecho y lo pasado no tape lo que falta. Calendario y Finanzas no se repiten: su
+// recuadro solo tiene el grupo de estado.
 
 "use client";
 
@@ -29,7 +32,9 @@ import {
   NOMBRES_DE_ORIGEN,
   NOMBRES_DE_REPETICION_EN_PLURAL,
   ORIGENES_CON_REPETICION,
+  ORIGENES_DE_EVENTO,
   type OrigenConRepeticion,
+  type OrigenDeEvento,
   type RepeticionDeEvento,
   repeticionesDeEvento,
 } from "@gestoria/shared";
@@ -52,10 +57,16 @@ const ICONOS_DEL_FILTRO: Record<EstadoParaFiltrar, LucideIcon> = {
   finalizada: Check,
   proximo: Circle,
   pasado: Circle,
+  pagada: Check,
+  futuro: Circle,
 };
 
 /** Los estados que se dibujan con el círculo lleno. */
-const ESTADOS_LLENOS: ReadonlySet<EstadoParaFiltrar> = new Set(["pendiente", "proximo"]);
+const ESTADOS_LLENOS: ReadonlySet<EstadoParaFiltrar> = new Set(["pendiente", "proximo", "futuro"]);
+
+function tieneRepeticion(origen: OrigenDeEvento): origen is OrigenConRepeticion {
+  return (ORIGENES_CON_REPETICION as readonly OrigenDeEvento[]).includes(origen);
+}
 
 /** Las clases de un botón del panel (repetición o estado), prendido o apagado. */
 function clasesDeBoton(visible: boolean, suave: string): string {
@@ -74,7 +85,7 @@ function clasesDeBoton(visible: boolean, suave: string): string {
 type PropsFiltrosAvanzados = {
   filtro: FiltroDeEventos;
   alAlternarRepeticion: (origen: OrigenConRepeticion, repeticion: RepeticionDeEvento) => void;
-  alAlternarEstado: (origen: OrigenConRepeticion, estado: EstadoParaFiltrar) => void;
+  alAlternarEstado: (origen: OrigenDeEvento, estado: EstadoParaFiltrar) => void;
   alMostrarTodo: () => void;
 };
 
@@ -173,7 +184,7 @@ export function FiltrosAvanzados({
             "xl:absolute xl:inset-x-0 xl:top-full xl:z-10 xl:mt-1 xl:shadow-flotante",
           )}
         >
-          {ORIGENES_CON_REPETICION.map((origen) => {
+          {ORIGENES_DE_EVENTO.map((origen) => {
             const { icono: Icono, suave } = ESTILOS_DE_ORIGEN[origen];
             const origenOculto = filtro.origenesOcultos.has(origen);
             return (
@@ -201,38 +212,44 @@ export function FiltrosAvanzados({
                   ) : null}
                 </div>
                 <div className={cn("flex flex-col gap-3 p-3", origenOculto && "opacity-60")}>
-                  <fieldset
-                    data-filtro="repeticion"
-                    className="flex min-w-0 flex-col gap-1.5 border-0 p-0"
-                  >
-                    <legend className="mb-1.5 text-[11px] font-medium tracking-wide text-texto-secundario uppercase">
-                      Repetición
-                      <span className="solo-lectores"> de {NOMBRES_DE_ORIGEN[origen]}</span>
-                    </legend>
-                    <div className="flex flex-wrap gap-1.5">
-                      {repeticionesDeEvento(origen).map((repeticion) => {
-                        const visible = !filtro.repeticionesOcultas[origen].has(repeticion);
-                        return (
-                          <button
-                            key={repeticion}
-                            type="button"
-                            aria-pressed={visible}
-                            data-repeticion={repeticion}
-                            disabled={origenOculto}
-                            onClick={() => alAlternarRepeticion(origen, repeticion)}
-                            className={clasesDeBoton(visible && !origenOculto, suave)}
-                          >
-                            <span className={cn(!visible && "line-through")}>
-                              {NOMBRES_DE_REPETICION_EN_PLURAL[repeticion]}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
+                  {tieneRepeticion(origen) ? (
+                    <fieldset
+                      data-filtro="repeticion"
+                      className="flex min-w-0 flex-col gap-1.5 border-0 p-0"
+                    >
+                      <legend className="mb-1.5 text-[11px] font-medium tracking-wide text-texto-secundario uppercase">
+                        Repetición
+                        <span className="solo-lectores"> de {NOMBRES_DE_ORIGEN[origen]}</span>
+                      </legend>
+                      <div className="flex flex-wrap gap-1.5">
+                        {repeticionesDeEvento(origen).map((repeticion) => {
+                          const visible = !filtro.repeticionesOcultas[origen].has(repeticion);
+                          return (
+                            <button
+                              key={repeticion}
+                              type="button"
+                              aria-pressed={visible}
+                              data-repeticion={repeticion}
+                              disabled={origenOculto}
+                              onClick={() => alAlternarRepeticion(origen, repeticion)}
+                              className={clasesDeBoton(visible && !origenOculto, suave)}
+                            >
+                              <span className={cn(!visible && "line-through")}>
+                                {NOMBRES_DE_REPETICION_EN_PLURAL[repeticion]}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  ) : null}
                   <fieldset
                     data-filtro="estado"
-                    className="flex min-w-0 flex-col gap-1.5 border-0 border-t border-borde p-0 pt-3"
+                    className={cn(
+                      "flex min-w-0 flex-col gap-1.5 border-0 p-0",
+                      // Separado de la repetición por una línea, si la hay.
+                      tieneRepeticion(origen) && "border-t border-borde pt-3",
+                    )}
                   >
                     <legend className="solo-lectores">Estado de {NOMBRES_DE_ORIGEN[origen]}</legend>
                     <p

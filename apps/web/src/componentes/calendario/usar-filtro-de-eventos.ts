@@ -1,5 +1,5 @@
 // El estado del filtro de eventos del calendario: qué orígenes, qué repeticiones y qué estados
-// se ocultan (los de las tareas y los de los recordatorios, por separado).
+// se ocultan (los de cada origen por separado).
 //
 // Se aplica sobre lo que ya llegó del servidor, así que cambiarlo es instantáneo y no vuelve a pedir
 // nada. Se recuerda en este navegador (ver lib/preferencias-calendario.ts).
@@ -44,14 +44,25 @@ export function useFiltroDeEventos() {
           [origen]: alternar(filtro.repeticionesOcultas[origen], repeticion),
         },
       }),
-    /** Vuelve a mostrar un origen (si estaba oculto): por ejemplo, el de los eventos propios al agregar uno. */
-    mostrarOrigen: (origen: OrigenDeEvento) => {
-      if (!filtro.origenesOcultos.has(origen)) return;
+    /**
+     * Al guardar un evento propio, se asegura de que se vea: vuelve a prender "Calendario" si estaba
+     * apagado, y el estado que le toca (pasado o futuro, según su día) si estaba oculto. Si no, parecería
+     * que no se guardó.
+     */
+    mostrarEventoPropio: (dia: string, hoy: string) => {
+      const estado = dia < hoy ? "pasado" : "futuro";
+      if (!filtro.origenesOcultos.has("manual") && !filtro.estadosOcultos.manual.has(estado)) return;
       const origenesOcultos = new Set(filtro.origenesOcultos);
-      origenesOcultos.delete(origen);
-      cambiar({ ...filtro, origenesOcultos });
+      origenesOcultos.delete("manual");
+      const deEventosPropios = new Set(filtro.estadosOcultos.manual);
+      deEventosPropios.delete(estado);
+      cambiar({
+        ...filtro,
+        origenesOcultos,
+        estadosOcultos: { ...filtro.estadosOcultos, manual: deEventosPropios },
+      });
     },
-    alternarEstado: (origen: OrigenConRepeticion, estado: EstadoParaFiltrar) =>
+    alternarEstado: (origen: OrigenDeEvento, estado: EstadoParaFiltrar) =>
       cambiar({
         ...filtro,
         estadosOcultos: {

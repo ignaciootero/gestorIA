@@ -1796,13 +1796,18 @@ en pantallas más angostas pasa debajo.
   (una atrasada que se dio por perdida) y (3) un **recordatorio de Contactos
   cuyo día ya pasó** (un recordatorio no se tilda: se considera completado cuando pasó su fecha; el de hoy
   todavía no, y uno diario está completado en cada día anterior a hoy). En **"Más filtros"**, cada categoría
-  tiene su fila **"Estado"**, con sus propios botones: **Tareas** tiene **Pendientes, Atrasadas y Finalizadas**,
-  y **Contactos** tiene **Próximos y Pasados** (son botones de estado, como los de origen, con las palabras en
+  tiene su fila **"Estado"**, con sus propios botones: **Tareas** tiene **Pendientes, Atrasadas y Finalizadas**;
+  **Contactos**, **Próximos y Pasados**; **Finanzas**, **Pendientes, Atrasadas y Pagadas**; y **Calendario**
+  (los eventos propios), **Futuros y Pasados** (son botones de estado, como los de origen, con las palabras en
   plural y el mismo ícono que la marca de la grilla; un estado apagado se ve tachado). Los de una categoría no
-  tocan a la otra: mostrar las tareas finalizadas no trae los recordatorios pasados. **Por defecto están
-  prendidos Pendientes, Atrasadas y Próximos**, así que lo finalizado y lo pasado no se ven hasta prender su
-  botón. *Finalizadas* junta las completadas y las fallidas; "atrasada" es una tarea de un día anterior a hoy
-  que no se hizo ni se dio por fallida. Finanzas y los eventos manuales no tienen estado y no se filtran por él. Con las
+  tocan a las otras: mostrar las tareas finalizadas no trae los recordatorios pasados ni las deudas pagadas.
+  **Por defecto están prendidos Pendientes y Atrasadas (de Tareas y de Finanzas), Próximos y Futuros**, así que
+  lo finalizado, lo pagado y lo pasado no se ven hasta prender su botón. *Finalizadas* junta las completadas y
+  las fallidas; "atrasada" es una tarea de un día anterior a hoy que no se hizo ni se dio por fallida, o una
+  deuda cuya fecha límite ya pasó sin saldarse. Una deuda **pagada** es una saldada: se ve en el día de su
+  fecha límite, con lo que se pagó ("Marcos te pagó $ 100,00") y la marca **"Pagada"**. Un evento propio es
+  **futuro** hasta que termina su día (el de hoy todavía es futuro) y después **pasado**; al guardar uno en un
+  día cuyo estado está oculto (por ejemplo, ayer), ese estado vuelve a prenderse solo. Con las
   finalizadas a la vista se distinguen de las pendientes: en la lista del día
   el título va **tachado y más apagado** y lleva la marca **"Completada"** o **"Fallida"** (con ícono, no
   solo estilo); en el mes, **el marcador de cada origen cambia con el estado**: **punto lleno** si hay algo
@@ -1814,7 +1819,9 @@ en pantallas más angostas pasa debajo.
   Los **recordatorios de Contactos** solo son próximos o pasados: el próximo es el **círculo lleno** y el pasado
   el **círculo vacío** (solo el borde, del color del origen); si el día tiene uno próximo, manda el lleno. En
   la lista del día un recordatorio pasado lleva la marca "Pasado" (no "Completada"), y el nombre accesible de
-  la casilla dice cuántos son pasados. Finanzas y los eventos manuales siempre son el círculo lleno.
+  la casilla dice cuántos son pasados. Los **eventos propios** se marcan igual: futuro lleno, pasado vacío.
+  Las **deudas de Finanzas** usan las marcas de las tareas: lleno si está pendiente, **!** si está atrasada y
+  **✓** si está pagada; en la lista del día, "Atrasada" o "Pagada".
   El nombre accesible de la casilla dice cuántos
   están completados, fallidos y atrasados. Los estados que se ocultan se recuerdan en este navegador, y "Mostrar todo" no los
   cambia. El botón "Más filtros" se marca (borde de acento) cuando los estados no son los de por defecto.
@@ -1949,14 +1956,13 @@ de otra persona responde 404).
 - Los eventos manuales son **de un solo día y no se repiten** (hay recordatorios y tareas repetitivas para
   eso) ni tienen hora de fin.
 - La vista de año no marca los días con eventos (solo la de mes) y no hay vista de semana o de día.
-- Las tareas tildadas no se muestran (solo las pendientes), y desde el calendario no se tildan ni se
-  editan las cosas de otros módulos.
+- Desde el calendario no se tildan ni se editan las cosas de otros módulos.
 - Las deudas sin fecha límite no aparecen.
 - La grilla marca un punto por origen (como mucho cuatro) y el total de eventos; la lista completa está en
   el panel. No muestra "qué tan cargado" está un día más que con ese número. La vista de año no marca los días.
-- El filtro es por origen y, para Tareas y Contactos, por repetición; no por palabra, por categoría de
-  tarea ni por contacto. Finanzas y los eventos manuales no tienen repetición, así que no tienen filtro
-  avanzado.
+- El filtro es por origen, por estado y, para Tareas y Contactos, por repetición; no por palabra, por
+  categoría de tarea ni por contacto. Finanzas y los eventos manuales no tienen repetición: en "Más filtros"
+  solo tienen el estado.
 - La repetición de una tarea ya armada es la de su regla; si la regla se borra del todo (a los 30 días de
   eliminarla) sus tareas viejas pasan a verse como "Una sola vez".
 - Las semanas empiezan el lunes y no se puede cambiar.

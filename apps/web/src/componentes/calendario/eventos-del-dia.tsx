@@ -15,7 +15,12 @@
 
 "use client";
 
-import { type EventoDeCalendario, estadoDeEvento, NOMBRES_DE_ORIGEN } from "@gestoria/shared";
+import {
+  type EventoDeCalendario,
+  esEventoPasado,
+  estadoDeEvento,
+  NOMBRES_DE_ORIGEN,
+} from "@gestoria/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -63,7 +68,7 @@ type PropsEventosDelDia = {
   cargando: boolean;
   error: unknown;
   /** Se llama cuando se guardó un evento manual (nuevo o editado). */
-  alGuardarEvento?: (() => void) | undefined;
+  alGuardarEvento?: ((dia: string) => void) | undefined;
 };
 
 export function EventosDelDia({
@@ -264,6 +269,8 @@ function FilaDeEvento({
   const { icono: Icono, ruta, borde, suave } = ESTILOS_DE_ORIGEN[evento.origen];
   const origen = NOMBRES_DE_ORIGEN[evento.origen];
   const estado = estadoDeEvento(evento, hoy);
+  // Un recordatorio o un evento propio de un día anterior: no se tilda, simplemente pasó.
+  const pasado = esEventoPasado(evento, hoy);
 
   return (
     <li
@@ -291,7 +298,7 @@ function FilaDeEvento({
             className={cn(
               "text-sm font-medium wrap-break-word",
               // Lo ya hecho se ve tachado y más apagado que lo que falta.
-              evento.completado || evento.fallido
+              evento.completado || evento.fallido || pasado
                 ? "text-texto-secundario line-through"
                 : "text-texto",
             )}
@@ -311,13 +318,13 @@ function FilaDeEvento({
               <Icono aria-hidden="true" className="size-3 shrink-0" />
               {origen}
             </span>
-            {estado === "pendiente" ? null : (
+            {estado === "pendiente" && !pasado ? null : (
               <span className="inline-flex w-fit items-center gap-1 rounded-full border border-borde-fuerte px-2 py-0.5 text-xs font-medium text-texto-secundario">
                 {evento.fallido ? (
                   <CircleX aria-hidden="true" className="size-3 shrink-0" />
                 ) : estado === "atrasada" ? (
                   <CircleAlert aria-hidden="true" className="size-3 shrink-0" />
-                ) : evento.origen === "contactos" ? (
+                ) : pasado ? (
                   <Circle aria-hidden="true" className="size-3 shrink-0" />
                 ) : (
                   <CircleCheck aria-hidden="true" className="size-3 shrink-0" />
@@ -326,9 +333,11 @@ function FilaDeEvento({
                   ? "Fallida"
                   : estado === "atrasada"
                     ? "Atrasada"
-                    : evento.origen === "contactos"
+                    : pasado
                       ? "Pasado"
-                      : "Completada"}
+                      : evento.origen === "finanzas"
+                        ? "Pagada"
+                        : "Completada"}
               </span>
             )}
           </div>

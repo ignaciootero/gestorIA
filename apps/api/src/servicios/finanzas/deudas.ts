@@ -271,11 +271,11 @@ export async function listarDeudas(
 }
 
 /**
- * Las deudas pendientes (con algo por saldar) cuya fecha límite cae entre `desde` y `hasta`, ambos
- * inclusive, la que vence antes primero. Es lo que el calendario muestra de Finanzas: una saldada
- * ya no tiene nada que vencer.
+ * Las deudas cuya fecha límite cae entre `desde` y `hasta`, ambos inclusive, la que vence antes
+ * primero: las pendientes y también las saldadas. Es lo que el calendario muestra de Finanzas (las
+ * saldadas quedan ocultas por defecto, y se ven al pedir las pagadas en su filtro).
  */
-export async function deudasPendientesConLimiteEnRango(
+export async function deudasConLimiteEnRango(
   cliente: ClienteDb,
   userId: string,
   desde: string,
@@ -291,7 +291,6 @@ export async function deudasPendientesConLimiteEnRango(
         isNull(deudas.eliminadoEn),
         gte(deudas.fechaLimite, desde),
         lte(deudas.fechaLimite, hasta),
-        sql`${deudas.montoCentavos} > ${pagadoSql}`,
       ),
     )
     .orderBy(deudas.fechaLimite, deudas.id);

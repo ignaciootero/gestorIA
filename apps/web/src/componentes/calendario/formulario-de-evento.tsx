@@ -47,8 +47,8 @@ export function FormularioDeEvento({
 }: {
   modo: ModoDeFormularioDeEvento;
   cerrar: () => void;
-  /** Se llama cuando el evento quedó guardado, antes de cerrar. */
-  alGuardar?: (() => void) | undefined;
+  /** Se llama cuando el evento quedó guardado, antes de cerrar, con el día en que quedó. */
+  alGuardar?: ((dia: string) => void) | undefined;
 }) {
   const queryClient = useQueryClient();
   const {
@@ -65,9 +65,9 @@ export function FormularioDeEvento({
   const mutacion = useMutation({
     mutationFn: (datos: DatosDeEventoDeCalendario) =>
       modo.tipo === "editar" ? editarEvento(modo.id, datos) : crearEvento(datos),
-    onSuccess: async () => {
+    onSuccess: async (_respuesta, datos) => {
       await queryClient.invalidateQueries({ queryKey: ["calendario"] });
-      alGuardar?.();
+      alGuardar?.(datos.fecha);
       cerrar();
     },
     onError: (error) => {

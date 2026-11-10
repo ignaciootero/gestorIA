@@ -20,6 +20,7 @@ import {
   describirDiaCompleto,
   diaIsoDeLaSemana,
   type EventoDeCalendario,
+  esEventoPasado,
   estadoDeEvento,
   type MesDeCalendario,
   marcadorDeEventos,
@@ -233,9 +234,7 @@ function CeldaDeDia({
   const completados = eventos.filter(
     (evento) => evento.completado && evento.origen !== "contactos",
   ).length;
-  const pasados = eventos.filter(
-    (evento) => evento.completado && evento.origen === "contactos",
-  ).length;
+  const pasados = eventos.filter((evento) => esEventoPasado(evento, hoy)).length;
   const fallidos = eventos.filter((evento) => evento.fallido).length;
   const atrasados = eventos.filter((evento) => estadoDeEvento(evento, hoy) === "atrasada").length;
   // Lo que marca el punto de un origen: un punto lleno si falta algo, o un ícono según lo más urgente que

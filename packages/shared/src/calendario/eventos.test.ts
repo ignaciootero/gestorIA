@@ -6,10 +6,9 @@ import {
   cantidadDeRestriccionesPorRepeticion,
   compararEventos,
   DIAS_MAXIMOS_POR_CONSULTA_DE_EVENTOS,
-  ESTADOS_DE_EVENTO,
-  ESTADOS_DE_RECORDATORIO,
   type EstadoParaFiltrar,
   type EventoDeCalendario,
+  esEventoPasado,
   esquemaEventoDeCalendario,
   esquemaRangoDeEventos,
   estadoDeEvento,
@@ -219,6 +218,22 @@ describe("esquemaRangoDeEventos", () => {
 });
 
 const HOY = "2026-10-20";
+
+/** Los estados ocultos de cada origen dejando a la vista solo `visibles` (null: todos a la vista). */
+function ocultandoTodoMenos(
+  visibles: readonly EstadoParaFiltrar[] | null,
+): FiltroDeEventos["estadosOcultos"] {
+  const ocultos = (origen: OrigenDeEvento) =>
+    new Set(
+      visibles === null ? [] : estadosDeOrigen(origen).filter((estado) => !visibles.includes(estado)),
+    );
+  return {
+    manual: ocultos("manual"),
+    finanzas: ocultos("finanzas"),
+    contactos: ocultos("contactos"),
+    tareas: ocultos("tareas"),
+  };
+}
 const pasa = (evento: EventoDeCalendario, filtro: FiltroDeEventos) =>
   pasaElFiltro(evento, filtro, HOY);
 
@@ -274,13 +289,10 @@ describe("pasaElFiltro", () => {
     expect(pasa(tarea("anual"), sinRecordatoriosAnuales)).toBe(true);
   });
 
-  /** Un filtro que muestra solo esos estados, de tareas y de recordatorios. */
+  /** Un filtro que muestra solo esos estados, de cualquier origen. */
   const mostrando = (...estados: EstadoParaFiltrar[]): FiltroDeEventos => ({
     ...filtroSinRestricciones(),
-    estadosOcultos: {
-      tareas: new Set(ESTADOS_DE_EVENTO.filter((estado) => !estados.includes(estado))),
-      contactos: new Set(ESTADOS_DE_RECORDATORIO.filter((estado) => !estados.includes(estado))),
-    },
+    estadosOcultos: ocultandoTodoMenos(estados),
   });
 
   it("por defecto se ven las pendientes y las atrasadas, y se ocultan las finalizadas (completadas y fallidas)", () => {
@@ -320,10 +332,46 @@ describe("pasaElFiltro", () => {
     expect(pasa(tarea("unica"), mostrando())).toBe(false);
   });
 
-  it("Finanzas y los eventos manuales no se filtran por estado, aunque su día haya pasado", () => {
-    const pasado = { dia: "2026-10-01" };
-    expect(pasa(evento({ origen: "finanzas", ...pasado }), mostrando())).toBe(true);
-    expect(pasa(evento({ origen: "manual", ...pasado }), mostrando())).toBe(true);
+  it("por defecto se ven las deudas pendientes y atrasadas, y se ocultan las pagadas", () => {
+    const libre = filtroSinRestricciones();
+    const pendiente = evento({ origen: "finanzas", dia: "2026-10-25" });
+    const atrasada = evento({ origen: "finanzas", dia: "2026-10-01" });
+    const pagada = evento({ origen: "finanzas", dia: "2026-10-25", completado: true });
+    expect(pasa(pendiente, libre)).toBe(true);
+    expect(pasa(atrasada, libre)).toBe(true);
+    expect(pasa(pagada, libre)).toBe(false);
+    expect(pasa(pagada, mostrando("pagada"))).toBe(true);
+    expect(pasa(atrasada, mostrando("pendiente"))).toBe(false);
+    expect(pasa(atrasada, mostrando("atrasada"))).toBe(true);
+  });
+
+  it("por defecto se ven los eventos propios futuros (también los de hoy) y se ocultan los pasados", () => {
+    const libre = filtroSinRestricciones();
+    const deHoy = evento({ origen: "manual", dia: HOY });
+    const futuro = evento({ origen: "manual", dia: "2026-11-02" });
+    const pasado = evento({ origen: "manual", dia: "2026-10-01" });
+    expect(pasa(deHoy, libre)).toBe(true);
+    expect(pasa(futuro, libre)).toBe(true);
+    expect(pasa(pasado, libre)).toBe(false);
+    expect(pasa(pasado, mostrando("pasado"))).toBe(true);
+    expect(pasa(futuro, mostrando("pasado"))).toBe(false);
+  });
+
+  it("los estados de cada origen no tocan a los demás", () => {
+    // "pasado" es de los recordatorios y de los eventos propios, pero cada uno con lo suyo.
+    const soloRecordatoriosPasados: FiltroDeEventos = {
+      ...filtroSinRestricciones(),
+      estadosOcultos: { ...filtroSinRestricciones().estadosOcultos, contactos: new Set() },
+    };
+    expect(pasa(evento({ origen: "manual", dia: "2026-10-01" }), soloRecordatoriosPasados)).toBe(
+      false,
+    );
+    // Mostrar las tareas finalizadas no trae las deudas pagadas.
+    const conFinalizadas: FiltroDeEventos = {
+      ...filtroSinRestricciones(),
+      estadosOcultos: { ...filtroSinRestricciones().estadosOcultos, tareas: new Set() },
+    };
+    expect(pasa(evento({ origen: "finanzas", completado: true }), conFinalizadas)).toBe(false);
   });
 
   it("por defecto se ven los recordatorios próximos y se ocultan los pasados", () => {
@@ -357,13 +405,7 @@ describe("pasaElFiltro", () => {
 
   it("un estado cerrado también respeta el filtro de origen y de repetición", () => {
     const hechaDiaria = evento({ origen: "tareas", repeticion: "diaria", completado: true });
-    const base = {
-      ...filtro([], ["diaria"]),
-      estadosOcultos: {
-        tareas: new Set<EstadoParaFiltrar>(),
-        contactos: new Set<EstadoParaFiltrar>(),
-      },
-    };
+    const base = { ...filtro([], ["diaria"]), estadosOcultos: ocultandoTodoMenos(null) };
     expect(pasa(hechaDiaria, base)).toBe(false);
     expect(
       pasa(hechaDiaria, {
@@ -458,10 +500,17 @@ describe("estadoDeEvento", () => {
     expect(estadoDeEvento(evento({ ...ayer, fallido: true }), HOY)).toBe("finalizada");
   });
 
-  it("solo las tareas se atrasan: lo demás de un día pasado sigue pendiente", () => {
-    for (const origen of ["finanzas", "manual", "contactos"] as const) {
+  it("solo las tareas y las deudas se atrasan: lo demás de un día pasado sigue pendiente", () => {
+    expect(estadoDeEvento(evento({ origen: "finanzas", dia: "2026-10-19" }), HOY)).toBe("atrasada");
+    for (const origen of ["manual", "contactos"] as const) {
       expect(estadoDeEvento(evento({ origen, dia: "2026-10-19" }), HOY)).toBe("pendiente");
     }
+  });
+
+  it("una deuda pagada está finalizada, aunque haya vencido", () => {
+    expect(
+      estadoDeEvento(evento({ origen: "finanzas", dia: "2026-10-19", completado: true }), HOY),
+    ).toBe("finalizada");
   });
 
   it("un recordatorio pasado está finalizado", () => {
@@ -490,9 +539,28 @@ describe("estadoParaFiltrar", () => {
     ).toBe("pasado");
   });
 
+  it("una deuda es pendiente hasta su límite (el de hoy incluido), atrasada después y pagada si se saldó", () => {
+    expect(estadoParaFiltrar(evento({ origen: "finanzas", dia: HOY }), HOY)).toBe("pendiente");
+    expect(estadoParaFiltrar(evento({ origen: "finanzas", dia: "2026-10-19" }), HOY)).toBe(
+      "atrasada",
+    );
+    expect(
+      estadoParaFiltrar(evento({ origen: "finanzas", dia: "2026-10-19", completado: true }), HOY),
+    ).toBe("pagada");
+  });
+
+  it("un evento propio es futuro hasta que pasa su día (el de hoy sigue futuro)", () => {
+    expect(estadoParaFiltrar(evento({ origen: "manual", dia: HOY }), HOY)).toBe("futuro");
+    expect(estadoParaFiltrar(evento({ origen: "manual", dia: "2026-10-19" }), HOY)).toBe("pasado");
+    expect(esEventoPasado(evento({ origen: "manual", dia: "2026-10-19" }), HOY)).toBe(true);
+    expect(esEventoPasado(evento({ origen: "manual", dia: HOY }), HOY)).toBe(false);
+  });
+
   it("cada origen ofrece sus estados", () => {
     expect(estadosDeOrigen("tareas")).toEqual(["pendiente", "atrasada", "finalizada"]);
     expect(estadosDeOrigen("contactos")).toEqual(["proximo", "pasado"]);
+    expect(estadosDeOrigen("finanzas")).toEqual(["pendiente", "atrasada", "pagada"]);
+    expect(estadosDeOrigen("manual")).toEqual(["futuro", "pasado"]);
   });
 });
 
@@ -532,10 +600,21 @@ describe("marcadorDeEventos", () => {
     expect(marcadorDeEventos([pasado, proximo], HOY)).toBe("pendiente");
   });
 
-  it("Finanzas y los manuales de un día pasado siguen pendientes", () => {
-    expect(marcadorDeEventos([evento({ origen: "finanzas", dia: "2026-10-01" })], HOY)).toBe(
+  it("una deuda vencida es atrasada, y una pagada, completada", () => {
+    const vencida = evento({ origen: "finanzas", dia: "2026-10-01" });
+    const pagada = evento({ origen: "finanzas", dia: "2026-10-01", completado: true });
+    expect(marcadorDeEventos([vencida], HOY)).toBe("atrasada");
+    expect(marcadorDeEventos([pagada], HOY)).toBe("completada");
+    expect(marcadorDeEventos([pagada, evento({ origen: "finanzas", dia: HOY })], HOY)).toBe(
       "pendiente",
     );
+  });
+
+  it("los eventos propios son futuros (pendiente) o pasados, como los recordatorios", () => {
+    expect(marcadorDeEventos([evento({ origen: "manual", dia: "2026-10-01" })], HOY)).toBe(
+      "pasado",
+    );
+    expect(marcadorDeEventos([evento({ origen: "manual", dia: HOY })], HOY)).toBe("pendiente");
   });
 });
 
@@ -546,7 +625,11 @@ describe("estadosPorDefecto", () => {
     const conOcultos = (tareas: EstadoParaFiltrar[], contactos: EstadoParaFiltrar[]) =>
       estadosPorDefecto({
         ...libre,
-        estadosOcultos: { tareas: new Set(tareas), contactos: new Set(contactos) },
+        estadosOcultos: {
+          ...libre.estadosOcultos,
+          tareas: new Set(tareas),
+          contactos: new Set(contactos),
+        },
       });
     expect(conOcultos(["finalizada"], ["pasado"])).toBe(true);
     expect(conOcultos(["finalizada", "pendiente"], ["pasado"])).toBe(false);
@@ -554,6 +637,19 @@ describe("estadosPorDefecto", () => {
     // Cambiar solo los de los recordatorios también lo deja de ser.
     expect(conOcultos(["finalizada"], [])).toBe(false);
     expect(conOcultos(["finalizada"], ["pasado", "proximo"])).toBe(false);
+    // Y los de Finanzas o los eventos propios, también.
+    expect(
+      estadosPorDefecto({
+        ...libre,
+        estadosOcultos: { ...libre.estadosOcultos, finanzas: new Set() },
+      }),
+    ).toBe(false);
+    expect(
+      estadosPorDefecto({
+        ...libre,
+        estadosOcultos: { ...libre.estadosOcultos, manual: new Set() },
+      }),
+    ).toBe(false);
   });
 
   it("ocultar estados no cuenta como restricción de origen o de repetición", () => {
