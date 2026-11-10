@@ -62,6 +62,8 @@ describe("esquemas de una tarea progresiva", () => {
     expect(esquemaProgresoDeTarea.safeParse({ sumar: 0.5 }).success).toBe(true);
     expect(esquemaProgresoDeTarea.safeParse({ total: 0 }).success).toBe(true);
     expect(esquemaProgresoDeTarea.safeParse({ total: 1.5 }).success).toBe(true);
+    expect(esquemaProgresoDeTarea.safeParse({ restar: 0.5 }).success).toBe(true);
+    expect(esquemaProgresoDeTarea.safeParse({ restar: 0 }).success).toBe(false);
     expect(esquemaProgresoDeTarea.safeParse({ sumar: 0 }).success).toBe(false);
     expect(esquemaProgresoDeTarea.safeParse({ sumar: -1 }).success).toBe(false);
     expect(esquemaProgresoDeTarea.safeParse({ total: -1 }).success).toBe(false);

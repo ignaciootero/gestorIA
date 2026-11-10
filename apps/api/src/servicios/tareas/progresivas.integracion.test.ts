@@ -136,6 +136,18 @@ describe("el progreso", () => {
     });
   });
 
+  it("restar descuenta lo anotado de más, sin bajar de 0, y puede volverla a pendiente", async () => {
+    const { id } = await crearTarea(cliente, ana.userId, agua(), AHORA);
+    await registrarProgreso(cliente, ana.userId, id, { sumar: 2.5 }, AHORA);
+    expect(await registrarProgreso(cliente, ana.userId, id, { restar: 1 }, AHORA)).toMatchObject({
+      progreso: 1.5,
+      completada: false,
+    });
+    expect(await registrarProgreso(cliente, ana.userId, id, { restar: 5 }, AHORA)).toMatchObject({
+      progreso: 0,
+    });
+  });
+
   it("dos sumas a la vez no se pisan", async () => {
     const { id } = await crearTarea(cliente, ana.userId, agua({ meta: 5 }), AHORA);
     await Promise.all(

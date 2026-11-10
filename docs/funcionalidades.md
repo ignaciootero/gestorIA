@@ -1595,12 +1595,14 @@ Para lo que se hace de a poco: "tomar 2 litros de agua", "leer 20 páginas", "ca
   —"1,5" o "1.5"—, hasta 1.000.000) y, si se quiere, la **unidad** ("litros", hasta 16 caracteres). Una
   repetitiva progresiva le pasa su meta y su unidad a cada tarea que arma. Al editar se puede cambiar la
   meta o desmarcar la casilla: vuelve a ser una tarea que se tilda y se borra lo anotado.
-- **Cómo se anota.** Una progresiva **no tiene casilla**: en su lugar va un **aro** del mismo tamaño que se
-  llena de verde con lo que se lleva. Debajo del título dice cuánto lleva ("1,5 de 2 litros") y tiene dos
-  **sumas rápidas** (más o menos la cuarta parte y la mitad de la meta, redondeadas a números cómodos:
-  "+0,5" y "+1" para 2 litros, "+2" y "+4" para 8 vasos) y **"Otra cantidad"**, que abre un campo para
-  **sumar** cualquier cantidad o decir que **"Es el total"** (para corregir). Tocar el aro abre el mismo
-  campo. Cada suma se ve al instante; dos toques rápidos suman los dos.
+- **Cómo se anota.** Una progresiva **no tiene casilla**: en su lugar va un **aro** del mismo tamaño,
+  **siempre visible** (también en Hoy, donde la casilla de las demás aparece al apuntar), que se llena de
+  verde con el **porcentaje cubierto**. Debajo del título dice cuánto lleva y el porcentaje ("1,5 de 2
+  litros · 75 %"). Al apuntar a la fila aparece, junto a editar y eliminar, el botón **"Sumar o restar"**
+  (en pantallas táctiles se ve siempre; tocar el aro hace lo mismo). Abre un panel con dos **sumas
+  rápidas** (más o menos la cuarta parte y la mitad de la meta, redondeadas a números cómodos: "+0,5" y "+1"
+  para 2 litros, "+2" y "+4" para 8 vasos) y un campo para **sumar**, **restar** (lo anotado de más; no baja
+  de 0) o decir que **"Es el total"**. Cada cambio se ve al instante; dos toques rápidos cuentan los dos.
 - **Cuándo se completa.** Sola, **al llegar a la meta** (se puede pasar: "2,5 de 2 litros"), y pasa a
   "Hechas hoy". Desde ahí, tocando el aro, se puede corregir el total; si queda por debajo de la meta,
   vuelve a pendiente. No se tilda ni se destilda a mano (la API responde 409).
@@ -1614,7 +1616,7 @@ Para lo que se hace de a poco: "tomar 2 litros de agua", "leer 20 páginas", "ca
   común), y en `tareas`, `progreso_centesimos` (migración `0035_tareas_progresivas`). Las cantidades van en
   **centésimos** (2 litros → 200), como la plata en centavos, para que 0,1 + 0,2 dé 0,3. Por la API viajan
   como números comunes: `meta`, `unidad` y `progreso` en cada tarea, y `PUT /api/tareas/:id/progreso` con
-  `{ "sumar": 0.5 }` o `{ "total": 1.5 }`. La suma bloquea la fila mientras se guarda, así dos pedidos a la
+  `{ "sumar": 0.5 }`, `{ "restar": 0.5 }` o `{ "total": 1.5 }`. La suma bloquea la fila mientras se guarda, así dos pedidos a la
   vez no se pisan. Al editar una repetitiva, lo anotado hoy se conserva.
 - Dónde: `packages/shared/src/tareas/progreso.ts`, `apps/api/src/servicios/tareas/tareas.ts`
   (`registrarProgreso`), `apps/web/src/componentes/tareas/progreso-de-tarea.tsx`.

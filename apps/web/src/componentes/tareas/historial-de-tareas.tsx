@@ -15,6 +15,7 @@ import {
   ESTADOS_DE_TAREA,
   NOMBRES_DE_ESTADO_DE_TAREA,
   progresoEnPalabras,
+  proporcionDelProgreso,
   sumarDias,
 } from "@gestoria/shared";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -363,7 +364,8 @@ export function HistorialDeTareas() {
                           {tarea.titulo}
                         </span>
                         <span className="numeros-tabulares text-xs text-texto-secundario">
-                          {progresoEnPalabras(tarea.progreso, tarea.meta, tarea.unidad)}
+                          {progresoEnPalabras(tarea.progreso, tarea.meta, tarea.unidad)} ·{" "}
+                          {Math.round(proporcionDelProgreso(tarea.progreso, tarea.meta) * 100)} %
                         </span>
                       </span>
                     </span>

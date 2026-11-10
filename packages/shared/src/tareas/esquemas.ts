@@ -274,10 +274,12 @@ export const esquemaFallarTarea = z.object({ fallida: z.boolean() });
 
 /**
  * Anotar el progreso de una tarea progresiva: **sumar** una cantidad a lo que lleva ("tomé medio litro
- * más") o **corregir el total** ("llevo 1,5"; 0 lo deja en cero).
+ * más"), **restarla** (lo anotado de más; no baja de 0) o **corregir el total** ("llevo 1,5"; 0 lo deja
+ * en cero).
  */
 export const esquemaProgresoDeTarea = z.union([
   z.object({ sumar: esquemaCantidad }),
+  z.object({ restar: esquemaCantidad }),
   z.object({
     total: z
       .number("Escribí cuánto llevás.")

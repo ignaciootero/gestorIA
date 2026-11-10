@@ -90,10 +90,13 @@ export function conProgreso(
   const tarea = buscar(lista, id);
   if (!tarea || tarea.meta === null) return lista;
   // En centésimos, como el servidor, para que 0,1 + 0,2 dé 0,3.
+  const actual = Math.round(tarea.progreso * 100);
   const centesimos =
     "sumar" in cambio
-      ? Math.round(tarea.progreso * 100) + Math.round(cambio.sumar * 100)
-      : Math.round(cambio.total * 100);
+      ? actual + Math.round(cambio.sumar * 100)
+      : "restar" in cambio
+        ? Math.max(0, actual - Math.round(cambio.restar * 100))
+        : Math.round(cambio.total * 100);
   const actualizada: Tarea = { ...tarea, progreso: centesimos / 100 };
   const conElProgreso = reemplazar(lista, actualizada);
   const llega = centesimos >= Math.round(tarea.meta * 100);

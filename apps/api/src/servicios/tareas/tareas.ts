@@ -344,7 +344,7 @@ function progresoAlCambiarLaMeta(
 }
 
 /**
- * Anota el progreso de una tarea progresiva: suma una cantidad o corrige el total. Si llega a la meta, se
+ * Anota el progreso de una tarea progresiva: suma o resta una cantidad (sin bajar de 0) o corrige el total. Si llega a la meta, se
  * completa (si ya estaba completa, no cambia cuándo); si queda por debajo, vuelve a pendiente. Se puede en
  * una tarea de hoy, atrasada o ya completada (para corregir); no en una de un día futuro (`TareaFutura`),
  * en una fallida (`TareaFallida`: primero se deshace) ni en una que se tilda (`TareaNoProgresiva`).
@@ -373,7 +373,10 @@ export async function registrarProgreso(
     const pedido =
       "sumar" in cambio
         ? actual.progresoCentesimos + aCentesimos(cambio.sumar)
-        : aCentesimos(cambio.total);
+        : "restar" in cambio
+          ? // Restar más de lo que hay deja en 0.
+            Math.max(0, actual.progresoCentesimos - aCentesimos(cambio.restar))
+          : aCentesimos(cambio.total);
     // Sumar no pasa del tope que acepta la base.
     const progreso = Math.min(pedido, aCentesimos(MAXIMO_DE_META_DE_TAREA));
     const llega = progreso >= actual.metaCentesimos;

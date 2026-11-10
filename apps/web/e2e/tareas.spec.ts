@@ -2805,18 +2805,30 @@ test.describe("tareas progresivas", () => {
     await agregarProgresiva(page, "Tomar agua", "2", "litros");
 
     const paraHoy = page.getByRole("region", { name: "Para hoy" });
-    await expect(paraHoy).toContainText("0 de 2 litros");
-    // No tiene casilla: se anota con el aro o con las sumas rápidas.
+    // El aro y el porcentaje se ven siempre; no tiene casilla.
+    await expect(paraHoy).toContainText("0 de 2 litros · 0 %");
+    await expect(paraHoy.getByRole("button", { name: "Progreso de Tomar agua: 0 %" })).toBeVisible();
     await expect(fila(page, "Tomar agua")).toHaveCount(0);
 
+    // El botón para sumar o restar aparece al apuntar a la fila.
+    await paraHoy.getByText("Tomar agua", { exact: true }).hover();
+    await paraHoy.getByRole("button", { name: "Sumar o restar: Tomar agua" }).click();
     await paraHoy.getByRole("button", { name: "Sumar 0,5 litros: Tomar agua" }).click();
-    await expect(paraHoy).toContainText("0,5 de 2 litros");
+    await expect(paraHoy).toContainText("0,5 de 2 litros · 25 %");
+
+    await paraHoy.getByRole("button", { name: "Sumar o restar: Tomar agua" }).click();
     await paraHoy.getByRole("button", { name: "Sumar 1 litros: Tomar agua" }).click();
-    await expect(paraHoy).toContainText("1,5 de 2 litros");
+    await expect(paraHoy).toContainText("1,5 de 2 litros · 75 %");
+
+    // Restar lo anotado de más.
+    await paraHoy.getByRole("button", { name: "Sumar o restar: Tomar agua" }).click();
+    await paraHoy.getByLabel("Cantidad litros").fill("0,5");
+    await paraHoy.getByRole("button", { name: "Restar", exact: true }).click();
+    await expect(paraHoy).toContainText("1 de 2 litros · 50 %");
 
     // Otra cantidad, con coma.
-    await paraHoy.getByRole("button", { name: "Otra cantidad" }).click();
-    await paraHoy.getByLabel("Cantidad litros").fill("0,5");
+    await paraHoy.getByRole("button", { name: "Sumar o restar: Tomar agua" }).click();
+    await paraHoy.getByLabel("Cantidad litros").fill("1");
     await paraHoy.getByRole("button", { name: "Sumar", exact: true }).click();
 
     await expect(page.getByRole("region", { name: "Para hoy" })).toHaveCount(0);
@@ -2835,15 +2847,15 @@ test.describe("tareas progresivas", () => {
     await agregarProgresiva(page, "Leer", "20", "páginas");
 
     const paraHoy = page.getByRole("region", { name: "Para hoy" });
-    await paraHoy.getByRole("button", { name: "Anotar cuánto llevás: Leer" }).click();
+    await paraHoy.getByRole("button", { name: "Sumar o restar: Leer" }).click();
     await paraHoy.getByLabel("Cantidad páginas").fill("25");
     await paraHoy.getByRole("button", { name: "Es el total" }).click();
     await expect(page.getByRole("region", { name: "Para hoy" })).toHaveCount(0);
 
     const hechas = page.getByRole("region", { name: "Hechas hoy" });
     await hechas.getByRole("button", { name: /^Hechas hoy/ }).click();
-    await expect(hechas).toContainText("25 de 20 páginas");
-    await hechas.getByRole("button", { name: "Anotar cuánto llevás: Leer" }).click();
+    await expect(hechas).toContainText("25 de 20 páginas · 100 %");
+    await hechas.getByRole("button", { name: "Sumar o restar: Leer" }).click();
     await hechas.getByLabel("Cantidad páginas").fill("12");
     await hechas.getByRole("button", { name: "Es el total" }).click();
 
@@ -2856,7 +2868,7 @@ test.describe("tareas progresivas", () => {
     await agregarProgresiva(page, "Caminar", "10000", "pasos");
 
     const paraHoy = page.getByRole("region", { name: "Para hoy" });
-    await paraHoy.getByRole("button", { name: "Otra cantidad" }).click();
+    await paraHoy.getByRole("button", { name: "Sumar o restar: Caminar" }).click();
     await paraHoy.getByLabel("Cantidad pasos").fill("cero");
     await paraHoy.getByRole("button", { name: "Sumar", exact: true }).click();
     await expect(paraHoy.getByRole("alert")).toHaveText("Escribí una cantidad.");

@@ -12,14 +12,19 @@
 // como los botones de editar y eliminar); una tarea ya completada o fallida muestra siempre su estado final: la
 // casilla marcada en verde o la cruz activada en rojo, y tocarla la devuelve a pendiente.
 //
-// Una tarea progresiva ("tomar 2 litros de agua") no tiene casilla: en su lugar va un aro que se llena con
-// lo que se lleva, y debajo del título, cuánto lleva ("1,5 de 2 litros") y los botones para sumar (ver
+// Una tarea progresiva ("tomar 2 litros de agua") no tiene casilla: en su lugar va un aro, siempre visible,
+// que se llena con el porcentaje cubierto, y debajo del título, cuánto lleva ("1,5 de 2 litros · 75 %").
+// Al apuntar a la fila aparece, junto a editar y eliminar, el botón para sumar o restar (ver
 // progreso-de-tarea.tsx). Se completa sola al llegar a la meta.
 
 "use client";
 
-import { type ProgresoDeTarea, progresoEnPalabras } from "@gestoria/shared";
-import { Pencil, Repeat, Trash2, X, XCircle } from "lucide-react";
+import {
+  type ProgresoDeTarea,
+  progresoEnPalabras,
+  proporcionDelProgreso,
+} from "@gestoria/shared";
+import { CirclePlus, Pencil, Repeat, Trash2, X, XCircle } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Casilla } from "@/componentes/ui/casilla";
@@ -28,7 +33,7 @@ import type { Tarea } from "@/lib/api-tareas";
 import { cn } from "@/lib/clases";
 import { diaCorto, diaDeOrigen, nombreDeDia } from "./ayudas";
 import { EtiquetaDeCategoria } from "./categorias";
-import { AnilloDeProgreso, ControlesDeProgreso } from "./progreso-de-tarea";
+import { AnilloDeProgreso, PanelDeProgreso } from "./progreso-de-tarea";
 
 /** Cuánto se ve el tachado antes de que la tarea salga de la lista. */
 const ESPERA_ANTES_DE_SACARLA_MS = 420;
@@ -155,7 +160,11 @@ export function FilaDeTarea({
   // Se anota en lo de hoy o atrasado (también para corregir una ya completa); no en una fallida ni futura.
   const puedeAnotar = progresiva && alAnotarProgreso !== undefined && !tarea.fallida && tarea.dia <= hoy;
   const detalles = [
-    progresiva ? progresoEnPalabras(tarea.progreso, tarea.meta ?? 0, tarea.unidad) : null,
+    progresiva
+      ? `${progresoEnPalabras(tarea.progreso, tarea.meta ?? 0, tarea.unidad)} · ${Math.round(
+          proporcionDelProgreso(tarea.progreso, tarea.meta ?? 0) * 100,
+        )} %`
+      : null,
     tarea.hora,
     // De qué día era, con el día concreto: para una atrasada, una que se acaba de hacer o una fallida.
     tarea.dia < hoy ? `Era para ${diaDeOrigen(tarea.dia, hoy)}` : null,
@@ -232,12 +241,10 @@ export function FilaDeTarea({
             {tarea.titulo}
           </span>
           {debajo ? <span className="col-start-2">{debajo}</span> : null}
-          {puedeAnotar && alAnotarProgreso ? (
+          {anotando && puedeAnotar && alAnotarProgreso ? (
             <span className="col-start-2">
-              <ControlesDeProgreso
+              <PanelDeProgreso
                 tarea={tarea}
-                abierto={anotando}
-                alAbrir={() => setAnotando(true)}
                 alCerrar={() => setAnotando(false)}
                 alAnotar={(cambio) => alAnotarProgreso(tarea, cambio)}
               />
@@ -299,6 +306,18 @@ export function FilaDeTarea({
           "[@media(hover:hover)]:group-focus-within:opacity-100",
         )}
       >
+        {puedeAnotar ? (
+          <button
+            type="button"
+            className={cn(CLASE_BOTON_DE_ICONO, "hover:bg-exito-fondo hover:text-exito")}
+            aria-label={`Sumar o restar: ${tarea.titulo}`}
+            aria-expanded={anotando}
+            title="Sumar o restar"
+            onClick={() => setAnotando((abierto) => !abierto)}
+          >
+            <CirclePlus aria-hidden="true" className="size-4" />
+          </button>
+        ) : null}
         {alEditar ? (
           <button
             type="button"

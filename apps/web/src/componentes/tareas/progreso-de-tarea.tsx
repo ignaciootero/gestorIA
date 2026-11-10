@@ -1,11 +1,11 @@
 // Las piezas de una tarea progresiva ("tomar 2 litros de agua") en su fila:
 //
-// - AnilloDeProgreso: va donde las demás tareas tienen la casilla, del mismo tamaño y con la misma
-//   estética (un círculo con borde). Se va llenando de verde con lo que se lleva; al llegar a la meta
-//   queda lleno con un tilde, como la casilla de una completada. Tocarlo abre el campo para anotar.
-// - ControlesDeProgreso: debajo del título, los botones para sumar rápido (más o menos la cuarta parte
-//   y la mitad de la meta: "+0,5" y "+1" para 2 litros) y "Otra cantidad", que abre un campo para sumar
-//   lo que sea o corregir el total ("Es el total").
+// - AnilloDeProgreso: va a la izquierda, donde las demás tareas tienen la casilla, del mismo tamaño y
+//   **siempre visible** (también en Hoy, donde la casilla aparece al apuntar): se va llenando de verde con
+//   el porcentaje cubierto; al llegar a la meta queda lleno con un tilde, como una completada.
+// - PanelDeProgreso: se abre con el botón "Sumar o restar" de la fila (aparece al apuntar, junto a editar
+//   y eliminar) o tocando el aro. Tiene las sumas rápidas (más o menos la cuarta parte y la mitad de la
+//   meta: "+0,5" y "+1" para 2 litros) y un campo para **sumar**, **restar** o decir que **es el total**.
 //
 // No se tilda a mano: se completa sola al llegar a la meta (y si se corrige por debajo, vuelve a
 // pendiente). Ver tareas/progreso.ts en @gestoria/shared.
@@ -18,7 +18,7 @@ import {
   proporcionDelProgreso,
   sumasRapidas,
 } from "@gestoria/shared";
-import { Check, Plus } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useId, useState } from "react";
 import type { Tarea } from "@/lib/api-tareas";
@@ -81,8 +81,8 @@ export function AnilloDeProgreso({
       type="button"
       onClick={alTocar}
       aria-expanded={abierto}
-      aria-label={`Anotar cuánto llevás: ${tarea.titulo}`}
-      title="Anotar cuánto llevás"
+      aria-label={`Progreso de ${tarea.titulo}: ${Math.round(proporcion * 100)} %`}
+      title="Sumar o restar"
       className={cn(
         "inline-flex shrink-0 rounded-full",
         "transition-transform duration-(--duracion-rapida) ease-salida active:scale-90",
@@ -107,17 +107,12 @@ function aNumero(texto: string): number {
   return limpio === "" ? Number.NaN : Number(limpio);
 }
 
-export function ControlesDeProgreso({
+export function PanelDeProgreso({
   tarea,
-  abierto,
-  alAbrir,
   alCerrar,
   alAnotar,
 }: {
   tarea: Tarea;
-  /** El campo para otra cantidad está abierto (también se abre tocando el aro). */
-  abierto: boolean;
-  alAbrir: () => void;
   alCerrar: () => void;
   alAnotar: (cambio: ProgresoDeTarea) => void;
 }) {
@@ -127,104 +122,101 @@ export function ControlesDeProgreso({
   const meta = tarea.meta ?? 1;
   const unidad = tarea.unidad ? ` ${tarea.unidad}` : "";
 
-  function anotar(como: "sumar" | "total") {
+  function anotar(como: "sumar" | "restar" | "total") {
     const cantidad = aNumero(texto);
     if (Number.isNaN(cantidad)) return setError("Escribí una cantidad.");
-    if (como === "sumar" && cantidad <= 0) return setError("Tiene que ser mayor que 0.");
+    if (como !== "total" && cantidad <= 0) return setError("Tiene que ser mayor que 0.");
     if (cantidad < 0) return setError("No puede ser menos de 0.");
     if (Math.abs(cantidad * 100 - Math.round(cantidad * 100)) > 1e-6) {
       return setError("Usá como mucho dos decimales.");
     }
-    alAnotar(como === "sumar" ? { sumar: cantidad } : { total: cantidad });
+    alAnotar(
+      como === "sumar"
+        ? { sumar: cantidad }
+        : como === "restar"
+          ? { restar: cantidad }
+          : { total: cantidad },
+    );
     setTexto("");
     setError(null);
     alCerrar();
   }
 
   return (
-    <div className="mt-1.5 flex flex-col gap-2">
-      {/* Una ya completa solo se corrige (desde el aro); las fichas son para ir sumando. */}
-      {tarea.completada ? null : (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {sumasRapidas(meta).map((cantidad) => (
-            <button
-              key={cantidad}
-              type="button"
-              className={CLASE_DE_FICHA}
-              aria-label={`Sumar ${formatearCantidad(cantidad)}${unidad}: ${tarea.titulo}`}
-              onClick={() => alAnotar({ sumar: cantidad })}
-            >
-              +{formatearCantidad(cantidad)}
-            </button>
-          ))}
+    <form
+      aria-label={`Sumar o restar: ${tarea.titulo}`}
+      className="mt-1.5 flex flex-col gap-2 rounded-control bg-superficie-suave p-2"
+      onSubmit={(evento) => {
+        evento.preventDefault();
+        anotar("sumar");
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        {sumasRapidas(meta).map((cantidad) => (
           <button
+            key={cantidad}
             type="button"
-            className={cn(CLASE_DE_FICHA, "text-texto-secundario")}
-            aria-expanded={abierto}
-            aria-controls={`${id}-campo`}
-            onClick={abierto ? alCerrar : alAbrir}
+            className={CLASE_DE_FICHA}
+            aria-label={`Sumar ${formatearCantidad(cantidad)}${unidad}: ${tarea.titulo}`}
+            onClick={() => {
+              alAnotar({ sumar: cantidad });
+              alCerrar();
+            }}
           >
-            <Plus aria-hidden="true" className="size-3.5" />
-            Otra cantidad
+            +{formatearCantidad(cantidad)}
           </button>
-        </div>
-      )}
-      {abierto ? (
-        <form
-          id={`${id}-campo`}
-          className="flex flex-col gap-1.5"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            anotar("sumar");
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <label htmlFor={`${id}-cantidad`} className="solo-lectores">
+          Cantidad{unidad}
+        </label>
+        <input
+          id={`${id}-cantidad`}
+          inputMode="decimal"
+          // Se abre para escribir: el foco va directo al campo.
+          autoFocus
+          value={texto}
+          onChange={(evento) => {
+            setTexto(evento.target.value);
+            setError(null);
           }}
+          onKeyDown={(evento) => {
+            if (evento.key === "Escape") alCerrar();
+          }}
+          placeholder={`Por ejemplo: ${formatearCantidad(sumasRapidas(meta)[0] ?? 1)}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={cn(
+            "numeros-tabulares h-8 w-28 rounded-control border border-borde bg-superficie px-2 text-sm",
+            "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
+            error && "border-peligro",
+          )}
+        />
+        <button type="submit" className={CLASE_DE_FICHA}>
+          <Plus aria-hidden="true" className="size-3.5" />
+          Sumar
+        </button>
+        <button type="button" className={CLASE_DE_FICHA} onClick={() => anotar("restar")}>
+          <Minus aria-hidden="true" className="size-3.5" />
+          Restar
+        </button>
+        <button type="button" className={CLASE_DE_FICHA} onClick={() => anotar("total")}>
+          Es el total
+        </button>
+        <button
+          type="button"
+          className={cn(CLASE_DE_FICHA, "border-transparent text-texto-secundario")}
+          onClick={alCerrar}
         >
-          <div className="flex flex-wrap items-center gap-1.5">
-            <label htmlFor={`${id}-cantidad`} className="solo-lectores">
-              Cantidad{unidad}
-            </label>
-            <input
-              id={`${id}-cantidad`}
-              inputMode="decimal"
-              // Se abre para escribir: el foco va directo al campo.
-              autoFocus
-              value={texto}
-              onChange={(evento) => {
-                setTexto(evento.target.value);
-                setError(null);
-              }}
-              onKeyDown={(evento) => {
-                if (evento.key === "Escape") alCerrar();
-              }}
-              placeholder={`Por ejemplo: ${formatearCantidad(sumasRapidas(meta)[0] ?? 1)}`}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? `${id}-error` : undefined}
-              className={cn(
-                "numeros-tabulares h-8 w-28 rounded-control border border-borde bg-superficie px-2 text-sm",
-                "focus-visible:outline-none focus-visible:shadow-(--anillo-foco)",
-                error && "border-peligro",
-              )}
-            />
-            <button type="submit" className={CLASE_DE_FICHA}>
-              Sumar
-            </button>
-            <button type="button" className={CLASE_DE_FICHA} onClick={() => anotar("total")}>
-              Es el total
-            </button>
-            <button
-              type="button"
-              className={cn(CLASE_DE_FICHA, "border-transparent text-texto-secundario")}
-              onClick={alCerrar}
-            >
-              Cancelar
-            </button>
-          </div>
-          {error ? (
-            <p id={`${id}-error`} role="alert" className="text-xs text-peligro">
-              {error}
-            </p>
-          ) : null}
-        </form>
+          Cancelar
+        </button>
+      </div>
+      {error ? (
+        <p id={`${id}-error`} role="alert" className="text-xs text-peligro">
+          {error}
+        </p>
       ) : null}
-    </div>
+    </form>
   );
 }
