@@ -36,6 +36,13 @@ export const LARGO_MAXIMO_TITULO_DE_TAREA = 120;
 export const LARGO_MAXIMO_NOTAS_DE_TAREA = 500;
 export const LARGO_MAXIMO_NOMBRE_DE_CATEGORIA_DE_TAREA = 30;
 
+/**
+ * Tareas progresivas ("tomar 2 litros de agua"): la meta es una cantidad con hasta dos decimales, de más
+ * de 0 hasta este tope, y la unidad ("litros", "páginas") es un texto corto opcional.
+ */
+export const MAXIMO_DE_META_DE_TAREA = 1_000_000;
+export const LARGO_MAXIMO_UNIDAD_DE_TAREA = 16;
+
 // Topes contra errores de carga y abusos; no son límites técnicos.
 export const MAXIMO_DE_TAREAS_REPETITIVAS = 100;
 export const MAXIMO_DE_TAREAS_PENDIENTES = 500;

@@ -5,6 +5,28 @@ Las más nuevas arriba.
 
 ---
 
+## 2026-11-10 — Tareas progresivas
+
+**Decisión.** Cualquier tarea (de uso único o repetitiva) puede tener una **meta** con unidad opcional; en vez
+de tildarse, se le va anotando el **progreso** (sumar o corregir el total) y se completa sola al llegar a la
+meta. Si no llega, falla con las mismas reglas que las demás tareas. Las cantidades se guardan en
+**centésimos** (enteros), y el progreso vive en cada tarea (`progreso_centesimos`), no en una tabla de
+anotaciones.
+
+**Por qué.** Lo pidió el usuario ("tomar 2 litros de agua": ir sumando lo que toma). Que la periodicidad no
+tenga nada que ver mantiene el concepto simple: es solo otra forma de marcar cuánto se hizo. Los centésimos
+evitan los errores de redondeo de los decimales, como los centavos en Finanzas.
+
+**Supuestos (el usuario no los definió; a confirmar).** Se suma con botones rápidos y un campo para otra
+cantidad, y el total se puede corregir; una tarea que no llega a la meta falla como cualquier otra (sola al
+terminar el día solo si su repetitiva lo pide); la meta admite decimales y una unidad libre opcional.
+
+**Descartado.** Una tabla con cada anotación (hora y cantidad): sumaría historial que nadie pidió; si hace
+falta, se agrega después sin cambiar cómo se ve. Tildar a mano una progresiva: dejaría progreso y estado
+contradiciéndose ("completa" con 0,5 de 2).
+
+---
+
 ## 2026-11-10 — Triángulo de aviso para lo atrasado en el calendario
 
 **Decisión.** Lo atrasado (tareas sin hacer de días anteriores y deudas vencidas) se marca en la grilla con un

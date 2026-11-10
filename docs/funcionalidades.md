@@ -1470,6 +1470,9 @@ va tachando. Hay dos clases de tareas:
 Cualquier tarea (de uso único o repetitiva) puede tener una **categoría** ("Casa", "Trabajo",
 "Salud"...), pero es **opcional**: puede quedar sin ninguna.
 
+Cualquier tarea (de uso único o repetitiva) puede ser también **progresiva**: en vez de tildarse, se va
+anotando cuánto se lleva hasta llegar a una meta. Ver "Tareas progresivas" más abajo.
+
 Cada cuenta tiene las suyas: toda consulta filtra por la persona de la sesión, sin excepción para el
 admin, y las tareas de otra persona responden 404 como si no existieran.
 
@@ -1582,6 +1585,39 @@ todos los días, cada varios días, semanas, meses o años) y lo que pide cada o
 del mes, el día y el mes), la hora y las notas. La validación es la del servidor (los mismos esquemas
 Zod). Editar una tarea que salió de una repetitiva cambia solo la de ese día; para cambiar todas se
 edita la repetitiva.
+
+### Tareas progresivas
+
+Para lo que se hace de a poco: "tomar 2 litros de agua", "leer 20 páginas", "caminar 10.000 pasos".
+
+- **Cómo se define.** En el formulario de cualquier tarea (se repita o no) está la casilla **"Ir anotando
+  cuánto llevás (progresiva)"**. Marcada, pide la **meta** (un número mayor que 0, con hasta dos decimales
+  —"1,5" o "1.5"—, hasta 1.000.000) y, si se quiere, la **unidad** ("litros", hasta 16 caracteres). Una
+  repetitiva progresiva le pasa su meta y su unidad a cada tarea que arma. Al editar se puede cambiar la
+  meta o desmarcar la casilla: vuelve a ser una tarea que se tilda y se borra lo anotado.
+- **Cómo se anota.** Una progresiva **no tiene casilla**: en su lugar va un **aro** del mismo tamaño que se
+  llena de verde con lo que se lleva. Debajo del título dice cuánto lleva ("1,5 de 2 litros") y tiene dos
+  **sumas rápidas** (más o menos la cuarta parte y la mitad de la meta, redondeadas a números cómodos:
+  "+0,5" y "+1" para 2 litros, "+2" y "+4" para 8 vasos) y **"Otra cantidad"**, que abre un campo para
+  **sumar** cualquier cantidad o decir que **"Es el total"** (para corregir). Tocar el aro abre el mismo
+  campo. Cada suma se ve al instante; dos toques rápidos suman los dos.
+- **Cuándo se completa.** Sola, **al llegar a la meta** (se puede pasar: "2,5 de 2 litros"), y pasa a
+  "Hechas hoy". Desde ahí, tocando el aro, se puede corregir el total; si queda por debajo de la meta,
+  vuelve a pendiente. No se tilda ni se destilda a mano (la API responde 409).
+- **Si no se llega.** Falla igual que cualquier otra tarea: sola al terminar el día si su repetitiva tiene
+  "Darla por fallida automáticamente si pasa el día", o queda atrasada (y se sigue anotando desde Hoy) hasta
+  que se complete, se marque como fallida o pase una semana. Una fallida guarda lo que se llegó a anotar;
+  para seguir anotando hay que deshacer la fallida. En una tarea de un día futuro todavía no se anota.
+- **Dónde más se ve.** En el historial, el aro (sin poder tocarlo) y cuánto se llegó a hacer; en
+  "Repetitivas", la meta ("Meta: 2 litros"); en el calendario, cuánto lleva en el detalle del evento.
+- **Cómo se guarda.** En `tareas` y `tareas_repetitivas`, `meta_centesimos` y `unidad` (en nulo, una tarea
+  común), y en `tareas`, `progreso_centesimos` (migración `0035_tareas_progresivas`). Las cantidades van en
+  **centésimos** (2 litros → 200), como la plata en centavos, para que 0,1 + 0,2 dé 0,3. Por la API viajan
+  como números comunes: `meta`, `unidad` y `progreso` en cada tarea, y `PUT /api/tareas/:id/progreso` con
+  `{ "sumar": 0.5 }` o `{ "total": 1.5 }`. La suma bloquea la fila mientras se guarda, así dos pedidos a la
+  vez no se pisan. Al editar una repetitiva, lo anotado hoy se conserva.
+- Dónde: `packages/shared/src/tareas/progreso.ts`, `apps/api/src/servicios/tareas/tareas.ts`
+  (`registrarProgreso`), `apps/web/src/componentes/tareas/progreso-de-tarea.tsx`.
 
 ### Tareas "cada varios días"
 

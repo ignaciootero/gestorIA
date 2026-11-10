@@ -12,6 +12,7 @@ import {
   esquemaCompletarTarea,
   esquemaFallarTarea,
   esquemaFiltrosDeHistorial,
+  esquemaProgresoDeTarea,
   esquemaTarea,
   esquemaTareaRepetitiva,
 } from "@gestoria/shared";
@@ -47,8 +48,12 @@ import {
   LimiteDeTareas,
   listarHistorial,
   listarTareasDeHoy,
+  registrarProgreso,
   TareaEnElPasado,
+  TareaFallida,
   TareaFutura,
+  TareaNoProgresiva,
+  TareaProgresiva,
 } from "../servicios/tareas/tareas.ts";
 import { obtenerWidgetsDeTareas } from "../servicios/tareas/widgets.ts";
 import type { EntornoHono } from "../tipos.ts";
@@ -84,7 +89,20 @@ function tareaInvalidaComoError(error: unknown): never {
     throw errores.validacion([{ campo: "fechaInicio", mensaje }], mensaje);
   }
   if (error instanceof TareaFutura) {
-    throw errores.conflicto("Una tarea de un día futuro todavía no puede marcarse como fallida.");
+    throw errores.conflicto(
+      "Una tarea de un día futuro todavía no puede marcarse como fallida ni tener progreso.",
+    );
+  }
+  if (error instanceof TareaNoProgresiva) {
+    throw errores.conflicto("Esta tarea no es progresiva: se marca como hecha con el tilde.");
+  }
+  if (error instanceof TareaProgresiva) {
+    throw errores.conflicto(
+      "Esta tarea es progresiva: se completa sola al llegar a la meta. Anotá cuánto llevás.",
+    );
+  }
+  if (error instanceof TareaFallida) {
+    throw errores.conflicto("Esta tarea está fallida. Deshacé la fallida para anotar progreso.");
   }
   if (error instanceof LimiteDeTareas) {
     throw errores.conflicto(
@@ -276,9 +294,28 @@ export function rutasDeTareas(cliente: ClienteDb): Hono<EntornoHono> {
     const resultado = esquemaCompletarTarea.safeParse(await c.req.json());
     if (!resultado.success) throw errores.validacion(detalleDe(resultado.error));
 
-    const tarea = await completarTarea(cliente, usuarioDe(c), id, resultado.data.completada);
-    if (!tarea) throw errores.noEncontrado("No encontramos esa tarea.");
-    return c.json(tarea);
+    try {
+      const tarea = await completarTarea(cliente, usuarioDe(c), id, resultado.data.completada);
+      if (!tarea) throw errores.noEncontrado("No encontramos esa tarea.");
+      return c.json(tarea);
+    } catch (error) {
+      return tareaInvalidaComoError(error);
+    }
+  });
+
+  // Anotar el progreso de una tarea progresiva: `{ sumar: 0.5 }` o `{ total: 1.5 }`.
+  rutas.put("/api/tareas/:id/progreso", async (c) => {
+    const id = esquemaId.parse(c.req.param("id"));
+    const resultado = esquemaProgresoDeTarea.safeParse(await c.req.json());
+    if (!resultado.success) throw errores.validacion(detalleDe(resultado.error));
+
+    try {
+      const tarea = await registrarProgreso(cliente, usuarioDe(c), id, resultado.data);
+      if (!tarea) throw errores.noEncontrado("No encontramos esa tarea.");
+      return c.json(tarea);
+    } catch (error) {
+      return tareaInvalidaComoError(error);
+    }
   });
 
   rutas.patch("/api/tareas/:id/fallida", async (c) => {

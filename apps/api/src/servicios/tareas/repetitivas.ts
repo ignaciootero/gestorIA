@@ -18,6 +18,7 @@ import {
   caeEnElDiaDeTarea,
   type DatosDeTareaRepetitiva,
   DIAS_DE_ATRASO_PARA_FALLAR,
+  desdeCentesimos,
   DIAS_DE_TAREAS_A_ARMAR,
   diaDeHoy,
   diasEntre,
@@ -32,6 +33,7 @@ import {
 import { and, count, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { obtenerZonaHoraria } from "../finanzas/periodos.ts";
 import { verificarCategoriaDeTarea } from "./categorias.ts";
+import { columnasDeMeta } from "./meta.ts";
 
 export type TareaRepetitiva = {
   id: string;
@@ -44,6 +46,10 @@ export type TareaRepetitiva = {
   fallaSola: boolean;
   /** Sus tareas llevan un distintivo. */
   importante: boolean;
+  /** Si es progresiva, la meta de cada tarea ("2"); null si se tildan. */
+  meta: number | null;
+  /** La unidad de la meta ("litros"), si tiene. */
+  unidad: string | null;
   /** Cuándo cae, según la repetición; lo que ella no usa va en nulo. */
   diasSemana: number[] | null;
   diaDelMes: number | null;
@@ -88,6 +94,8 @@ function aTareaRepetitiva(fila: FilaDeRepetitiva, hoy: string): TareaRepetitiva 
     repeticion: fila.repeticion as RepeticionDeTarea,
     fallaSola: fila.fallaSola,
     importante: fila.importante,
+    meta: fila.metaCentesimos === null ? null : desdeCentesimos(fila.metaCentesimos),
+    unidad: fila.unidad,
     diasSemana: fila.diasSemana === null ? null : ordenarDiasDeLaSemana(fila.diasSemana),
     diaDelMes: fila.diaDelMes,
     mes: fila.mes,
@@ -119,6 +127,8 @@ function columnasDe(datos: DatosDeTareaRepetitiva, hoy: string) {
     ...(datos.fallaSola === undefined ? {} : { fallaSola: datos.fallaSola }),
     // Igual con `importante`.
     ...(datos.importante === undefined ? {} : { importante: datos.importante }),
+    // Y con la meta (y su unidad): sin `meta` no se tocan.
+    ...(columnasDeMeta(datos) ?? {}),
   };
 
   switch (datos.repeticion) {
@@ -285,6 +295,8 @@ async function armarLasQueFaltan(cliente: ClienteDb, userId: string, hoy: string
           hora: repetitiva.hora,
           fallaSola: repetitiva.fallaSola,
           importante: repetitiva.importante,
+          metaCentesimos: repetitiva.metaCentesimos,
+          unidad: repetitiva.unidad,
         });
       }
       if (filas.length > 0) {
@@ -361,15 +373,16 @@ export async function crearTareaRepetitiva(
 
 /**
  * Los pendientes de hoy en adelante de una repetitiva se descartan para que se armen de nuevo con
- * la regla nueva. Lo hecho y lo de días pasados es historial y no se toca.
+ * la regla nueva. Lo hecho y lo de días pasados es historial y no se toca. Devuelve lo que llevaba
+ * anotado cada una que era progresiva y tenía algo (por día), para no perderlo al rearmarlas.
  */
 async function descartarPendientesDesdeHoy(
   cliente: ClienteDb,
   userId: string,
   repetitivaId: string,
   hoy: string,
-): Promise<void> {
-  await cliente.db
+): Promise<Map<string, number>> {
+  const descartadas = await cliente.db
     .delete(esquema.tareas)
     .where(
       and(
@@ -380,7 +393,44 @@ async function descartarPendientesDesdeHoy(
         isNull(esquema.tareas.falladaEn),
         isNull(esquema.tareas.eliminadoEn),
       ),
-    );
+    )
+    .returning({ dia: esquema.tareas.dia, progreso: esquema.tareas.progresoCentesimos });
+  return new Map(
+    descartadas.filter(({ progreso }) => progreso > 0).map(({ dia, progreso }) => [dia, progreso]),
+  );
+}
+
+/**
+ * Le devuelve a las tareas rearmadas de una repetitiva (progresiva) lo que llevaban anotado antes de
+ * editarla; si con la meta nueva ya llegan, quedan completadas.
+ */
+async function devolverProgreso(
+  cliente: ClienteDb,
+  userId: string,
+  repetitivaId: string,
+  metaCentesimos: number | null,
+  progresos: Map<string, number>,
+  ahora: Date,
+): Promise<void> {
+  if (metaCentesimos === null) return;
+  for (const [dia, progreso] of progresos) {
+    await cliente.db
+      .update(esquema.tareas)
+      .set({
+        progresoCentesimos: progreso,
+        ...(progreso >= metaCentesimos ? { completadaEn: ahora } : {}),
+      })
+      .where(
+        and(
+          eq(esquema.tareas.userId, userId),
+          eq(esquema.tareas.repetitivaId, repetitivaId),
+          eq(esquema.tareas.dia, dia),
+          isNull(esquema.tareas.completadaEn),
+          isNull(esquema.tareas.falladaEn),
+          isNull(esquema.tareas.eliminadoEn),
+        ),
+      );
+  }
 }
 
 /** Cambia la regla (y la categoría: sin `categoriaId` se conserva, `null` la quita); rige desde hoy. Devuelve null si no existe, es de otra persona o está eliminada. */
@@ -421,8 +471,9 @@ export async function editarTareaRepetitiva(
     .returning();
   if (!fila) return null;
 
-  await descartarPendientesDesdeHoy(cliente, userId, id, hoy);
+  const progresos = await descartarPendientesDesdeHoy(cliente, userId, id, hoy);
   await generarTareasRepetitivas(cliente, userId, hoy);
+  await devolverProgreso(cliente, userId, id, fila.metaCentesimos, progresos, ahora);
   return aTareaRepetitiva(fila, hoy);
 }
 

@@ -7,6 +7,7 @@ import {
   diaDeHoy,
   diasEntre,
   formatearDiaDeCalendario,
+  type ProgresoDeTarea,
   type RepeticionDeTarea,
 } from "@gestoria/shared";
 import type { ListaDeHoy, Tarea, TareaRepetitiva } from "@/lib/api-tareas";
@@ -74,6 +75,44 @@ export function conTareaFallida(
   };
   resultado.falladasHoy = [actualizada, ...resultado.falladasHoy];
   return resultado;
+}
+
+/**
+ * La lista de hoy después de anotar progreso en una tarea progresiva. Lo mismo que el servidor: el
+ * progreso cambia y, si llega a la meta, pasa a "hechas hoy"; si se corrige por debajo, vuelve a pendiente.
+ */
+export function conProgreso(
+  lista: ListaDeHoy,
+  id: string,
+  cambio: ProgresoDeTarea,
+  ahora: Date,
+): ListaDeHoy {
+  const tarea = buscar(lista, id);
+  if (!tarea || tarea.meta === null) return lista;
+  // En centésimos, como el servidor, para que 0,1 + 0,2 dé 0,3.
+  const centesimos =
+    "sumar" in cambio
+      ? Math.round(tarea.progreso * 100) + Math.round(cambio.sumar * 100)
+      : Math.round(cambio.total * 100);
+  const actualizada: Tarea = { ...tarea, progreso: centesimos / 100 };
+  const conElProgreso = reemplazar(lista, actualizada);
+  const llega = centesimos >= Math.round(tarea.meta * 100);
+  if (llega === tarea.completada) return conElProgreso;
+  return conTareaCompletada(conElProgreso, id, llega, ahora);
+}
+
+/** La lista con la tarea cambiada en su lugar. */
+function reemplazar(lista: ListaDeHoy, tarea: Tarea): ListaDeHoy {
+  const cambiar = (tareas: Tarea[]) =>
+    tareas.map((otra) => (otra.id === tarea.id ? tarea : otra));
+  return {
+    ...lista,
+    atrasadas: cambiar(lista.atrasadas),
+    deHoy: cambiar(lista.deHoy),
+    hechasHoy: cambiar(lista.hechasHoy),
+    falladasHoy: cambiar(lista.falladasHoy),
+    masAdelante: cambiar(lista.masAdelante),
+  };
 }
 
 function buscar(lista: ListaDeHoy, id: string): Tarea | undefined {

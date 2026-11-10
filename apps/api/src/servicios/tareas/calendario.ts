@@ -17,8 +17,10 @@
 import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
 import {
+  desdeCentesimos,
   type EventoDeCalendario,
   ocurrenciasEnRango,
+  progresoEnPalabras,
   proximaOcurrenciaDeTarea,
   type RangoDeEventos,
   type RepeticionDeEvento,
@@ -29,9 +31,16 @@ import {
 import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import { generarTareasRepetitivas } from "./repetitivas.ts";
 
-/** La categoría de una tarea como texto de contexto ("Casa"), y si se repite. */
-function detalleDe(categoria: string | null, repetitiva: boolean): string | null {
-  const partes = [categoria, repetitiva ? "Se repite" : null].filter(
+/**
+ * El contexto de una tarea: cuánto lleva si es progresiva ("1,5 de 2 litros"), la categoría ("Casa") y si
+ * se repite.
+ */
+function detalleDe(
+  categoria: string | null,
+  repetitiva: boolean,
+  progreso: string | null = null,
+): string | null {
+  const partes = [progreso, categoria, repetitiva ? "Se repite" : null].filter(
     (parte): parte is string => parte !== null,
   );
   return partes.length === 0 ? null : partes.join(" · ");
@@ -81,7 +90,17 @@ export async function eventosDeTareas(
       id: `tarea:${tarea.id}`,
       origen: "tareas",
       titulo: tarea.titulo,
-      detalle: detalleDe(categoria, tarea.repetitivaId !== null),
+      detalle: detalleDe(
+        categoria,
+        tarea.repetitivaId !== null,
+        tarea.metaCentesimos === null
+          ? null
+          : progresoEnPalabras(
+              desdeCentesimos(tarea.progresoCentesimos),
+              desdeCentesimos(tarea.metaCentesimos),
+              tarea.unidad,
+            ),
+      ),
       dia: tarea.dia,
       hora: recortarHora(tarea.hora),
       // Una tarea suelta es "una sola vez"; las demás se repiten según su regla.

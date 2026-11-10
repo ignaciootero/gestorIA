@@ -15,7 +15,9 @@
 // - Una repetitiva: su título, notas, hora y cuándo cae (pero no pasa a ser "no se repite").
 //
 // En todos los casos se puede elegir una categoría (opcional). Si no hay categorías, el campo no se
-// muestra.
+// muestra. Y cualquier tarea, se repita o no, puede ser **progresiva** ("tomar 2 litros de agua"): en vez
+// de tildarse, se va anotando cuánto se lleva y se completa sola al llegar a la meta. Se le pide la meta
+// (con decimales) y, si se quiere, la unidad ("litros").
 //
 // La validación es la del servidor (`esquemaTarea` y `esquemaTareaRepetitiva` de
 // @gestoria/shared): el formulario arma los mismos datos que manda a la API y los valida con ellos.
@@ -28,6 +30,7 @@ import {
   esquemaTarea,
   esquemaTareaRepetitiva,
   LARGO_MAXIMO_NOTAS_DE_TAREA,
+  LARGO_MAXIMO_UNIDAD_DE_TAREA,
   MAXIMO_DE_DIAS_ENTRE_REPETICIONES,
   MINIMO_DE_DIAS_ENTRE_REPETICIONES,
   NOMBRES_DE_MES,
@@ -72,6 +75,12 @@ type Valores = {
   fallaSola: boolean;
   /** Lleva un distintivo; no cambia el orden de las listas. */
   importante: boolean;
+  /** Se va anotando cuánto se lleva hasta llegar a la meta, en vez de tildarse. */
+  progresiva: boolean;
+  /** La meta como se escribe ("2" o "1,5"); solo si es progresiva. */
+  meta: string;
+  /** La unidad de la meta ("litros"); opcional. */
+  unidad: string;
   fecha: string;
   hora: string;
   /** Los días de la semana marcados ("1" es lunes … "7" es domingo). */
@@ -93,8 +102,23 @@ function mensajeDe(error: unknown): string {
   return detalleDeValidacion(error) ?? interpretarError(error).mensaje;
 }
 
+/** "1,5" o "1.5" → 1.5; en blanco o algo que no es un número, NaN (el esquema lo explica). */
+function aNumero(texto: string): number {
+  const limpio = texto.trim().replace(",", ".");
+  return limpio === "" ? Number.NaN : Number(limpio);
+}
+
 /** Los datos que se mandan a la API: solo los campos de lo que se eligió. */
 function aDatos(valores: Valores): unknown {
+  // Siempre se manda la meta: `null` la quita (vuelve a tildarse).
+  const meta = valores.progresiva
+    ? { meta: aNumero(valores.meta), unidad: valores.unidad }
+    : { meta: null };
+  const datos = aDatosSinMeta(valores);
+  return { ...(datos as object), ...meta };
+}
+
+function aDatosSinMeta(valores: Valores): unknown {
   const { titulo, notas, hora } = valores;
   // Siempre se manda: en blanco la quita, y así editar la deja como se ve en el formulario.
   const categoriaId = valores.categoriaId === "" ? null : Number(valores.categoriaId);
@@ -167,6 +191,15 @@ const resolver: Resolver<Valores> = async (valores) => {
   return { values: {}, errors: errores as FieldErrors<Valores> };
 };
 
+/** La meta guardada, como la muestran los campos ("1,5"). */
+function metaInicial({ meta, unidad }: { meta: number | null; unidad: string | null }) {
+  return {
+    progresiva: meta !== null,
+    meta: meta === null ? "" : String(meta).replace(".", ","),
+    unidad: unidad ?? "",
+  };
+}
+
 function valoresIniciales(modo: ModoDeFormulario): Valores {
   const hoy = diaDeHoy(zonaDelDispositivo());
   const vacio: Valores = {
@@ -176,6 +209,9 @@ function valoresIniciales(modo: ModoDeFormulario): Valores {
     repeticion: "ninguna",
     fallaSola: false,
     importante: false,
+    progresiva: false,
+    meta: "",
+    unidad: "",
     fecha: hoy,
     hora: "",
     diasSemana: [String(diaIsoDeLaSemana(hoy))],
@@ -192,6 +228,7 @@ function valoresIniciales(modo: ModoDeFormulario): Valores {
       notas: modo.tarea.notas ?? "",
       categoriaId: modo.tarea.categoriaId === null ? "" : String(modo.tarea.categoriaId),
       importante: modo.tarea.importante,
+      ...metaInicial(modo.tarea),
       fecha: modo.tarea.dia,
       hora: modo.tarea.hora ?? "",
     };
@@ -206,6 +243,7 @@ function valoresIniciales(modo: ModoDeFormulario): Valores {
       repeticion: repetitiva.repeticion,
       fallaSola: repetitiva.fallaSola,
       importante: repetitiva.importante,
+      ...metaInicial(repetitiva),
       hora: repetitiva.hora ?? "",
       diasSemana: repetitiva.diasSemana?.map(String) ?? vacio.diasSemana,
       diaDelMes: String(repetitiva.diaDelMes ?? vacio.diaDelMes),
@@ -273,6 +311,7 @@ export function FormularioDeTarea({
   const repeticion = watch("repeticion");
   const fallaSola = watch("fallaSola");
   const importante = watch("importante");
+  const progresiva = watch("progresiva");
   const categorias = useCategoriasDeTarea();
   const editaOcurrencia = modo.tipo === "tarea" && modo.tarea.repetitiva;
   const puedeElegirRepeticion = modo.tipo !== "tarea";
@@ -417,6 +456,39 @@ export function FormularioDeTarea({
           {campoDeHora}
         </>
       ) : null}
+
+      {/* Cualquier tarea puede ser progresiva: se repita o no, es otra forma de marcar cuánto se hizo. */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <Casilla
+            marcada={progresiva}
+            onCambio={(marcada) => setValue("progresiva", marcada)}
+            etiqueta="Ir anotando cuánto llevás (progresiva)"
+          />
+          <p className="pl-8 text-xs text-texto-secundario">
+            Por ejemplo, tomar 2 litros de agua: vas sumando lo que tomás y se completa sola al
+            llegar a la meta.
+          </p>
+        </div>
+        {progresiva ? (
+          <div className="grid gap-4 pl-8 sm:grid-cols-2">
+            <Campo
+              {...register("meta")}
+              inputMode="decimal"
+              etiqueta="Meta"
+              placeholder="Por ejemplo: 2"
+              error={errors.meta?.message}
+            />
+            <Campo
+              {...register("unidad")}
+              etiqueta="Unidad (opcional)"
+              placeholder="Por ejemplo: litros"
+              maxLength={LARGO_MAXIMO_UNIDAD_DE_TAREA}
+              error={errors.unidad?.message}
+            />
+          </div>
+        ) : null}
+      </div>
 
       {/* Solo para una repetitiva (la regla): sus tareas pueden darse por fallidas solas al pasar el día. */}
       {repeticion !== "ninguna" && !editaOcurrencia ? (

@@ -106,6 +106,13 @@ export const tareasRepetitivas = pgTable(
     fallaSola: boolean().notNull().default(false),
     /** Lleva un distintivo; no cambia el orden de las listas. */
     importante: boolean().notNull().default(false),
+    /**
+     * Si es progresiva, la meta de cada tarea que arma, en centésimos (2 litros → 200); en nulo, sus tareas
+     * se tildan. Ver tareas/progreso.ts en @gestoria/shared.
+     */
+    metaCentesimos: integer(),
+    /** La unidad de la meta ("litros"); solo si hay meta, y opcional. */
+    unidad: text(),
     /** El último día para el que ya se armaron sus tareas; en nulo, ninguno todavía. */
     generadaHasta: date({ mode: "string" }),
     eliminadoEn: timestamp({ withTimezone: true }),
@@ -127,6 +134,10 @@ export const tareasRepetitivas = pgTable(
         or (${tabla.repeticion} = 'semanal' and cardinality(${tabla.diasSemana}) between 1 and 7 and ${tabla.diaDelMes} is null and ${tabla.mes} is null and ${tabla.cadaDias} is null and ${tabla.fechaInicio} is null)
         or (${tabla.repeticion} = 'mensual' and ${tabla.diaDelMes} is not null and ${tabla.diasSemana} is null and ${tabla.mes} is null and ${tabla.cadaDias} is null and ${tabla.fechaInicio} is null)
         or (${tabla.repeticion} = 'anual' and ${tabla.diaDelMes} is not null and ${tabla.mes} is not null and ${tabla.diasSemana} is null and ${tabla.cadaDias} is null and ${tabla.fechaInicio} is null)`,
+    ),
+    check(
+      "tareas_repetitivas_meta_valida",
+      sql`(${tabla.metaCentesimos} is null and ${tabla.unidad} is null) or ${tabla.metaCentesimos} between 1 and 100000000`,
     ),
     check(
       "tareas_repetitivas_rangos",
@@ -174,6 +185,15 @@ export const tareas = pgTable(
     fallaSola: boolean().notNull().default(false),
     /** Lleva un distintivo; no cambia el orden de las listas. */
     importante: boolean().notNull().default(false),
+    /**
+     * Si es progresiva ("tomar 2 litros de agua"), la meta en centésimos (2 → 200); en nulo, se tilda.
+     * Llegar a la meta la completa; ver tareas/progreso.ts en @gestoria/shared.
+     */
+    metaCentesimos: integer(),
+    /** La unidad de la meta ("litros"); solo si hay meta, y opcional. */
+    unidad: text(),
+    /** Lo que lleva anotado, en centésimos (puede pasarse de la meta). Siempre 0 si no es progresiva. */
+    progresoCentesimos: integer().notNull().default(0),
     eliminadoEn: timestamp({ withTimezone: true }),
     creadoEn,
   },
@@ -188,6 +208,11 @@ export const tareas = pgTable(
       .where(
         sql`${tabla.completadaEn} is null and ${tabla.falladaEn} is null and ${tabla.eliminadoEn} is null`,
       ),
+    check(
+      "tareas_meta_valida",
+      sql`(${tabla.metaCentesimos} is null and ${tabla.unidad} is null and ${tabla.progresoCentesimos} = 0)
+        or (${tabla.metaCentesimos} between 1 and 100000000 and ${tabla.progresoCentesimos} between 0 and 100000000)`,
+    ),
     check(
       "tareas_completada_o_fallada",
       sql`not (${tabla.completadaEn} is not null and ${tabla.falladaEn} is not null)`,

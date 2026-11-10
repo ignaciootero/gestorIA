@@ -311,8 +311,10 @@ export {
   LARGO_MAXIMO_NOMBRE_DE_CATEGORIA_DE_TAREA,
   LARGO_MAXIMO_NOTAS_DE_TAREA,
   LARGO_MAXIMO_TITULO_DE_TAREA,
+  LARGO_MAXIMO_UNIDAD_DE_TAREA,
   MAXIMO_DE_CATEGORIAS_DE_TAREA,
   MAXIMO_DE_DIAS_ENTRE_REPETICIONES,
+  MAXIMO_DE_META_DE_TAREA,
   MAXIMO_DE_TAREAS_EN_EL_HISTORIAL,
   MAXIMO_DE_TAREAS_PENDIENTES,
   MAXIMO_DE_TAREAS_REPETITIVAS,
@@ -333,6 +335,7 @@ export type {
   DatosDeTareaRepetitiva,
   EstadoDeTarea,
   FiltrosDeHistorial,
+  ProgresoDeTarea,
 } from "./tareas/esquemas.ts";
 export {
   ESTADOS_DE_TAREA,
@@ -340,7 +343,17 @@ export {
   esquemaCompletarTarea,
   esquemaFallarTarea,
   esquemaFiltrosDeHistorial,
+  esquemaProgresoDeTarea,
   esquemaTarea,
   esquemaTareaRepetitiva,
   NOMBRES_DE_ESTADO_DE_TAREA,
 } from "./tareas/esquemas.ts";
+export {
+  aCentesimos,
+  desdeCentesimos,
+  formatearCantidad,
+  progresoEnPalabras,
+  proporcionDelProgreso,
+  sumasRapidas,
+  tieneHastaDosDecimales,
+} from "./tareas/progreso.ts";

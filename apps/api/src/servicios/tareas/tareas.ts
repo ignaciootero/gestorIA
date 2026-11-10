@@ -7,6 +7,10 @@
 // Una tarea está en uno de tres estados: pendiente, completada (`completadaEn`) o fallida
 // (`falladaEn`: una tarea atrasada que la persona decidió que ya no va a hacer). Nunca dos a la vez.
 //
+// Una tarea **progresiva** ("tomar 2 litros de agua") tiene una meta y no se tilda: se le va anotando el
+// progreso (`registrarProgreso`) y se completa sola al llegar a la meta; si se corrige por debajo,
+// vuelve a pendiente. Falla igual que cualquier otra (ver tareas/progreso.ts en @gestoria/shared).
+//
 // La lista de hoy se arma así:
 // - Atrasadas: tareas pendientes de días anteriores, sean sueltas o de una repetitiva. Se arrastran
 //   hasta que la persona las complete o las marque como fallidas.
@@ -20,14 +24,18 @@
 import type { ClienteDb } from "@gestoria/db";
 import { esquema } from "@gestoria/db";
 import {
+  aCentesimos,
   type DatosDeTarea,
+  desdeCentesimos,
   DIAS_DE_HISTORIAL_DE_TAREAS,
   DIAS_POR_DEFECTO_DEL_HISTORIAL,
   diaDeHoy,
   type FiltrosDeHistorial,
   instanteDelDia,
+  MAXIMO_DE_META_DE_TAREA,
   MAXIMO_DE_TAREAS_EN_EL_HISTORIAL,
   MAXIMO_DE_TAREAS_PENDIENTES,
+  type ProgresoDeTarea,
   recortarHora,
   sumarDias,
 } from "@gestoria/shared";
@@ -48,6 +56,7 @@ import {
 } from "drizzle-orm";
 import { obtenerZonaHoraria } from "../finanzas/periodos.ts";
 import { verificarCategoriaDeTarea } from "./categorias.ts";
+import { columnasDeMeta } from "./meta.ts";
 import { generarTareasRepetitivas } from "./repetitivas.ts";
 
 export type Tarea = {
@@ -71,6 +80,12 @@ export type Tarea = {
   repetitiva: boolean;
   /** Lleva un distintivo; no cambia el orden de las listas. */
   importante: boolean;
+  /** Si es progresiva, la meta ("2"); null si se tilda. */
+  meta: number | null;
+  /** La unidad de la meta ("litros"), si tiene. */
+  unidad: string | null;
+  /** Lo que lleva anotado (0 si no es progresiva). Puede pasarse de la meta. */
+  progreso: number;
 };
 
 export type ListaDeHoy = {
@@ -106,6 +121,12 @@ export class TareaEnElPasado extends Error {}
 export class TareaFutura extends Error {}
 /** La persona ya tiene el máximo de tareas sueltas pendientes. */
 export class LimiteDeTareas extends Error {}
+/** Se quiso anotar progreso en una tarea que no es progresiva (se tilda). */
+export class TareaNoProgresiva extends Error {}
+/** Se quiso tildar o destildar a mano una tarea progresiva (se completa sola al llegar a la meta). */
+export class TareaProgresiva extends Error {}
+/** Se quiso anotar progreso en una tarea fallida: primero hay que deshacer la fallida. */
+export class TareaFallida extends Error {}
 
 type FilaDeTarea = typeof esquema.tareas.$inferSelect;
 
@@ -123,8 +144,12 @@ function aTarea(fila: FilaDeTarea): Tarea {
     falladaEn: fila.falladaEn,
     repetitiva: fila.repetitivaId !== null,
     importante: fila.importante,
+    meta: fila.metaCentesimos === null ? null : desdeCentesimos(fila.metaCentesimos),
+    unidad: fila.unidad,
+    progreso: desdeCentesimos(fila.progresoCentesimos),
   };
 }
+
 
 /** Primero lo de todo el día, después por hora; a igual hora, en el orden en que se agregaron. Lo importante no cambia el orden. */
 function porHora(a: FilaDeTarea, b: FilaDeTarea): number {
@@ -243,6 +268,7 @@ export async function crearTarea(
       notas: datos.notas === "" ? null : datos.notas,
       categoriaId: datos.categoriaId ?? null,
       importante: datos.importante ?? false,
+      ...(columnasDeMeta(datos) ?? {}),
       dia,
       hora: datos.hora === "" ? null : datos.hora,
     })
@@ -274,6 +300,7 @@ export async function editarTarea(
   const dia = actual.repetitivaId !== null || datos.fecha === "" ? actual.dia : datos.fecha;
   if (dia < hoy && dia !== actual.dia) throw new TareaEnElPasado();
   await verificarCategoriaDeTarea(cliente, userId, datos.categoriaId);
+  const meta = columnasDeMeta(datos);
 
   const [fila] = await cliente.db
     .update(esquema.tareas)
@@ -284,11 +311,83 @@ export async function editarTarea(
       ...(datos.categoriaId === undefined ? {} : { categoriaId: datos.categoriaId }),
       // Sin `importante` se conserva.
       ...(datos.importante === undefined ? {} : { importante: datos.importante }),
+      ...(meta ?? {}),
+      ...progresoAlCambiarLaMeta(actual, meta, ahora),
       dia,
     })
     .where(and(eq(esquema.tareas.id, id), eq(esquema.tareas.userId, userId), SIN_ELIMINAR))
     .returning();
   return fila ? aTarea(fila) : null;
+}
+
+/**
+ * Lo que cambia en el progreso y el estado al cambiar la meta de una tarea:
+ * - deja de ser progresiva: el progreso vuelve a 0 (el estado queda como estaba);
+ * - pasa a ser progresiva o cambia la meta: si estaba pendiente y lo anotado ya llega a la meta nueva,
+ *   se completa; si se había completado por llegar a la meta y la nueva queda arriba, vuelve a
+ *   pendiente. Lo fallido no cambia.
+ */
+function progresoAlCambiarLaMeta(
+  actual: FilaDeTarea,
+  meta: ReturnType<typeof columnasDeMeta>,
+  ahora: Date,
+): { progresoCentesimos?: number; completadaEn?: Date | null } {
+  if (meta === null) return {};
+  if (meta.metaCentesimos === null) return { progresoCentesimos: 0 };
+  if (actual.falladaEn !== null) return {};
+  const llega = actual.progresoCentesimos >= meta.metaCentesimos;
+  if (llega && actual.completadaEn === null) return { completadaEn: ahora };
+  if (!llega && actual.completadaEn !== null && actual.metaCentesimos !== null) {
+    return { completadaEn: null };
+  }
+  return {};
+}
+
+/**
+ * Anota el progreso de una tarea progresiva: suma una cantidad o corrige el total. Si llega a la meta, se
+ * completa (si ya estaba completa, no cambia cuándo); si queda por debajo, vuelve a pendiente. Se puede en
+ * una tarea de hoy, atrasada o ya completada (para corregir); no en una de un día futuro (`TareaFutura`),
+ * en una fallida (`TareaFallida`: primero se deshace) ni en una que se tilda (`TareaNoProgresiva`).
+ * Devuelve null si no existe, es de otra persona o está eliminada.
+ */
+export async function registrarProgreso(
+  cliente: ClienteDb,
+  userId: string,
+  id: string,
+  cambio: ProgresoDeTarea,
+  ahora: Date = new Date(),
+): Promise<Tarea | null> {
+  const { hoy } = await hoyDeLaPersona(cliente, userId, ahora);
+  return cliente.db.transaction(async (tx) => {
+    // Bloquea la fila: dos sumas a la vez (dos toques rápidos) no se pisan.
+    const [actual] = await tx
+      .select()
+      .from(esquema.tareas)
+      .where(and(eq(esquema.tareas.id, id), eq(esquema.tareas.userId, userId), SIN_ELIMINAR))
+      .for("update");
+    if (!actual) return null;
+    if (actual.metaCentesimos === null) throw new TareaNoProgresiva();
+    if (actual.falladaEn !== null) throw new TareaFallida();
+    if (actual.dia > hoy) throw new TareaFutura();
+
+    const pedido =
+      "sumar" in cambio
+        ? actual.progresoCentesimos + aCentesimos(cambio.sumar)
+        : aCentesimos(cambio.total);
+    // Sumar no pasa del tope que acepta la base.
+    const progreso = Math.min(pedido, aCentesimos(MAXIMO_DE_META_DE_TAREA));
+    const llega = progreso >= actual.metaCentesimos;
+
+    const [fila] = await tx
+      .update(esquema.tareas)
+      .set({
+        progresoCentesimos: progreso,
+        completadaEn: llega ? (actual.completadaEn ?? ahora) : null,
+      })
+      .where(eq(esquema.tareas.id, actual.id))
+      .returning();
+    return fila ? aTarea(fila) : null;
+  });
 }
 
 /**
@@ -303,6 +402,13 @@ export async function completarTarea(
   completada: boolean,
   ahora: Date = new Date(),
 ): Promise<Tarea | null> {
+  // Una progresiva no se tilda: se completa sola al llegar a la meta (ver registrarProgreso).
+  const progresiva = await cliente.db.query.tareas.findFirst({
+    columns: { metaCentesimos: true },
+    where: () => and(eq(esquema.tareas.id, id), eq(esquema.tareas.userId, userId), SIN_ELIMINAR),
+  });
+  if (progresiva && progresiva.metaCentesimos !== null) throw new TareaProgresiva();
+
   const [fila] = await cliente.db
     .update(esquema.tareas)
     .set({

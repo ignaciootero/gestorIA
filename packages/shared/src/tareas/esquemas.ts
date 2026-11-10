@@ -19,10 +19,13 @@ import {
   LARGO_MAXIMO_NOMBRE_DE_CATEGORIA_DE_TAREA,
   LARGO_MAXIMO_NOTAS_DE_TAREA,
   LARGO_MAXIMO_TITULO_DE_TAREA,
+  LARGO_MAXIMO_UNIDAD_DE_TAREA,
   MAXIMO_DE_DIAS_ENTRE_REPETICIONES,
+  MAXIMO_DE_META_DE_TAREA,
   MINIMO_DE_DIAS_ENTRE_REPETICIONES,
   REPETICIONES_DE_TAREA,
 } from "./constantes.ts";
+import { formatearCantidad, tieneHastaDosDecimales } from "./progreso.ts";
 
 const esquemaTitulo = z
   .string()
@@ -57,6 +60,32 @@ const esquemaCategoriaId = z
  * quedar como atrasadas). Opcional: al crear, sin esto es que no; al editar, si no viene se conserva.
  */
 const esquemaFallaSola = z.boolean("Indicá si se da por fallida sola o no.").optional();
+
+/** Una cantidad de una tarea progresiva: mayor que 0, con hasta dos decimales y hasta el tope. */
+const esquemaCantidad = z
+  .number("Escribí una cantidad.")
+  .positive("Tiene que ser mayor que 0.")
+  .max(
+    MAXIMO_DE_META_DE_TAREA,
+    `No puede pasar de ${formatearCantidad(MAXIMO_DE_META_DE_TAREA)}.`,
+  )
+  .refine(tieneHastaDosDecimales, "Usá como mucho dos decimales.");
+
+/**
+ * La meta de una tarea progresiva ("2" litros de agua). `null` es una tarea común, que se tilda. Opcional:
+ * al crear, sin el campo es común; al editar, sin el campo se conserva lo que tenía (meta y unidad).
+ */
+const esquemaMeta = esquemaCantidad.nullable().optional();
+
+/** La unidad de la meta ("litros", "páginas"): opcional, y solo cuenta si hay meta. */
+const esquemaUnidad = z
+  .string()
+  .trim()
+  .max(
+    LARGO_MAXIMO_UNIDAD_DE_TAREA,
+    `La unidad no puede pasar de ${LARGO_MAXIMO_UNIDAD_DE_TAREA} caracteres.`,
+  )
+  .optional();
 
 /** Cada cuántos días se repite una tarea "cada tantos días": un entero de 2 a 365. */
 const esquemaCadaDias = z
@@ -114,6 +143,8 @@ export const esquemaTarea = z.object({
   hora: esquemaHoraOpcional,
   categoriaId: esquemaCategoriaId,
   importante: esquemaImportante,
+  meta: esquemaMeta,
+  unidad: esquemaUnidad,
 });
 export type DatosDeTarea = z.infer<typeof esquemaTarea>;
 
@@ -129,6 +160,8 @@ export const esquemaTareaRepetitiva = z.discriminatedUnion("repeticion", [
     categoriaId: esquemaCategoriaId,
     importante: esquemaImportante,
     fallaSola: esquemaFallaSola,
+    meta: esquemaMeta,
+    unidad: esquemaUnidad,
     repeticion: z.literal("diaria", { error: "Elegí cada cuánto se repite." }),
     hora: esquemaHoraOpcional,
   }),
@@ -138,6 +171,8 @@ export const esquemaTareaRepetitiva = z.discriminatedUnion("repeticion", [
     categoriaId: esquemaCategoriaId,
     importante: esquemaImportante,
     fallaSola: esquemaFallaSola,
+    meta: esquemaMeta,
+    unidad: esquemaUnidad,
     repeticion: z.literal("intervalo"),
     cadaDias: esquemaCadaDias,
     fechaInicio: esquemaFechaDeInicio,
@@ -149,6 +184,8 @@ export const esquemaTareaRepetitiva = z.discriminatedUnion("repeticion", [
     categoriaId: esquemaCategoriaId,
     importante: esquemaImportante,
     fallaSola: esquemaFallaSola,
+    meta: esquemaMeta,
+    unidad: esquemaUnidad,
     repeticion: z.literal("semanal"),
     diasSemana: esquemaDiasDeLaSemana,
     hora: esquemaHoraOpcional,
@@ -159,6 +196,8 @@ export const esquemaTareaRepetitiva = z.discriminatedUnion("repeticion", [
     categoriaId: esquemaCategoriaId,
     importante: esquemaImportante,
     fallaSola: esquemaFallaSola,
+    meta: esquemaMeta,
+    unidad: esquemaUnidad,
     repeticion: z.literal("mensual"),
     diaDelMes: esquemaDiaDelMes,
     hora: esquemaHoraOpcional,
@@ -170,6 +209,8 @@ export const esquemaTareaRepetitiva = z.discriminatedUnion("repeticion", [
       categoriaId: esquemaCategoriaId,
       importante: esquemaImportante,
       fallaSola: esquemaFallaSola,
+      meta: esquemaMeta,
+      unidad: esquemaUnidad,
       repeticion: z.literal("anual"),
       diaDelMes: esquemaDiaDelMes,
       mes: esquemaMes,
@@ -230,3 +271,22 @@ export const esquemaCompletarTarea = z.object({ completada: z.boolean() });
 
 /** Marcar una tarea atrasada como fallida (que ya no se va a hacer) o volver a dejarla pendiente. */
 export const esquemaFallarTarea = z.object({ fallida: z.boolean() });
+
+/**
+ * Anotar el progreso de una tarea progresiva: **sumar** una cantidad a lo que lleva ("tomé medio litro
+ * más") o **corregir el total** ("llevo 1,5"; 0 lo deja en cero).
+ */
+export const esquemaProgresoDeTarea = z.union([
+  z.object({ sumar: esquemaCantidad }),
+  z.object({
+    total: z
+      .number("Escribí cuánto llevás.")
+      .min(0, "No puede ser menos de 0.")
+      .max(
+        MAXIMO_DE_META_DE_TAREA,
+        `No puede pasar de ${formatearCantidad(MAXIMO_DE_META_DE_TAREA)}.`,
+      )
+      .refine(tieneHastaDosDecimales, "Usá como mucho dos decimales."),
+  }),
+]);
+export type ProgresoDeTarea = z.infer<typeof esquemaProgresoDeTarea>;

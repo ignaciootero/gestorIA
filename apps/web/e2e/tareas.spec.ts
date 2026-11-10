@@ -2778,3 +2778,132 @@ test.describe("aviso al dar por fallida", () => {
     });
   }
 });
+
+test.describe("tareas progresivas", () => {
+  /** Agrega una tarea progresiva para hoy con el formulario completo. */
+  async function agregarProgresiva(
+    pagina: Page,
+    titulo: string,
+    meta: string,
+    unidad: string,
+  ): Promise<void> {
+    await pagina.getByRole("button", { name: "Agregar tarea" }).click();
+    const dialogo = pagina.getByRole("dialog", { name: "Agregar tarea" });
+    await dialogo.getByLabel("¿Qué hay que hacer?").fill(titulo);
+    const progresiva = dialogo.getByRole("checkbox", { name: /progresiva/ });
+    await progresiva.locator("xpath=..").click();
+    await expect(progresiva).toBeChecked();
+    await dialogo.getByLabel("Meta", { exact: true }).fill(meta);
+    await dialogo.getByLabel("Unidad (opcional)").fill(unidad);
+    await dialogo.getByRole("button", { name: "Agregar tarea" }).click();
+    await expect(dialogo).toBeHidden();
+  }
+
+  test("se va sumando y al llegar a la meta pasa a 'Hechas hoy'", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await abrirTareas(page);
+    await agregarProgresiva(page, "Tomar agua", "2", "litros");
+
+    const paraHoy = page.getByRole("region", { name: "Para hoy" });
+    await expect(paraHoy).toContainText("0 de 2 litros");
+    // No tiene casilla: se anota con el aro o con las sumas rápidas.
+    await expect(fila(page, "Tomar agua")).toHaveCount(0);
+
+    await paraHoy.getByRole("button", { name: "Sumar 0,5 litros: Tomar agua" }).click();
+    await expect(paraHoy).toContainText("0,5 de 2 litros");
+    await paraHoy.getByRole("button", { name: "Sumar 1 litros: Tomar agua" }).click();
+    await expect(paraHoy).toContainText("1,5 de 2 litros");
+
+    // Otra cantidad, con coma.
+    await paraHoy.getByRole("button", { name: "Otra cantidad" }).click();
+    await paraHoy.getByLabel("Cantidad litros").fill("0,5");
+    await paraHoy.getByRole("button", { name: "Sumar", exact: true }).click();
+
+    await expect(page.getByRole("region", { name: "Para hoy" })).toHaveCount(0);
+    const hechas = page.getByRole("region", { name: "Hechas hoy" });
+    await expect(hechas).toContainText("(1)");
+
+    // Se recuerda al recargar.
+    await page.reload();
+    await hechas.getByRole("button", { name: /^Hechas hoy/ }).click();
+    await expect(hechas).toContainText("2 de 2 litros");
+  });
+
+  test("corregir el total por debajo de la meta la vuelve a dejar pendiente", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await abrirTareas(page);
+    await agregarProgresiva(page, "Leer", "20", "páginas");
+
+    const paraHoy = page.getByRole("region", { name: "Para hoy" });
+    await paraHoy.getByRole("button", { name: "Anotar cuánto llevás: Leer" }).click();
+    await paraHoy.getByLabel("Cantidad páginas").fill("25");
+    await paraHoy.getByRole("button", { name: "Es el total" }).click();
+    await expect(page.getByRole("region", { name: "Para hoy" })).toHaveCount(0);
+
+    const hechas = page.getByRole("region", { name: "Hechas hoy" });
+    await hechas.getByRole("button", { name: /^Hechas hoy/ }).click();
+    await expect(hechas).toContainText("25 de 20 páginas");
+    await hechas.getByRole("button", { name: "Anotar cuánto llevás: Leer" }).click();
+    await hechas.getByLabel("Cantidad páginas").fill("12");
+    await hechas.getByRole("button", { name: "Es el total" }).click();
+
+    await expect(page.getByRole("region", { name: "Para hoy" })).toContainText("12 de 20 páginas");
+  });
+
+  test("avisa si la cantidad no sirve, sin anotar nada", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await abrirTareas(page);
+    await agregarProgresiva(page, "Caminar", "10000", "pasos");
+
+    const paraHoy = page.getByRole("region", { name: "Para hoy" });
+    await paraHoy.getByRole("button", { name: "Otra cantidad" }).click();
+    await paraHoy.getByLabel("Cantidad pasos").fill("cero");
+    await paraHoy.getByRole("button", { name: "Sumar", exact: true }).click();
+    await expect(paraHoy.getByRole("alert")).toHaveText("Escribí una cantidad.");
+    await expect(paraHoy).toContainText("0 de 10.000 pasos");
+  });
+
+  test("el formulario pide la meta y se puede volver a una tarea común", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await abrirTareas(page);
+    await page.getByRole("button", { name: "Agregar tarea" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Agregar tarea" });
+    await dialogo.getByLabel("¿Qué hay que hacer?").fill("Tomar agua");
+    await dialogo.getByRole("checkbox", { name: /progresiva/ }).locator("xpath=..").click();
+    await dialogo.getByRole("button", { name: "Agregar tarea" }).click();
+    await expect(dialogo.getByText("Escribí una cantidad.")).toBeVisible();
+    await dialogo.getByLabel("Meta", { exact: true }).fill("1,234");
+    await dialogo.getByRole("button", { name: "Agregar tarea" }).click();
+    await expect(dialogo.getByText("Usá como mucho dos decimales.")).toBeVisible();
+    await dialogo.getByLabel("Meta", { exact: true }).fill("2");
+    await dialogo.getByRole("button", { name: "Agregar tarea" }).click();
+    await expect(dialogo).toBeHidden();
+
+    // Al editarla y desmarcar "progresiva", vuelve a tener casilla.
+    await page.getByRole("button", { name: "Editar: Tomar agua" }).click();
+    const edicion = page.getByRole("dialog");
+    await expect(edicion.getByLabel("Meta", { exact: true })).toHaveValue("2");
+    await edicion.getByRole("checkbox", { name: /progresiva/ }).locator("xpath=..").click();
+    await edicion.getByRole("button", { name: "Guardar cambios" }).click();
+    await expect(edicion).toBeHidden();
+    await expect(fila(page, "Tomar agua")).toHaveCount(1);
+  });
+
+  test("una repetitiva progresiva arma tareas con su meta", async ({ page }) => {
+    await entrar(page, await crearCuentaAprobada());
+    await abrirTareas(page);
+    await page.getByRole("button", { name: "Agregar tarea" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Agregar tarea" });
+    await dialogo.getByLabel("¿Qué hay que hacer?").fill("Tomar agua");
+    await dialogo.getByLabel("Se repite").selectOption("diaria");
+    await dialogo.getByRole("checkbox", { name: /progresiva/ }).locator("xpath=..").click();
+    await dialogo.getByLabel("Meta", { exact: true }).fill("2");
+    await dialogo.getByLabel("Unidad (opcional)").fill("litros");
+    await dialogo.getByRole("button", { name: "Agregar tarea" }).click();
+    await expect(dialogo).toBeHidden();
+
+    await expect(page.getByRole("region", { name: "Para hoy" })).toContainText("0 de 2 litros");
+    await irASeccion(page, "Repetitivas");
+    await expect(page.getByRole("tabpanel")).toContainText("Meta: 2 litros");
+  });
+});

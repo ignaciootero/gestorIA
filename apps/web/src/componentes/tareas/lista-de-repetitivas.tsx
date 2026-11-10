@@ -5,7 +5,7 @@
 
 "use client";
 
-import { describirDiasRestantes } from "@gestoria/shared";
+import { describirDiasRestantes, formatearCantidad } from "@gestoria/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Repeat, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -169,6 +169,9 @@ function FilaDeRepetitiva({
         </p>
         <p className="truncate text-sm text-texto-secundario">
           {describirRepeticion(repetitiva)}
+          {repetitiva.meta !== null
+            ? ` · Meta: ${formatearCantidad(repetitiva.meta)}${repetitiva.unidad ? ` ${repetitiva.unidad}` : ""}`
+            : ""}
           {repetitiva.fallaSola ? " · Se da por fallida si pasa el día" : ""}
           {repetitiva.notas ? ` · ${repetitiva.notas}` : ""}
         </p>

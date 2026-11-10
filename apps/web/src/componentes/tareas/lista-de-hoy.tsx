@@ -9,10 +9,12 @@
 // un cambio por error.
 //
 // Tildar actualiza la lista al instante (actualización optimista) y, si el servidor falla, la deja
-// como estaba y avisa (docs/guias/rendimiento.md, velocidad percibida).
+// como estaba y avisa (docs/guias/rendimiento.md, velocidad percibida). Lo mismo al anotar progreso en
+// una tarea progresiva: el aro avanza al instante y, si llega a la meta, pasa a "Hechas hoy".
 
 "use client";
 
+import type { ProgresoDeTarea } from "@gestoria/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarCheck,
@@ -36,12 +38,13 @@ import {
   fallarTarea,
   type ListaDeHoy as Lista,
   obtenerTareasDeHoy,
+  registrarProgreso,
   type Tarea,
 } from "@/lib/api-tareas";
 import { cn } from "@/lib/clases";
 import { detalleDeValidacion, interpretarError } from "@/lib/mensajes-de-error";
 import { usarAvisoDeFallida } from "./aviso-de-fallida";
-import { conTareaCompletada, conTareaFallida } from "./ayudas";
+import { conProgreso, conTareaCompletada, conTareaFallida } from "./ayudas";
 import { FilaDeTarea } from "./fila-de-tarea";
 
 const CLAVE = ["tareas", "hoy"] as const;
@@ -98,6 +101,25 @@ export function ListaDeHoy({ alEditar, alEliminar }: PropsListaDeHoy) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tareas"] }),
   });
 
+  const progreso = useMutation({
+    mutationFn: ({ tarea, cambio }: { tarea: Tarea; cambio: ProgresoDeTarea }) =>
+      registrarProgreso(tarea.id, cambio),
+    // Las sumas de una misma tarea van en orden: dos toques rápidos suman las dos.
+    scope: { id: "progreso-de-tareas" },
+    onMutate: async ({ tarea, cambio }) => {
+      await queryClient.cancelQueries({ queryKey: CLAVE });
+      const anterior = queryClient.getQueryData<Lista>(CLAVE);
+      if (anterior) {
+        queryClient.setQueryData<Lista>(CLAVE, conProgreso(anterior, tarea.id, cambio, new Date()));
+      }
+      return { anterior };
+    },
+    onError: (_error, _variables, contexto) => {
+      if (contexto?.anterior) queryClient.setQueryData(CLAVE, contexto.anterior);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["tareas"] }),
+  });
+
   // Antes de dar una tarea por fallida se explica qué significa (hasta que la persona pide no verlo más).
   const { pedir: pedirFallida, aviso: avisoDeFallida } = usarAvisoDeFallida((tarea) =>
     fallar.mutate({ tarea, fallida: true }),
@@ -137,6 +159,10 @@ export function ListaDeHoy({ alEditar, alEliminar }: PropsListaDeHoy) {
 
   function alCompletar(tarea: Tarea, completada: boolean) {
     completar.mutate({ tarea, completada });
+  }
+
+  function alAnotarProgreso(tarea: Tarea, cambio: ProgresoDeTarea) {
+    progreso.mutate({ tarea, cambio });
   }
 
   function alFallar(tarea: Tarea, fallida: boolean) {
@@ -249,6 +275,7 @@ export function ListaDeHoy({ alEditar, alEliminar }: PropsListaDeHoy) {
         tareas={data.atrasadas}
         hoy={data.hoy}
         alCompletar={alCompletar}
+        alAnotarProgreso={alAnotarProgreso}
         alFallar={alFallar}
         alEditar={alEditar}
         alEliminar={alEliminar}
@@ -258,6 +285,7 @@ export function ListaDeHoy({ alEditar, alEliminar }: PropsListaDeHoy) {
         tareas={data.deHoy}
         hoy={data.hoy}
         alCompletar={alCompletar}
+        alAnotarProgreso={alAnotarProgreso}
         alFallar={alFallar}
         alEditar={alEditar}
         alEliminar={alEliminar}
@@ -287,6 +315,7 @@ export function ListaDeHoy({ alEditar, alEliminar }: PropsListaDeHoy) {
         ]}
         hoy={data.hoy}
         alCompletar={alCompletar}
+        alAnotarProgreso={alAnotarProgreso}
       />
       <Seccion
         titulo="Fallidas hoy"
@@ -324,6 +353,7 @@ function Seccion({
   alFallar,
   alEditar,
   alEliminar,
+  alAnotarProgreso,
 }: {
   titulo: string;
   tono?: "peligro" | "suave";
@@ -342,6 +372,7 @@ function Seccion({
   alFallar?: (tarea: Tarea, fallida: boolean) => void;
   alEditar?: (tarea: Tarea) => void;
   alEliminar?: (tarea: Tarea) => void;
+  alAnotarProgreso?: (tarea: Tarea, cambio: ProgresoDeTarea) => void;
 }) {
   const [abierta, setAbierta] = useState(!plegada);
   const idDeLaLista = useId();
@@ -369,6 +400,7 @@ function Seccion({
               alFallar={alFallar}
               alEditar={alEditar}
               alEliminar={alEliminar}
+              alAnotarProgreso={alAnotarProgreso}
               // En Hoy la casilla y la cruz de lo pendiente aparecen al apuntar; lo hecho o fallido muestra su estado.
               acciones="al-apuntar"
             />

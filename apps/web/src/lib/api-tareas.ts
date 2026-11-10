@@ -8,6 +8,7 @@ import type {
   DatosDeCategoriaDeTarea,
   DatosDeTarea,
   DatosDeTareaRepetitiva,
+  ProgresoDeTarea,
   RepeticionDeTarea,
 } from "@gestoria/shared";
 import { URL_API } from "./entorno";
@@ -49,6 +50,12 @@ export type Tarea = {
   repetitiva: boolean;
   /** Lleva un distintivo; no cambia el orden de las listas. */
   importante: boolean;
+  /** Si es progresiva ("tomar 2 litros"), la meta; null si se tilda. */
+  meta: number | null;
+  /** La unidad de la meta ("litros"), si tiene. */
+  unidad: string | null;
+  /** Lo que lleva anotado (0 si no es progresiva); puede pasarse de la meta. */
+  progreso: number;
 };
 
 export type ListaDeHoy = {
@@ -92,6 +99,10 @@ export type TareaRepetitiva = {
   fallaSola: boolean;
   /** Sus tareas llevan un distintivo. */
   importante: boolean;
+  /** Si es progresiva, la meta de cada tarea que arma; null si se tildan. */
+  meta: number | null;
+  /** La unidad de la meta, si tiene. */
+  unidad: string | null;
   titulo: string;
   notas: string | null;
   /** La categoría, si tiene. */
@@ -166,6 +177,11 @@ export function completarTarea(id: string, completada: boolean): Promise<Tarea> 
     method: "PATCH",
     body: JSON.stringify({ completada }),
   });
+}
+
+/** Anota el progreso de una tarea progresiva: `{ sumar: 0.5 }` o `{ total: 1.5 }`. */
+export function registrarProgreso(id: string, cambio: ProgresoDeTarea): Promise<Tarea> {
+  return pedir(`/api/tareas/${id}/progreso`, { method: "PUT", body: JSON.stringify(cambio) });
 }
 
 export function fallarTarea(id: string, fallida: boolean): Promise<Tarea> {

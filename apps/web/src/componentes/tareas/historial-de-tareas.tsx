@@ -14,6 +14,7 @@ import {
   diaDeHoy,
   ESTADOS_DE_TAREA,
   NOMBRES_DE_ESTADO_DE_TAREA,
+  progresoEnPalabras,
   sumarDias,
 } from "@gestoria/shared";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ import { usarAvisoDeFallida } from "./aviso-de-fallida";
 import { diaCorto, GRUPOS_DE_REPETICION, nombreDeDia } from "./ayudas";
 import { EtiquetaDeCategoria, useCategoriasDeTarea } from "./categorias";
 import { BotonDeFallida } from "./fila-de-tarea";
+import { AnilloDeProgreso } from "./progreso-de-tarea";
 
 const SIN_FILTROS: FiltrosDelHistorial = {
   desde: "",
@@ -338,6 +340,31 @@ export function HistorialDeTareas() {
                       />
                       <span className="truncate font-medium text-texto-secundario line-through">
                         {tarea.titulo}
+                      </span>
+                    </span>
+                  ) : tarea.meta !== null ? (
+                    // Una progresiva no se tilda: el aro muestra cuánto llegó a hacer ese día. Lo que está
+                    // atrasado se sigue anotando desde Hoy.
+                    <span className="flex min-w-0 flex-1 items-center gap-3 text-sm">
+                      <AnilloDeProgreso tarea={tarea} />
+                      {tarea.completada ? null : (
+                        <BotonDeFallida
+                          titulo={tarea.titulo}
+                          alFallar={() => pedirFallida(tarea)}
+                        />
+                      )}
+                      <span className="flex min-w-0 flex-col">
+                        <span
+                          className={cn(
+                            "truncate font-medium",
+                            tarea.completada && "text-texto-secundario line-through",
+                          )}
+                        >
+                          {tarea.titulo}
+                        </span>
+                        <span className="numeros-tabulares text-xs text-texto-secundario">
+                          {progresoEnPalabras(tarea.progreso, tarea.meta, tarea.unidad)}
+                        </span>
                       </span>
                     </span>
                   ) : (
